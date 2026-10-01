@@ -1,3 +1,5 @@
+import { numericExtent } from "../data/limits.js";
+import { donutParts } from "./integrity.js";
 // Chart components — theme-aware, brand-neutral.
 //
 // Every component takes `theme` in its options (defaulting to the active
@@ -114,8 +116,8 @@ function trendLine(data, x, y) {
   const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
   const intercept = (sy - slope * sx) / n;
   const xs = pts.map((p) => p[0]);
-  const x0 = Math.min(...xs);
-  const x1 = Math.max(...xs);
+  const [x0, x1] = numericExtent(xs);
+  if (!Number.isFinite(slope) || !Number.isFinite(intercept)) return null;
   return [
     { x: x0, y: slope * x0 + intercept },
     { x: x1, y: slope * x1 + intercept }
@@ -294,8 +296,8 @@ export function choropleth(data, {
   const borders = mesh(geo, geo.objects[object], (a, b) => a !== b);
   const values = new Map(data.map((d) => [String(d[id]), d[value]]));
   const nums = [...values.values()].filter((v) => v != null);
-  let lo = domain ? domain[0] : Math.min(...nums);
-  let hi = domain ? domain[1] : Math.max(...nums);
+  let lo = domain ? domain[0] : numericExtent(nums)[0];
+  let hi = domain ? domain[1] : numericExtent(nums)[1];
   if (center != null && domain == null) {
     const dev = Math.max(Math.abs(hi - center), Math.abs(lo - center));
     lo = center - dev;
@@ -343,7 +345,7 @@ export function smallMultiples(data, {
   columns = 3,
   chartWidth = 300,
   yDomain = null,
-  includeZero = false,
+  includeZero = true,
   facetSort = null,
   facetLabel = (v) => v
 } = {}) {
@@ -361,8 +363,7 @@ export function smallMultiples(data, {
     keys.sort(facetSort);
   }
   const nums = data.map((d) => d[value]).filter((v) => v != null);
-  let lo = Math.min(...nums);
-  let hi = Math.max(...nums);
+  let [lo, hi] = numericExtent(nums);
   if (includeZero) {
     lo = Math.min(lo, 0);
     hi = Math.max(hi, 0);
@@ -384,6 +385,7 @@ export function smallMultiples(data, {
 // d3-shape pie+arc generators and htl — same theme, no Plot dependency.
 export function donutChart(data, { value, label, width = 420, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme() } = {}) {
   const t = theme.chart;
+  data = donutParts(data, label, value);
   const total = data.reduce((s, d) => s + d[value], 0);
   const slices = d3pie().value((d) => d[value]).sort(null)(data);
   const arcGen = d3arc().innerRadius(innerRadius).outerRadius(outerRadius);
@@ -433,6 +435,13 @@ function deltaClass(dir, invert) {
 // CSS custom properties, so it follows theme switches without re-rendering.
 // Include once per page.
 export const chartStyles = html`<style>
+.chart-data { margin: 8px 0; overflow: auto; }
+.chart-data table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.chart-data td, .chart-data th { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--slate-200); }
+.chart-data summary { cursor: pointer; }
+.chart-data button { margin: 4px 8px; }
+.chart-transform-note { color: var(--slate-600); font-size: 12px; }
+:focus-visible { outline: 3px solid var(--periwinkle); outline-offset: 3px; }
   .db-card {
     background: var(--white);
     border: 1px solid var(--slate-200);

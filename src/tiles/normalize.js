@@ -56,6 +56,9 @@ export function normalizeRows(entry, rawRows, mapping) {
           out[f.key] = null;
         } else {
           const n = Number(v);
+          if ((typeof v === "string" && /^[+-]?\d+$/.test(v.trim()) && (BigInt(v.trim()) > BigInt(Number.MAX_SAFE_INTEGER) || BigInt(v.trim()) < BigInt(Number.MIN_SAFE_INTEGER))) || (Number.isInteger(n) && !Number.isSafeInteger(n))) {
+            throw new Error(`Precision error in ${col}: ${v}. Keep exact values in a KPI/text field or explicitly round in SQL before plotting.`);
+          }
           if (!Number.isFinite(n)) {
             out[f.key] = null;
             dropped++;
@@ -91,7 +94,7 @@ export function normalizeRows(entry, rawRows, mapping) {
  *  time axis; anything else passes through untouched. */
 export function promoteDate(v) {
   if (v instanceof Date) return v;
-  if (typeof v === "string" && /^\d{4}-\d{2}(-\d{2})?(T\d{2}:\d{2}(:\d{2})?)?$/.test(v.trim())) {
+  if (typeof v === "string" && /^\d{4}-\d{2}(-\d{2})?(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?)?$/.test(v.trim())) {
     const t = v.trim();
     const d = new Date(t + (t.includes("T") ? "" : "T00:00:00"));
     if (!Number.isNaN(d.getTime())) return d;

@@ -1,14 +1,17 @@
+import { focusDialog } from "./focus.js";
 // Theme picker popover: lists the available visual themes with a small
 // color preview each. Appended to document.body with fixed positioning.
 // One popover open at a time (same conventions as the data popovers).
 
 import { THEMES } from "../themes/themes.js";
 
+let releaseFocus = null;
 let popEl = null;
 let popAnchor = null;
 
 export function closeThemePopover() {
   if (popEl) {
+    releaseFocus?.(); releaseFocus = null;
     popEl.remove();
     popEl = null;
     popAnchor = null;
@@ -39,6 +42,7 @@ export function toggleThemePopover({ anchor, current, onSelect }) {
 function openThemePopover({ anchor, current, onSelect }) {
   const pop = document.createElement("div");
   pop.className = "data-popover theme-popover";
+  pop.setAttribute("aria-label","Choose theme");
 
   const head = document.createElement("div");
   head.className = "data-pop-head";
@@ -103,6 +107,7 @@ function openThemePopover({ anchor, current, onSelect }) {
   });
 
   popEl = pop;
+  releaseFocus = focusDialog(pop,anchor);
   popAnchor = anchor;
   document.addEventListener("pointerdown", onDocPointerDown, true);
   document.addEventListener("keydown", onDocKeyDown);

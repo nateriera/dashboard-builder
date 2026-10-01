@@ -1,3 +1,7 @@
+import { validateLayout, assertNoCollisions } from "./data/layout.js";
+import { datasetVersion, listDatasets, storageIssues, rollbackDatasets, subscribeDatasetChanges } from "./data/store.js";
+import { querySnapshot, rollbackQueries, serializeQueries } from "./data/queries.js";
+import { LIMITS } from "./data/limits.js";
 // Dashboard Builder — MVP composer (Shape A: standalone vanilla app).
 //
 // A drag-and-drop dashboard composer: the left palette lists chart types from
@@ -49,7 +53,7 @@ setTheme(getThemeId());
 const STORAGE_KEY = "dashboard-builder:layout:v1";
 // Build stamp, shown in the status bar on boot. Bump on every shipped archive
 // so it's always possible to confirm which code is actually running.
-const BUILD = "2f";
+const BUILD = "2f-remediation";
 const gridEl = document.querySelector(".grid-stack");
 const statusEl = document.getElementById("status");
 
@@ -87,7 +91,7 @@ function dashboardDefaultName() {
   if (!dd || dd.kind === "samples") return "Tile samples";
   if (isUploadRef(dd.ref)) {
     const ds = getDataset(uploadId(dd.ref));
-    return ds ? ds.name : "Missing upload";
+    return ds ? ds.name + (ds.persisted ? "" : " (session only)") : "Missing upload";
   }
   return DATASET_LABELS[dd.ref] || dd.ref;
 }
@@ -104,7 +108,7 @@ function validateDashboardDefault(dd) {
   if (!dd || dd.kind === "samples") return { kind: "samples" };
   if (dd.kind === "dataset" && typeof dd.ref === "string") {
     if (DATASETS[dd.ref]) return { kind: "dataset", ref: dd.ref };
-    if (isUploadRef(dd.ref) && hasDataset(uploadId(dd.ref))) {
+    if (isUploadRef(dd.ref)) {
       return { kind: "dataset", ref: dd.ref };
     }
   }
@@ -138,7 +142,7 @@ async function resolveExportRows(meta, entry) {
     if (!q) return { error: "Saved query is missing." };
     try {
       const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
-      const rows = getCachedRows(qid) || (await runTileQuery(qid, q, entry));
+      const rows = getCachedRows(qid, q, entry) || (await runTileQuery(qid, q, entry));
       return { rows };
     } catch (err) {
       return { error: `Query failed: ${err && err.message ? err.message : err}` };
@@ -223,16 +227,16 @@ function buildTileContent(type, meta) {
             ? `Loaded ${name}`
             : `Loaded ${name} — browser storage unavailable, kept for this session only.`
         );
-        refreshQueryTiles(); // new tables: re-run any query tiles
+
       },
-      onQuery: ({ id, name }) => {
+      onQuery: ({ id, name, persisted }) => {
         meta.dataset = `query:${id}`;
         meta.source = name;
         pruneQueries([...tileMeta.values()].map((m) => m.dataset));
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
-        setStatus(`SQL query applied — ${name}`);
+        setStatus(`SQL query applied — ${name}` + (persisted ? "" : " — session only; export JSON for backup."));
       }
     });
   });
@@ -247,6 +251,7 @@ function buildTileContent(type, meta) {
   removeBtn.addEventListener("click", () => {
     const widgetEl = tile.closest(".grid-stack-item");
     if (widgetEl) grid.removeWidget(widgetEl);
+    document.querySelector(".palette-item")?.focus();
   });
 
   toolbar.append(titleInput, dataBtn);
@@ -266,6 +271,16 @@ function buildTileContent(type, meta) {
       });
       label.append(box, document.createTextNode(ctrl.label));
       toolbar.append(label);
+    }
+  }
+  if (entry.fields.some(f => f.numeric)) {
+    for (const key of ['xLabel','yLabel']) {
+      const label = document.createElement('label'); label.className = 'tile-control';
+      label.textContent = key === 'xLabel' ? 'X label / unit ' : 'Y label / unit ';
+      const input = document.createElement('input'); input.type = 'text'; input.maxLength = 120;
+      input.setAttribute('aria-label',label.textContent.trim()); input.value = meta.tileOptions[key] || '';
+      input.addEventListener('change', () => { meta.tileOptions[key] = input.value; renderTileById(meta.id); scheduleAutosave(); });
+      label.append(input); toolbar.append(label);
     }
   }
   toolbar.append(removeBtn);
@@ -293,17 +308,6 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions } =
     dataset: dataset === undefined ? null : dataset,
     tileOptions: { ...(tileOptions || {}) }
   };
-  // A layout may reference an upload that isn't in this browser (imported
-  // file without inlined data, or cleared storage): revert to samples.
-  // Same for a saved query that isn't here.
-  if (isUploadRef(meta.dataset) && !hasDataset(uploadId(meta.dataset))) {
-    meta.dataset = entry.defaultDataset;
-    meta.source = "Sample data";
-  }
-  if (isQueryRef(meta.dataset) && !hasQuery(queryId(meta.dataset))) {
-    meta.dataset = entry.defaultDataset;
-    meta.source = "Sample data";
-  }
   tileMeta.set(widgetId, meta);
 
   const el = grid.addWidget({
@@ -351,7 +355,18 @@ function datasetDisplayName(meta) {
   return DATASET_LABELS[meta.dataset] || meta.dataset;
 }
 
+function paintUnavailable(el, title, message) {
+  el.replaceChildren();
+  const box = document.createElement("div"); box.className = "tile-error"; box.setAttribute("role","alert");
+  const head = document.createElement("strong"); head.textContent = title;
+  const msg = document.createElement("p"); msg.textContent = message;
+  const repair = document.createElement("button"); repair.type = "button"; repair.textContent = "Repair data binding";
+  repair.onclick = () => el.closest(".tile")?.querySelector(".tile-data-btn")?.click();
+  box.append(head,msg,repair); el.append(box);
+}
+
 function renderTile(el) {
+  if (!el.isConnected) return;
   const node = el.gridstackNode;
   if (!node) return;
   const meta = tileMeta.get(node.id);
@@ -365,7 +380,8 @@ function renderTile(el) {
     return;
   }
 
-  let data = resolveTileData(meta, entry);
+  let data;
+  try { data = resolveTileData(meta, entry); } catch (err) { paintUnavailable(chartEl,"Data precision error",err.message); return; }
   if (!data) {
     if (meta.dataset == null) {
       // Following the dashboard default, but it is missing or can't be
@@ -386,13 +402,8 @@ function renderTile(el) {
       chartEl.appendChild(box);
       return;
     }
-    // Uploaded dataset is gone (cleared storage, or an import that didn't
-    // carry it): fall back to this tile type's sample dataset.
-    meta.dataset = entry.defaultDataset;
-    meta.source = "Sample data";
-    data = DATASETS[meta.dataset];
-    setStatus("An uploaded dataset was missing — tile reverted to sample data.");
-    scheduleAutosave();
+    paintUnavailable(chartEl, 'Data unavailable', 'The saved reference ' + meta.dataset + ' is missing. Choose Data to repair the binding.');
+    return;
   }
   entry.render(chartEl, {
     data,
@@ -406,6 +417,8 @@ function renderTile(el) {
 async function renderQueryTile(el, meta, entry, chartEl) {
   const qid = queryId(meta.dataset);
   const q = getQuery(qid);
+  const capturedRevision = datasetVersion();
+  const renderToken = meta.renderToken = (meta.renderToken || 0) + 1;
   const capturedDataset = meta.dataset; // stale-render guard (see below)
   const options = () => ({
     title: meta.title,
@@ -414,18 +427,14 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   });
 
   if (!q) {
-    // Saved query is gone (cleared storage, or an import that didn't carry
-    // it): fall back to this tile type's sample dataset, like missing uploads.
-    meta.dataset = entry.defaultDataset;
-    meta.source = "Sample data";
-    entry.render(chartEl, { data: DATASETS[meta.dataset], options: options() });
-    setStatus("A saved query was missing — tile reverted to sample data.");
-    scheduleAutosave();
+    paintUnavailable(chartEl, 'Saved query unavailable', 'Reference ' + meta.dataset + ' was retained. Choose Data to repair it.');
     return;
   }
 
+  try {
   const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
-  const cached = getCachedRows(qid);
+  if (!el.isConnected || tileMeta.get(meta.id) !== meta || meta.renderToken !== renderToken || meta.dataset !== capturedDataset) return;
+  const cached = getCachedRows(qid, q, entry);
   if (cached) {
     entry.render(chartEl, { data: cached, options: options() });
     return;
@@ -437,37 +446,19 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   loading.textContent = "Running query…";
   chartEl.appendChild(loading);
 
-  try {
     const rows = await runTileQuery(qid, q, entry);
     // The tile may have been removed, re-bound, or re-rendered while the
     // query was in flight — never paint a stale result.
-    if (!el.isConnected || tileMeta.get(meta.id)?.dataset !== capturedDataset) return;
+    if (!el.isConnected || tileMeta.get(meta.id) !== meta || meta.renderToken !== renderToken || datasetVersion() !== capturedRevision || meta.dataset !== capturedDataset) return;
     entry.render(chartEl, { data: rows, options: options() });
   } catch (err) {
-    if (!el.isConnected || tileMeta.get(meta.id)?.dataset !== capturedDataset) return;
-    if (isMissingTableError(err)) {
-      // The query names a table that isn't registered here (e.g. an import
-      // whose upload wasn't inlined): graceful fallback, like missing uploads.
-      meta.dataset = entry.defaultDataset;
-      meta.source = "Sample data";
-      entry.render(chartEl, { data: DATASETS[meta.dataset], options: options() });
-      setStatus(`Query failed (${err.message}) — tile reverted to sample data.`);
-      scheduleAutosave();
-    } else {
-      chartEl.innerHTML = "";
-      const box = document.createElement("div");
-      box.className = "tile-error";
-      const head = document.createElement("div");
-      head.className = "tile-error-title";
-      head.textContent = "Query failed";
-      const msg = document.createElement("div");
-      msg.className = "tile-error-msg";
-      msg.textContent = err && err.message ? err.message : String(err);
-      box.append(head, msg);
-      chartEl.appendChild(box);
-    }
+    if (!el.isConnected || tileMeta.get(meta.id) !== meta || meta.renderToken !== renderToken || datasetVersion() !== capturedRevision || meta.dataset !== capturedDataset) return;
+    paintUnavailable(chartEl, 'Query unavailable', (err?.message || String(err)) + ' Choose Data to repair or rerun this query.');
   }
+
 }
+
+subscribeDatasetChanges(() => refreshQueryTiles());
 
 // Re-render every query tile (used after uploads/imports change the tables).
 function refreshQueryTiles() {
@@ -487,7 +478,7 @@ function renderTileById(id) {
 function serializeLayout() {
   return {
     app: "dashboard-builder",
-    version: 1,
+    version: 2,
     savedAt: new Date().toISOString(),
     defaultDataset: dashboardDefault,
     theme: getThemeId(),
@@ -499,6 +490,7 @@ function serializeLayout() {
         title: meta.title,
         source: meta.source,
         dataset: meta.dataset,
+        binding: meta.dataset == null ? { mode: "dashboard" } : { mode: "explicit", ref: meta.dataset },
         tileOptions: meta.tileOptions,
         x: n.x,
         y: n.y,
@@ -509,18 +501,10 @@ function serializeLayout() {
   };
 }
 
-function validateLayout(data) {
-  if (!data || typeof data !== "object") throw new Error("layout is not an object");
-  if (!Array.isArray(data.tiles)) throw new Error('layout is missing the "tiles" array');
-  for (const t of data.tiles) {
-    if (!t || !TILE_TYPES[t.type]) throw new Error(`unknown tile type "${t && t.type}"`);
-  }
-}
-
 let bulkLoading = false; // suppresses autosave while a layout is being loaded
 
 function loadLayout(data) {
-  validateLayout(data);
+  data = validateLayout(data);
   bulkLoading = true;
   try {
     grid.removeAll();
@@ -532,9 +516,6 @@ function loadLayout(data) {
       refreshThemeButton();
     }
     for (const t of data.tiles) {
-      const e = TILE_TYPES[t.type];
-      // 2b-era tiles that never customized their data follow the dashboard now.
-      if (e && t.dataset === e.defaultDataset) t.dataset = null;
       addTile(t.type, t);
     }
   } finally {
@@ -546,23 +527,25 @@ function loadLayout(data) {
 // datasets are kept as-is (no 2b-era migration) and the dashboard-wide
 // default is left untouched — a template should look like its preview.
 function applyTemplate(tpl) {
-  const tiles = Array.isArray(tpl.tiles) ? tpl.tiles : [];
-  bulkLoading = true;
   try {
-    grid.removeAll();
-    tileMeta.clear();
-    if (typeof tpl.theme === "string") {
-      setTheme(tpl.theme);
-      refreshThemeButton();
-    }
-    for (const t of tiles) {
-      if (TILE_TYPES[t.type]) addTile(t.type, t);
-    }
-  } finally {
-    bulkLoading = false;
+    const candidate = validateLayout({ app: 'dashboard-builder', version: 1, theme: tpl.theme || getThemeId(), defaultDataset: dashboardDefault, tiles: tpl.tiles });
+    replaceLayout(candidate);
+    scheduleAutosave(); setStatus('Applied template “' + tpl.name + '”.');
+  } catch (err) { setStatus('Template failed: ' + err.message); }
+}
+function replaceLayout(candidate) {
+  const previous = serializeLayout();
+  // Construct controls/charts detached before changing the current grid.
+  for (const t of candidate.tiles) {
+    const host = document.createElement('div');
+    buildTileContent(t.type,t);
+    const entry = TILE_TYPES[t.type];
+    const ds = t.dataset?.startsWith('upload:') ? candidate.datasets[uploadId(t.dataset)] || getDataset(uploadId(t.dataset)) : null;
+    const rows = ds?.rows || DATASETS[t.dataset];
+    if (rows) entry.render(host,{ data: rows, options: t });
   }
-  scheduleAutosave();
-  setStatus(`Applied template “${tpl.name}” — ${tiles.length} tiles.`);
+  try { loadLayout(candidate); }
+  catch (err) { loadLayout(previous); throw err; }
 }
 
 // ── Persistence: autosave + explicit save ────────────────────────────────
@@ -619,7 +602,8 @@ grid.on("removed", (_event, items) => {
 const paletteEl = document.getElementById("palette-items");
 const paletteItems = [];
 for (const [type, entry] of Object.entries(TILE_TYPES)) {
-  const item = document.createElement("div");
+  const item = document.createElement("button");
+  item.type = "button";
   item.className = "palette-item";
   item.dataset.tileType = type;
 
@@ -747,7 +731,7 @@ if (btnData) {
           raw: { columns, rows }
         });
         const persisted = await persistDataset(id);
-        refreshQueryTiles(); // new table for the SQL tab
+
         applyDashboardDefault(
           { kind: "dataset", ref: `upload:${id}` },
           persisted
@@ -773,7 +757,7 @@ function download(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-document.getElementById("btn-export").addEventListener("click", () => {
+document.getElementById("btn-export").addEventListener("click", async () => {
   const layout = serializeLayout();
   // Inline small uploaded datasets so the exported file is self-contained.
   // Includes the dashboard-wide default dataset, not just per-tile uploads.
@@ -781,7 +765,20 @@ document.getElementById("btn-export").addEventListener("click", () => {
   if (layout.defaultDataset?.kind === "dataset" && isUploadRef(layout.defaultDataset.ref)) {
     refs.push(layout.defaultDataset.ref);
   }
-  const { inlined, skipped } = inlineDatasets(refs);
+  const queryRefs = layout.tiles.map(t => t.dataset).filter(isQueryRef);
+  for (const qref of queryRefs) {
+    const q = getQuery(queryId(qref));
+    if (q?.dependencies) refs.push(...q.dependencies.filter(isUploadRef));
+    else refs.push(...listDatasets().map(ds => 'upload:' + ds.id));
+  }
+  const { inlined, skipped } = inlineDatasets([...new Set(refs)]);
+  for (const qref of queryRefs) if (!getQuery(queryId(qref))) skipped.push(qref + ' (missing query)');
+  for (const t of layout.tiles.filter(t => isQueryRef(t.dataset))) {
+    const resolved = await resolveExportRows(t,TILE_TYPES[t.type]);
+    if (resolved.error && !skipped.some(s => s.startsWith(t.dataset))) skipped.push(t.dataset + ": " + resolved.error);
+  }
+  layout.omittedDependencies = skipped;
+  if (skipped.length && !window.confirm('This JSON will omit these dependencies:\n' + skipped.join('\n') + '\nExport with unavailable-data references retained?')) { setStatus('JSON export cancelled.'); return; }
   if (Object.keys(inlined).length) layout.datasets = inlined;
   // Queries are small text: always inline them, same treatment.
   const inlinedQueries = inlineQueries(layout.tiles.map((t) => t.dataset).filter(isQueryRef));
@@ -803,6 +800,9 @@ document.getElementById("btn-export").addEventListener("click", () => {
 // per-tile rows, and downloads the result. The exported file renders the
 // same themed charts with no network dependencies and no editor chrome.
 async function exportHtml() {
+  const exportRevision = datasetVersion();
+  const snapshotSignature = () => { const { savedAt, ...layout } = serializeLayout(); return JSON.stringify(layout); };
+  const exportLayout = snapshotSignature();
   setStatus("Preparing HTML export…");
   try {
     const res = await fetch(new URL("export-template.html", window.location.href));
@@ -838,7 +838,7 @@ async function exportHtml() {
 
     const payload = {
       app: "dashboard-builder",
-      version: 1,
+      version: 2,
       kind: "dashboard-export",
       title: "Dashboard",
       exportedAt: new Date().toISOString(),
@@ -854,6 +854,7 @@ async function exportHtml() {
         return;
       }
     }
+    if (exportRevision !== datasetVersion() || exportLayout !== snapshotSignature()) throw new Error("Dashboard changed during export. Export again.");
     const html = template.replace("__DASHBOARD_PAYLOAD__", () => json);
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
@@ -877,19 +878,39 @@ document.getElementById("btn-import").addEventListener("click", () => fileInput.
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   if (!file) return;
+  if (file.size > LIMITS.layoutBytes) { setStatus("Import limit is 32 MiB."); fileInput.value = ""; return; }
   const reader = new FileReader();
   reader.onload = async () => {
     try {
-      const data = JSON.parse(reader.result);
-      // Validate before restoring datasets or queries, since those restores
-      // persist immediately and should not be a side effect of a rejected file.
-      validateLayout(data);
-      const restored = await restoreDatasets(data.datasets);
-      const restoredQueries = restoreQueries(data.queries);
-      loadLayout(data);
-      pruneQueries([...tileMeta.values()].map((m) => m.dataset));
-      refreshQueryTiles(); // imported tables/queries: (re-)run query tiles
-      scheduleAutosave();
+      const data = validateLayout(JSON.parse(reader.result));
+      assertNoCollisions(data,getDataset,getQuery);
+      const previous = serializeLayout();
+      const queriesBefore = querySnapshot();
+      const layoutRaw = localStorage.getItem(STORAGE_KEY);
+      const queryRaw = localStorage.getItem('dashbuilder.queries.v1');
+      const newIds = Object.keys(data.datasets).filter(id => !hasDataset(id));
+      // Retain a durable recovery copy before the first replacement mutation.
+      localStorage.setItem(STORAGE_KEY + ':recovery',JSON.stringify({ layout: previous, queries: queriesBefore }));
+      let restored = 0, restoredQueries = 0;
+      clearTimeout(saveTimer);
+      bulkLoading = true;
+      try {
+        // Detached construction checks run before any durable dataset write.
+        for (const t of data.tiles) buildTileContent(t.type,t);
+        restored = await restoreDatasets(data.datasets);
+        restoredQueries = restoreQueries(data.queries);
+        replaceLayout(data);
+        localStorage.setItem('dashbuilder.queries.v1',serializeQueries());
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(serializeLayout()));
+      } catch (err) {
+        rollbackQueries(queriesBefore);
+        loadLayout(previous);
+        if (restored) await rollbackDatasets(newIds);
+        if (queryRaw === null) localStorage.removeItem('dashbuilder.queries.v1'); else localStorage.setItem('dashbuilder.queries.v1',queryRaw);
+        if (layoutRaw === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY,layoutRaw);
+        throw err;
+      } finally { bulkLoading = false; }
+      refreshQueryTiles();
       const bits = [];
       if (restored) bits.push(`${restored} dataset${restored === 1 ? "" : "s"}`);
       if (restoredQueries) bits.push(`${restoredQueries} quer${restoredQueries === 1 ? "y" : "ies"}`);
@@ -973,6 +994,13 @@ function starterLayout() {
   if (!restored) {
     loadLayout(starterLayout());
     setStatus("Starter dashboard loaded");
+  }
+  const issues = storageIssues();
+  if (issues.length) {
+    setStatus(issues.join("; ") + ". Export JSON for backup or retry migration.");
+    const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "Retry data migration";
+    retry.onclick = async () => { await loadPersistedDatasets(); setStatus(storageIssues().join("; ") || "Migration verified."); };
+    statusEl.after(retry);
   }
   setStatus(`${statusEl.textContent} · build ${BUILD}`);
 })();

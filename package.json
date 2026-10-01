@@ -23,17 +23,21 @@
     "url": "https://github.com/nateriera/dashboard-builder/issues"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.1.1",
     "vite": "^7.1.7",
     "vite-plugin-singlefile": "^2.3.3"
   },
   "name": "dashboard-builder",
   "scripts": {
-    "build": "vite build --config vite.export.config.js && vite build",
-    "dev": "vite",
+    "build": "vite build --config vite.export.config.js --configLoader runner && vite build --configLoader runner",
+    "dev": "vite --configLoader runner",
     "preview": "vite preview",
-    "build:export-template": "vite build --config vite.export.config.js",
-    "test": "node --no-warnings --loader ./tests/json-loader.mjs tests/render-sweep.mjs"
+    "build:export-template": "vite build --config vite.export.config.js --configLoader runner",
+    "test": "node --no-warnings --loader ./tests/json-loader.mjs tests/render-sweep.mjs && node --no-warnings --loader ./tests/json-loader.mjs --test tests/remediation.test.mjs",
+    "predev": "npm run build:export-template",
+    "test:browser": "playwright test"
   },
   "type": "module"
 }

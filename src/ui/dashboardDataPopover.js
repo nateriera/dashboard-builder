@@ -1,3 +1,4 @@
+import { focusDialog } from "./focus.js";
 // Dashboard-wide default dataset popover: pick one CSV (or sample) that all
 // charts follow, instead of binding data tile by tile. Tiles with an explicit
 // per-tile dataset keep it; tiles on the default re-resolve on every render.
@@ -5,14 +6,16 @@
 // Reuses the tile Data popover's CSS classes so it matches automatically.
 
 import { DATASET_LABELS } from "../tiles/registry.js";
-import { parseFile } from "../data/parse.js";
+import { readUpload } from "../data/readUpload.js";
 import { listDatasets } from "../data/store.js";
 
+let releaseFocus = null;
 let popEl = null;
 let popAnchor = null;
 
 export function closeDashboardPopover() {
   if (popEl) {
+    releaseFocus?.(); releaseFocus = null;
     popEl.remove();
     popEl = null;
     popAnchor = null;
@@ -137,8 +140,8 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     err.hidden = true;
     dropText.textContent = `Reading ${file.name}…`;
     try {
-      const text = await file.text();
-      const { columns, rows } = parseFile(file.name, text);
+      const { columns, rows } = await readUpload(file,pop);
+      if (!pop.isConnected) return;
       onUpload({ name: file.name, columns, rows });
       closeDashboardPopover();
     } catch (e) {
@@ -180,6 +183,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
   });
 
   popEl = pop;
+  releaseFocus = focusDialog(pop,anchor);
   popAnchor = anchor;
   document.addEventListener("pointerdown", onDocPointerDown, true);
   document.addEventListener("keydown", onDocKeyDown);

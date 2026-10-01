@@ -1,0 +1,442 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "C:\\Users\\nater\\Documents\\SecondBrain\\Projects\\dashboard-builder-2f\\node_modules\\@playwright\\test\\cli.js",
+      "test"
+    ],
+    "configFile": "C:\\Users\\nater\\Documents\\SecondBrain\\Projects\\dashboard-builder-2f\\playwright.config.js",
+    "rootDir": "C:/Users/nater/Documents/SecondBrain/Projects/dashboard-builder-2f/tests/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/nater/Documents/SecondBrain/Projects/dashboard-builder-2f/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Users/nater/Documents/SecondBrain/Projects/dashboard-builder-2f/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "docs/verification/browser-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
+      "url": "http://127.0.0.1:4173",
+      "reuseExistingServer": false,
+      "timeout": 60000
+    }
+  },
+  "suites": [
+    {
+      "title": "remediation.spec.js",
+      "file": "remediation.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 976,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:33.888Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-ffeae9046a310a248b30",
+          "file": "remediation.spec.js",
+          "line": 17,
+          "column": 1
+        },
+        {
+          "title": "R2: query JSON carries uploaded inputs into empty storage; HTML works offline",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3958,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:35.097Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "browser-version",
+                      "contentType": "text/plain",
+                      "body": "MTU0LjAuODAzNy41OA=="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-f87f876d9c3ca84a65a3",
+          "file": "remediation.spec.js",
+          "line": 41,
+          "column": 1
+        },
+        {
+          "title": "R2/R7: missing references stay blocked; collision and invalid imports preserve current layout",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 884,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:39.068Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-2ef40d2f3ce8de581090",
+          "file": "remediation.spec.js",
+          "line": 61,
+          "column": 1
+        },
+        {
+          "title": "R4: delayed SQL A after edit to B and mapping change never enables Apply",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5580,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:39.965Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-f94b02b647125568224a",
+          "file": "remediation.spec.js",
+          "line": 75,
+          "column": 1
+        },
+        {
+          "title": "R5/R7: quota fault during import restores old chart and removes new dataset records",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 598,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:45.558Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-a4f7deeddef18bf9516f",
+          "file": "remediation.spec.js",
+          "line": 95,
+          "column": 1
+        },
+        {
+          "title": "R6/R9: capacity, query cap and supported editor viewport",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2228,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:46.168Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "capacity-measurements",
+                      "contentType": "application/json",
+                      "body": "eyJzY2F0dGVyIjp7Im1zIjozMC4zMDAwMDAwMDQ0NzAzNSwic3ZnIjp0cnVlLCJub3RlIjp0cnVlfSwibGluZSI6eyJtcyI6MjQuMTk5OTk5OTk1NTI5NjUsInN2ZyI6dHJ1ZSwibm90ZSI6dHJ1ZX19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-81ddf30c44d9158818ac",
+          "file": "remediation.spec.js",
+          "line": 106,
+          "column": 1
+        },
+        {
+          "title": "R5: unavailable IndexedDB retains legacy records across reload with visible retry",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 869,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:48.410Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-727fb8bd73de9904c736",
+          "file": "remediation.spec.js",
+          "line": 125,
+          "column": 1
+        },
+        {
+          "title": "R5/R7: partial IndexedDB write and construction faults leave prior layout and data intact",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 636,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:49.297Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-26540d49fec54453a381",
+          "file": "remediation.spec.js",
+          "line": 135,
+          "column": 1
+        },
+        {
+          "title": "R4/R8: real WASM precision, immediate cache invalidation and serialized resynchronization",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1252,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:49.950Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-06db898f89126c5686f2",
+          "file": "remediation.spec.js",
+          "line": 151,
+          "column": 1
+        },
+        {
+          "title": "R6/R9: worker upload, keyboard save/import/export and cancel remain operable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 966,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-01T23:48:51.217Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "67caf5e2f86d40fc75d1-db1d510d0f992fbe480b",
+          "file": "remediation.spec.js",
+          "line": 168,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-01T23:48:29.392Z",
+    "duration": 23184.760000000002,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

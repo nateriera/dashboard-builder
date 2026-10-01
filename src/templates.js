@@ -1,3 +1,4 @@
+import { validateLayout } from "./data/layout.js";
 // Template library: original dashboard compositions a user can start from.
 //
 // IP rule (standing): templates are original compositions built from generic
@@ -101,24 +102,9 @@ const LEGACY_USER_TPL_KEY = "klaroDash.templates.v1"; // pre-theme era; read onc
 
 /** Drop tiles with unknown types and clamp geometry to sane ranges. */
 export function sanitizeTiles(tiles) {
-  if (!Array.isArray(tiles)) return [];
-  const out = [];
-  for (const t of tiles) {
-    if (!t || !TILE_TYPES[t.type]) continue;
-    const x = Math.max(0, Math.min(11, Math.floor(Number(t.x) || 0)));
-    const y = Math.max(0, Math.floor(Number(t.y) || 0));
-    const w = Math.max(1, Math.min(12, Math.floor(Number(t.w) || TILE_TYPES[t.type].defaultSize.w)));
-    const h = Math.max(1, Math.floor(Number(t.h) || TILE_TYPES[t.type].defaultSize.h));
-    out.push({
-      type: t.type,
-      x, y, w, h,
-      title: typeof t.title === "string" ? t.title : TILE_TYPES[t.type].defaultTitle,
-      source: typeof t.source === "string" ? t.source : "Sample data",
-      dataset: t.dataset === undefined ? null : t.dataset,
-      tileOptions: t.tileOptions && typeof t.tileOptions === "object" ? { ...t.tileOptions } : {}
-    });
-  }
-  return out;
+  try {
+    return validateLayout({ app: 'dashboard-builder', version: 1, tiles }).tiles.map(({ id,binding,...t }) => t);
+  } catch { return []; }
 }
 
 export function loadUserTemplates() {
@@ -153,6 +139,7 @@ export function saveUserTemplate(name, tiles, theme = "paper") {
     id: `user-${Date.now().toString(36)}`,
     name: name.trim().slice(0, 60),
     theme,
+    version: 2,
     createdAt: new Date().toISOString(),
     inspiredBy: null,
     tiles: clean

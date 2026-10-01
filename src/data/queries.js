@@ -30,38 +30,42 @@ function readAll() {
 function writeAll(next) {
   const items = {};
   for (const [id, q] of memory) {
-    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping };
+    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null };
   }
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({ next, items }));
     localStorage.removeItem(LEGACY_LS_KEY);
+    return true;
   } catch {
-    // Quota or unavailable storage: memory-only for this session.
+    // Callers can distinguish a durable save from a session-only query.
+    return false;
   }
 }
 
 /** Save a query validated by Run. Returns {id, name}. */
-export function saveQuery({ name, sql, columns, fieldKeys, mapping }) {
+export function saveQuery({ name, sql, columns, fieldKeys, mapping, dependencies = null }) {
   const id = `q${Date.now().toString(36)}${seq++}`;
   const entry = {
     id,
+    dependencies,
     name: null, // filled below
     sql,
     columns: columns || [],
     fieldKeys: fieldKeys || [],
     mapping: mapping || {}
   };
+  let persisted = false;
   if (name) {
     entry.name = name;
     memory.set(id, entry);
-    writeAll(readAll().next);
+    persisted = writeAll(readAll().next);
   } else {
     const all = readAll();
     entry.name = `Query ${all.next}`;
     memory.set(id, entry);
-    writeAll(all.next + 1);
+    persisted = writeAll(all.next + 1);
   }
-  return { id, name: entry.name };
+  return { id, name: entry.name, persisted };
 }
 
 export function getQuery(id) {
@@ -100,6 +104,7 @@ export function loadPersistedQueries() {
       id,
       name: e.name || id,
       sql: e.sql,
+      dependencies: e.dependencies ?? null,
       columns: Array.isArray(e.columns) ? e.columns : [],
       fieldKeys: Array.isArray(e.fieldKeys) ? e.fieldKeys : [],
       mapping: e.mapping && typeof e.mapping === "object" ? e.mapping : {}
@@ -116,27 +121,23 @@ export function inlineQueries(refs) {
     if (!isQueryRef(ref)) continue;
     const q = memory.get(queryId(ref));
     if (!q) continue;
-    inlined[q.id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping };
+    inlined[q.id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null };
   }
   return inlined;
 }
 
 /** Restore queries inlined in an imported layout file. Returns count added. */
+export function querySnapshot() { return structuredClone([...memory]); }
+export function rollbackQueries(snapshot) {
+  memory.clear(); for (const [id,q] of snapshot) memory.set(id,q);
+}
 export function restoreQueries(obj) {
-  if (!obj || typeof obj !== "object") return 0;
-  let added = 0;
-  for (const [id, e] of Object.entries(obj)) {
-    if (!e || typeof e.sql !== "string" || memory.has(id)) continue;
-    memory.set(id, {
-      id,
-      name: e.name || id,
-      sql: e.sql,
-      columns: Array.isArray(e.columns) ? e.columns : [],
-      fieldKeys: Array.isArray(e.fieldKeys) ? e.fieldKeys : [],
-      mapping: e.mapping && typeof e.mapping === "object" ? e.mapping : {}
-    });
-    added++;
-  }
-  if (added) writeAll();
-  return added;
+  if (!obj) return 0;
+  const pending = Object.entries(obj).filter(([id]) => !memory.has(id));
+  for (const [id,e] of pending) memory.set(id,{ ...e,id });
+  // The import coordinator commits localStorage together with the layout.
+  return pending.length;
+}
+export function serializeQueries() {
+  return JSON.stringify({ next: readAll().next, items: Object.fromEntries(memory) });
 }

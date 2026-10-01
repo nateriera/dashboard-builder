@@ -1,3 +1,4 @@
+import { focusDialog } from "./focus.js";
 // Template gallery: modal picker for starter templates and the user's own
 // saved templates. Follows the dataPopover conventions (overlay + dialog,
 // Escape/overlay-click to close, callbacks back into main.js).
@@ -10,10 +11,12 @@ import {
 } from "../templates.js";
 import { TILE_TYPES } from "../tiles/registry.js";
 
+let releaseFocus = null;
 let overlayEl = null;
 let docKeyHandler = null;
 
 export function closeTemplateGallery() {
+  releaseFocus?.(); releaseFocus = null;
   if (overlayEl) overlayEl.remove();
   overlayEl = null;
   if (docKeyHandler) {
@@ -144,7 +147,7 @@ export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrent
     if (e.key === "Escape") closeTemplateGallery();
   };
   document.addEventListener("keydown", docKeyHandler);
-  modal.focus();
+  releaseFocus = focusDialog(modal);
 
   // ── Card builders ─────────────────────────────────────────────────────
   function buildSection(heading) {

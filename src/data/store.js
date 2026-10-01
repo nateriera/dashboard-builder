@@ -1,3 +1,4 @@
+import { migrateLegacy } from "./migrate.js";
 // Uploaded-dataset store: in-memory Map (sync reads) backed by IndexedDB
 // (async persistence via the `idb` wrapper, ISC).
 //
@@ -53,7 +54,9 @@ export async function persistDataset(id) {
   if (!entry) return false;
   try {
     const db = await dbPromise;
-    await db.put(DB_STORE, storable(entry));
+    const record = storable(entry);
+    await db.put(DB_STORE, record);
+    if (JSON.stringify(await db.get(DB_STORE,id)) !== JSON.stringify(record)) throw new Error("Dataset verification failed");
     entry.persisted = true;
     return true;
   } catch {
@@ -66,6 +69,9 @@ export async function persistDataset(id) {
 // restored). The DuckDB layer (phase 2b) uses it to know when its registered
 // tables are stale.
 let version = 0;
+const revisionListeners = new Set();
+export function subscribeDatasetChanges(listener) { revisionListeners.add(listener); return () => revisionListeners.delete(listener); }
+function bumpVersion() { version++; for (const listener of revisionListeners) listener(version); }
 export function datasetVersion() {
   return version;
 }
@@ -92,95 +98,35 @@ export function listDatasets() {
 /** Populate memory from IndexedDB on startup. One-time migrates the legacy
  *  localStorage key ("klaroDash.datasets.v1") and removes it. Resolves the
  *  count loaded. */
+let migrationFailures = [];
+export function storageIssues() { return [...migrationFailures]; }
 export async function loadPersistedDatasets() {
-  let loaded = 0;
-  // Legacy migration (2a era): move localStorage entries into IndexedDB once.
-  let legacy = null;
-  try {
-    const rawLS = localStorage.getItem(LS_KEY) || localStorage.getItem(LEGACY_LS_KEY);
-    if (rawLS) {
-      const obj = JSON.parse(rawLS);
-      if (obj && typeof obj === "object") legacy = obj;
-      localStorage.removeItem(LS_KEY);
-      localStorage.removeItem(LEGACY_LS_KEY);
-    }
-  } catch {
-    // Corrupt legacy data: drop it rather than fail startup.
-    try {
-      localStorage.removeItem(LS_KEY);
-      localStorage.removeItem(LEGACY_LS_KEY);
-    } catch {
-      /* ignore */
-    }
-  }
   let db = null;
-  try {
-    db = await dbPromise;
-  } catch {
-    db = null; // IndexedDB unavailable: memory-only this session
-  }
-  const ingest = (id, e) => {
-    if (!e || !Array.isArray(e.rows) || memory.has(id)) return false;
-    memory.set(id, {
-      id,
-      name: e.name || id,
-      columns: e.columns || [],
-      rows: e.rows,
-      fieldKeys: e.fieldKeys || [],
-      mapping: e.mapping || {},
-      raw: e.raw && Array.isArray(e.raw.rows) ? e.raw : null,
-      bytes: typeof e.bytes === "number" ? e.bytes : JSON.stringify(e.rows).length,
-      persisted: true
-    });
-    return true;
+  try { db = await dbPromise; } catch { /* preserve legacy sources */ }
+  const ingest = (id,e,persisted) => {
+    if (!e || !Array.isArray(e.rows)) return;
+    const prior = memory.get(id);
+    if (prior) { if (persisted && JSON.stringify(prior.rows) === JSON.stringify(e.rows)) prior.persisted = true; return; }
+    memory.set(id,{ ...e, id, name: e.name || id, columns: e.columns || [], fieldKeys: e.fieldKeys || [], mapping: e.mapping || {}, raw: e.raw || null, bytes: e.bytes || new TextEncoder().encode(JSON.stringify(e)).length, persisted });
   };
-  if (legacy) {
-    for (const [id, e] of Object.entries(legacy)) {
-      if (!ingest(id, e)) continue;
-      loaded++;
-      if (db) {
-        try {
-          await db.put(DB_STORE, storable(memory.get(id)));
-        } catch {
-          /* best effort */
-        }
-      }
-    }
-    version++;
-  }
   if (db) {
-    try {
-      for (const e of await db.getAll(DB_STORE)) {
-        if (ingest(e.id, e)) loaded++;
-      }
-      if (loaded) version++;
-    } catch {
-      // Unreadable store: memory-only this session.
-    }
-    // Pre-theme-era database rename: if the new database came up empty,
-    // copy any datasets from the old one exactly once.
-    if (loaded === 0) {
-      try {
-        const oldDb = await openDB(LEGACY_DB_NAME, 1);
-        const oldEntries = await oldDb.getAll(DB_STORE).catch(() => []);
-        for (const e of oldEntries) {
-          if (ingest(e.id, e)) {
-            loaded++;
-            try {
-              await db.put(DB_STORE, storable(memory.get(e.id)));
-            } catch {
-              /* best effort */
-            }
-          }
-        }
-        if (loaded) version++;
-        oldDb.close();
-      } catch {
-        // No old database (or unreadable): nothing to migrate.
-      }
-    }
+    try { for (const e of await db.getAll(DB_STORE)) ingest(e.id,e,true); } catch { /* migration still keeps sources */ }
   }
-  return loaded;
+  migrationFailures = await migrateLegacy({ storage: globalThis.localStorage, keys: [LS_KEY,LEGACY_LS_KEY], db, ingest });
+  // The old IndexedDB database remains a recovery source even after copying.
+  try {
+    const databases = await globalThis.indexedDB?.databases?.();
+    if (databases?.some(d => d.name === LEGACY_DB_NAME)) {
+      const oldDb = await openDB(LEGACY_DB_NAME,1);
+      for (const e of await oldDb.getAll(DB_STORE)) {
+        ingest(e.id,e,false);
+        if (!(await persistDataset(e.id))) migrationFailures.push(e.id + ': legacy database retained; session-only data');
+      }
+      oldDb.close();
+    }
+  } catch { migrationFailures.push('Legacy database could not be read; retained for retry.'); }
+  if (memory.size) bumpVersion();
+  return memory.size;
 }
 
 /** Store an uploaded dataset in memory. Normalization (if any) is the caller's
@@ -200,7 +146,7 @@ export function saveDataset({ name, columns, rows, fieldKeys, mapping, raw = nul
     bytes,
     persisted: false
   });
-  version++;
+  bumpVersion();
   return { id, bytes };
 }
 
@@ -219,7 +165,7 @@ export function inlineDatasets(refs) {
   for (const ref of refs) {
     if (!isUploadRef(ref)) continue;
     const ds = memory.get(uploadId(ref));
-    if (!ds) continue;
+    if (!ds) { skipped.push(`${ref} (missing)`); continue; }
     if (ds.bytes <= EXPORT_INLINE_BYTES) {
       inlined[ds.id] = {
         name: ds.name,
@@ -230,7 +176,7 @@ export function inlineDatasets(refs) {
         raw: ds.raw || null
       };
     } else {
-      skipped.push(ds.name);
+      skipped.push(`${ds.name} (${ds.id}: ${ds.bytes.toLocaleString()} bytes exceeds ${EXPORT_INLINE_BYTES.toLocaleString()} byte inline limit)`);
     }
   }
   return { inlined, skipped };
@@ -239,27 +185,31 @@ export function inlineDatasets(refs) {
 /** Restore datasets inlined in an imported layout file. Persists them to
  *  IndexedDB as well. Resolves the count added. */
 export async function restoreDatasets(obj) {
-  if (!obj || typeof obj !== "object") return 0;
-  let added = 0;
-  for (const [id, e] of Object.entries(obj)) {
-    if (!e || !Array.isArray(e.rows) || memory.has(id)) continue;
-    memory.set(id, {
-      id,
-      name: e.name || id,
-      columns: e.columns || [],
-      rows: e.rows,
-      fieldKeys: e.fieldKeys || [],
-      mapping: e.mapping || {},
-      raw: e.raw && Array.isArray(e.raw.rows) ? e.raw : null,
-      bytes: JSON.stringify(e.rows).length,
-      persisted: false
-    });
-    added++;
-  }
-  if (!added) return 0;
-  version++; // tables changed: DuckDB registrations (phase 2b) go stale
-  for (const id of Object.keys(obj)) {
-    if (memory.has(id)) await persistDataset(id);
-  }
-  return added;
+  if (!obj || typeof obj !== 'object') return 0;
+  const pending = Object.entries(obj).filter(([id]) => !memory.has(id));
+  if (!pending.length) return 0;
+  const db = await dbPromise;
+  const tx = db.transaction(DB_STORE,'readwrite');
+  try {
+    for (const [id,e] of pending) {
+      const record = { ...e,id,bytes: new TextEncoder().encode(JSON.stringify(e)).length };
+      await tx.store.add(record);
+      const verified = await tx.store.get(id);
+      if (JSON.stringify(record) !== JSON.stringify(verified)) throw new Error('Dataset verification failed');
+    }
+    await tx.done;
+  } catch (err) { try { tx.abort(); } catch {} await tx.done.catch(() => {}); throw err; }
+  for (const [id,e] of pending) memory.set(id,{ ...e,id,bytes: new TextEncoder().encode(JSON.stringify(e)).length,persisted: true });
+  bumpVersion();
+  return pending.length;
+}
+// Only rolls back newly introduced import ids; never replaces existing records.
+export async function rollbackDatasets(ids) {
+  if (!ids.length) return;
+  const db = await dbPromise;
+  const tx = db.transaction(DB_STORE,'readwrite');
+  for (const id of ids) await tx.store.delete(id);
+  await tx.done;
+  for (const id of ids) memory.delete(id);
+  bumpVersion();
 }

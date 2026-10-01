@@ -1,3 +1,4 @@
+import { LIMITS, assertRows } from "./limits.js";
 // File parsing for tile data uploads: CSV (via d3-dsv) and JSON.
 //
 // parseFile(name, text) -> { columns: string[], rows: object[] }
@@ -11,8 +12,11 @@ export const MAX_ROWS = 250000;
 const WRAPPER_KEYS = ["data", "rows", "results", "items"];
 
 export function parseFile(name, text) {
-  if (/\.json$/i.test(name)) return parseJson(text);
-  return parseCsv(text);
+  if (new TextEncoder().encode(text).length > LIMITS.fileBytes) throw new Error("File limit is 16 MiB. Split or aggregate the file.");
+  const result = /\.json$/i.test(name) ? parseJson(text) : parseCsv(text);
+  assertRows(result.rows);
+  if (result.columns.length > LIMITS.columns) throw new Error(`Column limit is ${LIMITS.columns}.`);
+  return result;
 }
 
 function parseJson(text) {

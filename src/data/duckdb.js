@@ -1,3 +1,5 @@
+import { createQueryCoordinator } from "./queryCoordinator.js";
+import { LIMITS } from "./limits.js";
 // DuckDB-WASM in-browser SQL (phase 2b).
 //
 // Lazy singleton: the duckdb-wasm ESM bundle and its .wasm binary load only
@@ -51,14 +53,10 @@ async function getDB() {
 }
 
 // ── Table registration ────────────────────────────────────────────────────
-// tableEpoch bumps on every completed sync; cached query results are only
-// valid for the epoch they ran under, so uploads/imports automatically
-// invalidate them (see "Query lifecycle" in the README).
+// All synchronization and execution is serialized. Cache eligibility compares
+// the store revision immediately, before the next synchronization begins.
 
-let tableEpoch = 0;
-let syncedVersion = -1;
-let syncPromise = null;
-
+let registered = new Set();
 function collectDatasetTables() {
   const out = [];
   for (const [key, rows] of Object.entries(DATASETS)) {
@@ -72,42 +70,29 @@ function collectDatasetTables() {
 
 async function syncTables(datasets) {
   const { conn } = await getDB();
-  for (const { table, columns, rows } of datasets) {
-    for (const stmt of buildTableStatements(table, columns, rows)) {
-      await conn.query(stmt);
+  await conn.query('BEGIN TRANSACTION');
+  try {
+    const wanted = new Set(datasets.map(d => d.table));
+    for (const table of registered) if (!wanted.has(table)) await conn.query('DROP TABLE IF EXISTS "' + table.replaceAll('"','""') + '"');
+    for (const { table, columns, rows } of datasets) {
+      if (!columns.length) continue;
+      for (const stmt of buildTableStatements(table, columns, rows)) await conn.query(stmt);
     }
+    await conn.query('COMMIT'); registered = wanted;
+  } catch (err) { await conn.query('ROLLBACK'); throw err; }
+}
+const coordinator = createQueryCoordinator({
+  revision: datasetVersion, collect: collectDatasetTables, sync: syncTables,
+  execute: async sql => {
+    const trimmed = sql.trim().replace(/;\s*$/, '');
+    if (!/^(SELECT|WITH)\b/i.test(trimmed)) throw new Error('Only SELECT/WITH queries are supported.');
+    const { conn } = await getDB();
+    const result = await conn.query('SELECT * FROM (' + trimmed + ') AS dashboard_result LIMIT ' + (LIMITS.queryRows + 1));
+    return materializeResult(result);
   }
-  tableEpoch++;
-}
-
-/** Make sure the registered tables match the current in-memory datasets.
- *  Concurrent calls coalesce; a newer dataset version always triggers a
- *  fresh sync after any in-flight one settles. */
-export async function ensureTables() {
-  await getDB();
-  const v = datasetVersion();
-  if (v === syncedVersion) return;
-  if (!syncPromise || syncPromise.version !== v) {
-    const p = (async () => {
-      await syncTables(collectDatasetTables());
-      syncedVersion = v;
-    })();
-    syncPromise = Object.assign(p, { version: v });
-    const clear = () => {
-      if (syncPromise === p) syncPromise = null;
-    };
-    p.then(clear, clear);
-  }
-  await syncPromise;
-}
-
-// ── Queries ───────────────────────────────────────────────────────────────
-
-export async function runQuery(sql) {
-  const { conn } = await getDB();
-  const result = await conn.query(sql);
-  return materializeResult(result);
-}
+});
+export function ensureTables() { return coordinator.ensure(); }
+export function runQuery(sql) { return coordinator.run(sql); }
 
 /** Tables shown in the SQL tab: exact names, so queries need no guessing. */
 export function listTables() {
@@ -123,31 +108,19 @@ export function listTables() {
 }
 
 // ── Result cache ──────────────────────────────────────────────────────────
-// qid -> {epoch, rows}. A tile re-renders from cache when the epoch matches;
-// anything that re-registers tables (upload, import) bumps the epoch and the
-// next render re-runs the query.
+// qid -> {revision, identity, rows}; field contracts are part of identity.
 
 const queryCache = new Map();
 
-export function getCachedRows(qid) {
+export function getCachedRows(qid, query, entry) {
   const e = queryCache.get(qid);
-  return e && e.epoch === tableEpoch ? e.rows : null;
+  return e && e.revision === datasetVersion() && e.identity === JSON.stringify([query,entry?.fields]) ? e.rows : null;
 }
-
-function setCachedRows(qid, rows) {
-  queryCache.set(qid, { epoch: tableEpoch, rows });
-}
-
-export function dropCachedRows(qid) {
-  queryCache.delete(qid);
-}
-
-/** Run a saved query for a tile: ensure tables, execute, normalize through
- *  the tile's field declarations (same as uploads), cache the result. */
+export function dropCachedRows(qid) { queryCache.delete(qid); }
 export async function runTileQuery(qid, query, entry) {
-  await ensureTables();
-  const { rows } = await runQuery(query.sql);
+  const { rows, revision } = await runQuery(query.sql);
   const { rows: normalized } = normalizeRows(entry, rows, query.mapping || {});
-  setCachedRows(qid, normalized);
+  if (revision !== datasetVersion()) throw new Error('Datasets changed. Run again.');
+  queryCache.set(qid, { revision, identity: JSON.stringify([query,entry.fields]), rows: normalized });
   return normalized;
 }

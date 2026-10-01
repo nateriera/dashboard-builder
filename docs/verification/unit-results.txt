@@ -1,0 +1,61 @@
+
+> dashboard-builder@0.1.0 test
+> node --no-warnings --loader ./tests/json-loader.mjs tests/render-sweep.mjs && node --no-warnings --loader ./tests/json-loader.mjs --test tests/remediation.test.mjs
+
+paper / bar: OK
+paper / column: OK
+paper / line: OK
+paper / scatter: OK
+paper / dot: OK
+paper / donut: OK
+paper / choropleth: OK
+paper / smallMultiples: OK
+paper / kpi: OK
+slate / bar: OK
+slate / column: OK
+slate / line: OK
+slate / scatter: OK
+slate / dot: OK
+slate / donut: OK
+slate / choropleth: OK
+slate / smallMultiples: OK
+slate / kpi: OK
+dusk / bar: OK
+dusk / column: OK
+dusk / line: OK
+dusk / scatter: OK
+dusk / dot: OK
+dusk / donut: OK
+dusk / choropleth: OK
+dusk / smallMultiples: OK
+dusk / kpi: OK
+mono / bar: OK
+mono / column: OK
+mono / line: OK
+mono / scatter: OK
+mono / dot: OK
+mono / donut: OK
+mono / choropleth: OK
+mono / smallMultiples: OK
+mono / kpi: OK
+ALL 36 OK
+✔ R1: all eight donut categories total 48,240, independent of row order (68.6057ms)
+✔ R1: neutral units and default zero-inclusive shared domain through registry (26.8643ms)
+✔ R3: every binding survives migration, reload and JSON without input mutation (1.2642ms)
+✔ R7: malformed envelopes fail validation before any mutation (1.1317ms)
+✔ R8: exact integers survive SQL, JSON, store and KPI; plotting refuses approximation (29.5945ms)
+✔ R8: millisecond timestamp boundaries and timezone offsets are explicit; finer precision is refused (0.4886ms)
+✔ R5: unavailable, quota, partial writes and read-back faults retain recoverable source across reload (1.0745ms)
+✔ R7: partial IndexedDB import transaction aborts without publishing records (2.6813ms)
+✔ R4: deferred previews cannot apply SQL A after editing to B or a dataset revision (0.2806ms)
+✔ R4: revisions synchronize serially and superseded query results are rejected (19.8782ms)
+✔ R6: 250,000-row fixtures have safe domains and bounded plotted marks (107.3568ms)
+✔ R2/R6: upload row boundaries and oversized dependency reasons are explicit (95.0114ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2350.1993

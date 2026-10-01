@@ -1,3 +1,6 @@
+import { focusDialog } from "./focus.js";
+import { createPreviewGate } from "../data/queryCoordinator.js";
+import { datasetVersion, listDatasets, subscribeDatasetChanges } from "../data/store.js";
 // Tile "Data" popover: three tabs — Samples (bundled datasets), Upload
 // (CSV/JSON file with column mapping), and SQL (DuckDB-WASM queries over all
 // registered tables). Appended to document.body with fixed positioning so
@@ -9,7 +12,7 @@ import {
   guessMapping,
   normalizeRows
 } from "../tiles/registry.js";
-import { parseFile } from "../data/parse.js";
+import { readUpload } from "../data/readUpload.js";
 import { saveDataset, persistDataset, uploadId, isUploadRef } from "../data/store.js";
 import { saveQuery, getQuery } from "../data/queries.js";
 import {
@@ -19,11 +22,15 @@ import {
   isQueryRef
 } from "../data/sql.js";
 
+let releaseRevision = null;
+let releaseFocus = null;
 let popEl = null;
 let popAnchor = null;
 
 export function closeDataPopover() {
   if (popEl) {
+    releaseRevision?.(); releaseRevision = null;
+    releaseFocus?.(); releaseFocus = null;
     popEl.remove();
     popEl = null;
     popAnchor = null;
@@ -220,6 +227,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
         lab.append(" ", tag);
       }
       const sel = document.createElement("select");
+      sel.setAttribute("aria-label",f.label);
       sel.dataset.fieldKey = f.key;
       const none = document.createElement("option");
       none.value = "";
@@ -251,7 +259,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       applyBtn.disabled = true;
       return;
     }
-    const { rows, dropped } = normalizeRows(entry, state.rawRows, state.mapping);
+    let rows, dropped;
+    try { ({ rows, dropped } = normalizeRows(entry, state.rawRows, state.mapping)); }
+    catch (err) { showError(err.message); state.normalized = null; return; }
     state.normalized = rows;
 
     previewTable.innerHTML = "";
@@ -291,8 +301,8 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     if (!file) return;
     errorEl.hidden = true;
     try {
-      const text = await file.text();
-      const { columns, rows } = parseFile(file.name, text);
+      const { columns, rows } = await readUpload(file,pop);
+      if (!pop.isConnected) return;
       state.fileName = file.name;
       state.columns = columns;
       state.rawRows = rows;
@@ -387,7 +397,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   const sqlStatus = document.createElement("span");
   sqlStatus.className = "data-sql-status";
   sqlStatus.textContent = "Loading DuckDB…";
-  sqlRunRow.append(runBtn, sqlStatus);
+  const cancelRun = document.createElement("button"); cancelRun.type = "button"; cancelRun.textContent = "Discard running result";
+  cancelRun.onclick = () => { previewGate.invalidate(); qApplyBtn.disabled = true; sqlStatus.textContent = "Result discarded; wait for execution to finish before running again."; };
+  sqlRunRow.append(runBtn, cancelRun, sqlStatus);
 
   const sqlError = document.createElement("div");
   sqlError.className = "data-error";
@@ -463,7 +475,11 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     }
   }
 
+  const previewGate = createPreviewGate(datasetVersion);
+  releaseRevision = subscribeDatasetChanges(() => { previewGate.invalidate(); qApplyBtn.disabled = true; sqlStatus.textContent = "Data changed — Run again"; });
   function markSqlDirty() {
+    previewGate.invalidate();
+    qApplyBtn.disabled = true;
     // The SQL changed after the last Run: Apply must not save stale results.
     if (qstate.sql != null && sqlInput.value !== qstate.sql) {
       qApplyBtn.disabled = true;
@@ -515,6 +531,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   }
 
   function updateQueryPreview() {
+    if (!previewGate.eligible(sqlInput.value) || sqlRunning) { qApplyBtn.disabled = true; return; }
     const required = entry.fields.filter((f) => !f.optional);
     const missing = required.filter((f) => !qstate.mapping[f.key]);
     if (missing.length) {
@@ -522,7 +539,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       qApplyBtn.disabled = true;
       return;
     }
-    const { rows, dropped } = normalizeRows(entry, qstate.rows, qstate.mapping);
+    let rows, dropped;
+    try { ({ rows, dropped } = normalizeRows(entry, qstate.rows, qstate.mapping)); }
+    catch (err) { showSqlError(err.message); previewGate.invalidate(); qstate.normalized = null; return; }
     qstate.normalized = rows;
 
     qPreviewTable.innerHTML = "";
@@ -559,20 +578,28 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
 
   runBtn.addEventListener("click", async () => {
     if (sqlRunning) return;
+    const request = previewGate.begin(sqlInput.value);
+    qApplyBtn.disabled = true;
+    qstate.normalized = null;
     sqlRunning = true;
     runBtn.disabled = true;
     sqlError.hidden = true;
     sqlStatus.textContent = "Running…";
     try {
-      const { columns, rows } = await sqlModule.runQuery(sqlInput.value);
-      qstate.sql = sqlInput.value;
+      const { columns, rows } = await sqlModule.runQuery(request.sql);
+      if (!pop.isConnected || !previewGate.accept(request, sqlInput.value)) { sqlStatus.textContent = "Edited or data changed — Run again"; return; }
+      qstate.sql = request.sql;
       qstate.columns = columns;
       qstate.rows = rows;
       qstate.mapping = guessMapping(entry, columns);
       sqlStatus.textContent = `${rows.length.toLocaleString()} row${rows.length === 1 ? "" : "s"}`;
       buildQueryMappingUI();
+      sqlRunning = false;
       updateQueryPreview();
     } catch (err) {
+      previewGate.invalidate();
+      qstate.normalized = null;
+      qApplyBtn.disabled = true;
       qstate.sql = null;
       qstate.columns = null;
       qstate.rows = null;
@@ -585,14 +612,15 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   });
 
   qApplyBtn.addEventListener("click", () => {
-    if (!qstate.normalized || qstate.sql == null) return;
-    const { id, name } = saveQuery({
+    if (!previewGate.eligible(sqlInput.value) || sqlRunning || !qstate.normalized || qstate.sql == null) { qApplyBtn.disabled = true; return; }
+    const { id, name, persisted } = saveQuery({
       sql: qstate.sql,
+      dependencies: listDatasets().map(ds => `upload:${ds.id}`),
       columns: qstate.columns,
       fieldKeys: entry.fields.map((f) => f.key),
       mapping: { ...qstate.mapping }
     });
-    onQuery({ id, name });
+    onQuery({ id, name, persisted });
     closeDataPopover();
   });
 
@@ -604,6 +632,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
 
   // Position under the anchor, clamped to the viewport.
   popEl = pop;
+  releaseFocus = focusDialog(pop,anchor);
   popAnchor = anchor;
   document.addEventListener("pointerdown", onDocPointerDown, true);
   document.addEventListener("keydown", onDocKeyDown);

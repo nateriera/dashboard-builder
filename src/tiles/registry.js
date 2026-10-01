@@ -1,3 +1,5 @@
+import { renderData } from "../charts/integrity.js";
+import { chartData } from "../ui/chartData.js";
 // Tile registry: the catalog of chart types the composer can place on the grid.
 //
 // Each entry describes one tile type:
@@ -86,7 +88,7 @@ export const TILE_TYPES = {
     render(el, { data, options }) {
       mount(
         el,
-        (width) => barChart(data, { x: "value", y: "label", width, xLabel: "Requests" }),
+        (width) => barChart(data, { x: "value", y: "label", width, xLabel: options.tileOptions?.xLabel || null }),
         options
       );
     }
@@ -106,7 +108,7 @@ export const TILE_TYPES = {
     render(el, { data, options }) {
       mount(
         el,
-        (width) => columnChart(data, { x: "label", y: "value", width, yLabel: "Requests" }),
+        (width) => columnChart(data, { x: "label", y: "value", width, yLabel: options.tileOptions?.yLabel || null }),
         options
       );
     }
@@ -130,7 +132,7 @@ export const TILE_TYPES = {
       mount(
         el,
         (width) =>
-          lineChart(rows, { x: "date", y: "value", stroke: "series", width, yLabel: "Requests" }),
+          lineChart(rows, { x: "date", y: "value", stroke: "series", width, yLabel: options.tileOptions?.yLabel || null }),
         options
       );
     }
@@ -160,8 +162,8 @@ export const TILE_TYPES = {
             fill: "group",
             trend,
             width,
-            xLabel: "Rent burden (%)",
-            yLabel: "Rate per 10k"
+            xLabel: options.tileOptions?.xLabel || null,
+            yLabel: options.tileOptions?.yLabel || null
           }),
         options
       );
@@ -182,7 +184,7 @@ export const TILE_TYPES = {
     render(el, { data, options }) {
       mount(
         el,
-        (width) => dotChart(data, { x: "value", y: "label", width, xLabel: "Requests" }),
+        (width) => dotChart(data, { x: "value", y: "label", width, xLabel: options.tileOptions?.xLabel || null }),
         options
       );
     }
@@ -204,7 +206,7 @@ export const TILE_TYPES = {
         el,
         // The donut is square; cap the width so wide tiles don't blow it up.
         (width) =>
-          donutChart(data.slice(0, 6), {
+          donutChart(data, {
             value: "value",
             label: "label",
             width: Math.min(width, 400)
@@ -263,10 +265,10 @@ export const TILE_TYPES = {
     defaultSize: { w: 12, h: 6 },
     defaultTitle: "Requests by category and region",
     controls: [
-      { key: "includeZero", label: "Include zero in shared scale", type: "checkbox", default: false }
+      { key: "includeZero", label: "Include zero in shared scale", type: "checkbox", default: true }
     ],
     render(el, { data, options }) {
-      const includeZero = options.tileOptions?.includeZero ?? false;
+      const includeZero = options.tileOptions?.includeZero ?? true;
       mount(
         el,
         (width) =>
@@ -277,7 +279,7 @@ export const TILE_TYPES = {
             includeZero,
             chartWidth: Math.max(220, Math.floor((width - 64) / 3)),
             chart: (rows, { yDomain, width: cw }) =>
-              columnChart(rows, { x: "label", y: "value", width: cw, yDomain })
+              columnChart(rows, { x: "label", y: "value", width: cw, yDomain, yLabel: options.tileOptions?.yLabel || null })
           }),
         options
       );
@@ -307,3 +309,28 @@ export const TILE_TYPES = {
     }
   }
 };
+
+// One integrity boundary for both composer and standalone exports.
+for (const [type, entry] of Object.entries(TILE_TYPES)) {
+  const render = entry.render;
+  entry.render = (el, { data, options = {} }) => {
+    try {
+      for (const f of entry.fields.filter(f => f.numeric)) {
+        for (const r of data) {
+          const v = r[f.key];
+          if (v != null && (typeof v !== 'number' || !Number.isFinite(v) || (Number.isInteger(v) && !Number.isSafeInteger(v)))) throw new Error('Unsupported numeric precision or type in ' + f.key + '. Use a KPI/text field or explicitly round in SQL.');
+        }
+      }
+      const prepared = renderData(type,data);
+      render(el,{ data: prepared.rows, options });
+      if (prepared.note || (type === 'smallMultiples' && options.tileOptions?.includeZero === false)) {
+        const note = document.createElement('p'); note.className = 'chart-transform-note';
+        note.textContent = prepared.note || 'Cropped shared domain selected: zero may be excluded.'; el.append(note);
+      }
+      for (const svg of el.querySelectorAll('svg')) { svg.setAttribute('role','img'); svg.setAttribute('aria-label',options.title || entry.label); }
+    } catch (err) {
+      el.replaceChildren(); const error = document.createElement('div'); error.className = 'tile-error'; error.setAttribute('role','alert'); error.textContent = err.message; el.append(error);
+    }
+    el.append(chartData(data,entry.fields,options.title));
+  };
+}

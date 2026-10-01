@@ -49,11 +49,7 @@ for (const theme of THEMES) {
     el.style.width = "800px"; el.style.height = "500px";
     document.body.appendChild(el);
     try {
-      if (type === "choropleth") {
-        const { choropleth } = await import("../src/charts/charts.js");
-        const { card } = await import("../src/charts/charts.js");
-        el.appendChild(card(choropleth(rows, { geo: topo, id: "id", value: "value", width: 700 }), { title: "t" }));
-      } else if (type === "kpi") {
+      if (type === "kpi") {
         entry.render(el, { data: rows.map((d) => ({ value: String(d.value ?? d.requests ?? ""), label: d.label ?? d.category ?? "" })), options: { title: "t" } });
       } else {
         entry.render(el, { data: rows, options: { title: "t", tileOptions: {} } });

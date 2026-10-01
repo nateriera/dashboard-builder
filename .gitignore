@@ -3,3 +3,5 @@ dist/
 public/export-template.html
 *.local
 .DS_Store
+test-results/
+playwright-report/

@@ -1,3 +1,4 @@
+import { LIMITS } from "./limits.js";
 // Pure SQL helpers for the DuckDB-WASM layer (phase 2b). No DOM, no wasm,
 // no kit imports — directly unit-testable in node.
 //
@@ -60,7 +61,7 @@ const pad2 = (n) => String(n).padStart(2, "0");
 export function formatTimestamp(d) {
   return (
     `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ` +
-    `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
+    `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3,"0")}`
   );
 }
 
@@ -118,19 +119,22 @@ export function rowColumns(rows) {
 
 // ── Result materialization ────────────────────────────────────────────────
 // Arrow values need a little help becoming plain JSON-ish rows:
-//   - BigInt (huge ints) -> Number
+//   - BigInt -> safe Number or exact decimal string
 //   - Date instances -> ISO strings ("YYYY-MM-DD", or with time when nonzero)
-//   - epoch-millis numbers from Timestamp columns -> same ISO strings
+//   - Arrow epoch-millis Timestamp values -> UTC ISO, refusing finer precision
 // Everything else passes through untouched.
 
 export function isoLocal(d) {
   const date = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  if (d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0) return date;
-  return `${date}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  if (d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0) return date;
+  return `${date}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}${d.getMilliseconds() ? "." + String(d.getMilliseconds()).padStart(3,"0") : ""}`;
 }
 
 export function sanitizeValue(v, typeName) {
-  if (typeof v === "bigint") return Number(v);
+  if (v == null) return null;
+  if (/^timestampnanosecond/i.test(typeName || '')) throw new Error('Nanosecond timestamps must be CAST AS VARCHAR to retain exact text.');
+  if (/^decimal/i.test(typeName || '')) throw new Error('Exact SQL decimals must be CAST AS VARCHAR for KPI/text display, or explicitly CAST AS DOUBLE for approximate plotting.');
+  if (typeof v === "bigint") return v <= BigInt(Number.MAX_SAFE_INTEGER) && v >= BigInt(Number.MIN_SAFE_INTEGER) ? Number(v) : v.toString();
   if (v instanceof Date) return isoLocal(v);
   if (
     typeof v === "number" &&
@@ -138,18 +142,23 @@ export function sanitizeValue(v, typeName) {
     typeof typeName === "string" &&
     /^timestamp/i.test(typeName)
   ) {
-    return isoLocal(new Date(v));
+    if (!Number.isInteger(v)) throw new Error("Sub-millisecond timestamps are unsupported. CAST the timestamp AS VARCHAR to retain exact text.");
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) throw new Error("Timestamp is outside the supported Date range.");
+    return d.toISOString();
   }
   return v;
 }
 
 /** Materialize one duckdb-wasm result into {columns, rows} of plain objects. */
 export function materializeResult(result) {
+  if (result.numRows > LIMITS.queryRows) throw new Error(`Query result limit is ${LIMITS.queryRows.toLocaleString()} rows. Add LIMIT or aggregate in SQL.`);
   const fields = result.schema.fields.map((f) => ({
     name: f.name,
     typeName: f.type?.constructor?.name || ""
   }));
   const columns = fields.map((f) => f.name);
+  if (fields.length > LIMITS.columns) throw new Error(`Query column limit is ${LIMITS.columns}.`);
   const rows = result.toArray().map((r) => {
     const obj = r.toJSON();
     const out = {};

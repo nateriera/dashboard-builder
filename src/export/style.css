@@ -109,5 +109,9 @@ body {
 @media print {
   body { background: var(--white); }
   #export-root { max-width: none; padding: 0; }
-  .export-grid { gap: 16px; }
+  .export-grid { display: block; }
+  .export-tile { display: block; break-inside: avoid; break-after: page; }
+  .export-tile:last-child { break-after: auto; }
+  .export-tile .tile-chart { overflow: visible; }
+  .chart-data:not([open]) { display: none; }
 }

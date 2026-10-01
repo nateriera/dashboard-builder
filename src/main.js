@@ -551,6 +551,10 @@ function applyTemplate(tpl) {
   try {
     grid.removeAll();
     tileMeta.clear();
+    if (typeof tpl.theme === "string") {
+      setTheme(tpl.theme);
+      refreshThemeButton();
+    }
     for (const t of tiles) {
       if (TILE_TYPES[t.type]) addTile(t.type, t);
     }
@@ -694,6 +698,7 @@ if (btnTemplates) {
     openTemplateGallery({
       applyTemplate,
       getCurrentTiles: () => serializeLayout().tiles.map(({ id, ...rest }) => rest),
+      getCurrentTheme: getThemeId,
       notify: setStatus
     });
   });
@@ -876,6 +881,9 @@ fileInput.addEventListener("change", () => {
   reader.onload = async () => {
     try {
       const data = JSON.parse(reader.result);
+      // Validate before restoring datasets or queries, since those restores
+      // persist immediately and should not be a side effect of a rejected file.
+      validateLayout(data);
       const restored = await restoreDatasets(data.datasets);
       const restoredQueries = restoreQueries(data.queries);
       loadLayout(data);

@@ -22,7 +22,7 @@ export function closeTemplateGallery() {
   }
 }
 
-export function openTemplateGallery({ applyTemplate, getCurrentTiles, notify }) {
+export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrentTheme, notify }) {
   // Toggle like the data popover.
   if (overlayEl) {
     closeTemplateGallery();
@@ -116,7 +116,7 @@ export function openTemplateGallery({ applyTemplate, getCurrentTiles, notify }) 
       notify("Nothing to save — the dashboard is empty.");
       return;
     }
-    const tpl = saveUserTemplate(nameInput.value, tiles);
+    const tpl = saveUserTemplate(nameInput.value, tiles, getCurrentTheme());
     if (tpl) {
       nameInput.value = "";
       refreshUserTemplates();

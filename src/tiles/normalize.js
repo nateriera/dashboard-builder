@@ -56,7 +56,7 @@ export function normalizeRows(entry, rawRows, mapping) {
           out[f.key] = null;
         } else {
           const n = Number(v);
-          if (Number.isNaN(n)) {
+          if (!Number.isFinite(n)) {
             out[f.key] = null;
             dropped++;
           } else {

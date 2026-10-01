@@ -18,6 +18,7 @@ import { TILE_TYPES } from "./tiles/registry.js";
 export const BUILT_IN_TEMPLATES = [
   {
     id: "executive-overview",
+    theme: "paper",
     name: "Executive overview",
     description: "KPI strip, monthly trend, and category mix — the classic leadership summary.",
     inspiredBy: null,
@@ -31,6 +32,7 @@ export const BUILT_IN_TEMPLATES = [
   },
   {
     id: "sales-performance",
+    theme: "paper",
     name: "Sales performance",
     description: "How revenue breaks down and where it's heading.",
     inspiredBy: null,
@@ -43,6 +45,7 @@ export const BUILT_IN_TEMPLATES = [
   },
   {
     id: "trend-deep-dive",
+    theme: "paper",
     name: "Trend deep dive",
     description: "One metric, three angles: over time, by group, and against volume.",
     inspiredBy: null,
@@ -54,6 +57,7 @@ export const BUILT_IN_TEMPLATES = [
   },
   {
     id: "geographic-snapshot",
+    theme: "paper",
     name: "Geographic snapshot",
     description: "Where things happen: map first, details alongside.",
     inspiredBy: null,
@@ -66,6 +70,7 @@ export const BUILT_IN_TEMPLATES = [
   },
   {
     id: "category-comparison",
+    theme: "paper",
     name: "Category comparison",
     description: "Small multiples for the full picture, ranked and share views below.",
     inspiredBy: null,
@@ -77,6 +82,7 @@ export const BUILT_IN_TEMPLATES = [
   },
   {
     id: "performance-scorecard",
+    theme: "paper",
     name: "Performance scorecard",
     description: "Dense ops view: KPIs up top, trend, breakdown, and correlation.",
     inspiredBy: null,
@@ -139,13 +145,14 @@ function writeUserTemplates(list) {
   }
 }
 
-export function saveUserTemplate(name, tiles) {
+export function saveUserTemplate(name, tiles, theme = "paper") {
   const clean = sanitizeTiles(tiles);
   if (!name.trim() || clean.length === 0) return null;
   const list = loadUserTemplates();
   const tpl = {
     id: `user-${Date.now().toString(36)}`,
     name: name.trim().slice(0, 60),
+    theme,
     createdAt: new Date().toISOString(),
     inspiredBy: null,
     tiles: clean

@@ -1,0 +1,77 @@
+[
+  {
+    "facet": "North",
+    "label": "Housing",
+    "value": 42
+  },
+  {
+    "facet": "North",
+    "label": "Food",
+    "value": 31
+  },
+  {
+    "facet": "North",
+    "label": "Transit",
+    "value": 27
+  },
+  {
+    "facet": "North",
+    "label": "Health",
+    "value": 35
+  },
+  {
+    "facet": "North",
+    "label": "Childcare",
+    "value": 22
+  },
+  {
+    "facet": "South",
+    "label": "Housing",
+    "value": 38
+  },
+  {
+    "facet": "South",
+    "label": "Food",
+    "value": 29
+  },
+  {
+    "facet": "South",
+    "label": "Transit",
+    "value": 24
+  },
+  {
+    "facet": "South",
+    "label": "Health",
+    "value": 30
+  },
+  {
+    "facet": "South",
+    "label": "Childcare",
+    "value": 19
+  },
+  {
+    "facet": "West",
+    "label": "Housing",
+    "value": 45
+  },
+  {
+    "facet": "West",
+    "label": "Food",
+    "value": 33
+  },
+  {
+    "facet": "West",
+    "label": "Transit",
+    "value": 29
+  },
+  {
+    "facet": "West",
+    "label": "Health",
+    "value": 37
+  },
+  {
+    "facet": "West",
+    "label": "Childcare",
+    "value": 25
+  }
+]

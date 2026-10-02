@@ -391,6 +391,7 @@ export function smallMultiples(data, {
 // d3-shape pie+arc generators and htl — same theme, no Plot dependency.
 export function donutChart(data, { value, label, width = 420, height = width + 80, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme() } = {}) {
   const t = theme.chart;
+  const compactLegend = width < 280;
   width = Math.max(80, Math.min(width, height - 80, 400));
   data = donutParts(data, label, value);
   const total = data.reduce((s, d) => s + d[value], 0);
@@ -399,16 +400,19 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
   const colors = data.map((_, i) => t.categorical[i % t.categorical.length]);
   const size = outerRadius * 2 + 48;
   const c = size / 2;
+  // Keep the total readable when a narrow tile requires a smaller ring.
+  const totalFont = Math.min(22, Math.max(12, width / 15)) * size / width;
+  const textScale = size / width;
   return html`<div class="db-donut">
     ${svg`<svg width="${width}" height="${width}" viewBox="0 0 ${size} ${size}" role="img">
       <g transform="translate(${c} ${c})">
         ${slices.map((s, i) => svg`<path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path>`)}
-        <text text-anchor="middle" dy="-6" font-family="${t.fonts.mono}" font-weight="500" font-size="22" fill="${t.ink}">${valueFormat(total)}</text>
-        <text text-anchor="middle" dy="16" font-size="11" fill="${t.muted}">total</text>
+        <text text-anchor="middle" dy="${-4 * textScale}" font-family="${t.fonts.mono}" font-weight="500" font-size="${totalFont}" fill="${t.ink}">${valueFormat(total)}</text>
+        <text text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
       </g>
     </svg>`}
-    <div class="db-legend">
-      ${data.map((d, i) => html`<span class="db-legend-item"><span class="db-swatch" style="background:${colors[i]}"></span>${d[label]}&nbsp;<span class="db-fig">${valueFormat(d[value])}</span></span>`)}
+    <div class="db-legend ${compactLegend ? 'db-legend-compact' : ''}">
+      ${data.map((d, i) => html`<span class="db-legend-item"><span class="db-swatch" style="background:${colors[i]}"></span><span class="db-legend-label">${d[label]}</span><span class="db-fig">${valueFormat(d[value])}</span></span>`)}
     </div>
   </div>`;
 }
@@ -448,6 +452,7 @@ export const chartStyles = html`<style>
 .chart-data summary { cursor: pointer; }
 .chart-data button { margin: 4px 8px; }
 .chart-transform-note { color: var(--slate-600); font-size: 12px; }
+.tile-chart .chart-transform-note { margin: 8px 0; }
 :focus-visible { outline: 3px solid var(--periwinkle); outline-offset: 3px; }
   .db-card {
     background: var(--white);
@@ -515,6 +520,7 @@ export const chartStyles = html`<style>
     font-family: var(--font-mono);
     font-weight: 500;
     font-size: 28px;
+    line-height: 1.25;
     color: var(--ink);
     font-variant-numeric: tabular-nums;
     margin-bottom: 4px;
@@ -539,6 +545,12 @@ export const chartStyles = html`<style>
     display: inline-flex; align-items: center;
     font-family: var(--font-body); font-size: 13px; color: var(--slate-600);
   }
+  .db-legend-item .db-fig { margin-left: 4px; white-space: nowrap; }
+  .db-legend-compact { display: grid; align-self: stretch; gap: 4px; margin-top: 8px; }
+  .db-legend-compact .db-legend-item { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: start; font-size: 12px; line-height: 16px; }
+  .db-legend-compact .db-swatch { margin: 2px 0 0; }
+  .db-legend-compact .db-fig { margin: 0; }
+  .db-legend-label { min-width: 0; }
   .db-swatch {
     display: inline-block; width: 12px; height: 12px; border-radius: 3px;
     margin-right: 8px;

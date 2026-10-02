@@ -1,4 +1,5 @@
 import { focusDialog } from "./focus.js";
+import { anchorPopover } from "./anchoredPopover.js";
 import { createPreviewGate } from "../data/queryCoordinator.js";
 import { datasetVersion, listDatasets, subscribeDatasetChanges } from "../data/store.js";
 // Tile "Data" popover: three tabs — Samples (bundled datasets), Upload
@@ -24,11 +25,13 @@ import {
 
 let releaseRevision = null;
 let releaseFocus = null;
+let releasePosition = null;
 let popEl = null;
 let popAnchor = null;
 
 export function closeDataPopover() {
   if (popEl) {
+    releasePosition?.(); releasePosition = null;
     releaseRevision?.(); releaseRevision = null;
     releaseFocus?.(); releaseFocus = null;
     popEl.remove();
@@ -636,16 +639,5 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   popAnchor = anchor;
   document.addEventListener("pointerdown", onDocPointerDown, true);
   document.addEventListener("keydown", onDocKeyDown);
-  const r = anchor.getBoundingClientRect();
-  const M = 8;
-  requestAnimationFrame(() => {
-    const pw = pop.offsetWidth;
-    const ph = pop.offsetHeight;
-    let left = Math.min(r.left, window.innerWidth - pw - M);
-    let top = r.bottom + 6;
-    if (top + ph > window.innerHeight - M) top = Math.max(M, r.top - ph - 6);
-    pop.style.left = Math.max(M, left) + "px";
-    pop.style.top = top + "px";
-    pop.style.visibility = "visible";
-  });
+  releasePosition = anchorPopover(pop, anchor);
 }

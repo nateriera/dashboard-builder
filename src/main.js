@@ -55,7 +55,7 @@ setTheme(getThemeId());
 const STORAGE_KEY = "dashboard-builder:layout:v1";
 // Build stamp, shown in the status bar on boot. Bump on every shipped archive
 // so it's always possible to confirm which code is actually running.
-const BUILD = "2f-remediation";
+const BUILD = "2f-pages-fit";
 const gridEl = document.querySelector(".grid-stack");
 const statusEl = document.getElementById("status");
 

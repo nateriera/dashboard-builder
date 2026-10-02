@@ -30,22 +30,50 @@ async function drag(page, tile, dx, dy, release = true) {
   return {x:x+dx,y:y+dy};
 }
 
-test('fresh placement, compact headings and measured chart frames at both editor widths', async ({page}, info) => {
+test('fresh placement, compact headings and measured chart frames at all editor widths', async ({page}, info) => {
   await ready(page);
   const layout = await saved(page);
   expect(layout.version).toBe(3); expect(layout.rowHeight).toBe(24);
   expect(layout.tiles.map(t=>[t.x,t.y,t.w,t.h])).toEqual([[0,0,12,13],[0,13,6,16],[6,13,6,16],[0,29,4,20],[4,29,8,20]]);
   expect(await page.locator('.tile .db-chart-title').count()).toBe(0);
-  for (const width of [1440,1024]) {
+  for (const width of [1440,1160,1024]) {
     await page.setViewportSize({width,height:width===1440?900:768});
     await page.waitForTimeout(200);
     const bounds = await page.locator('.tile-chart').evaluateAll(es=>es.map(e=>({width:e.clientWidth,scroll:e.scrollWidth,height:e.clientHeight,scrollHeight:e.scrollHeight})));
     for (const b of bounds) expect(b.scroll).toBeLessThanOrEqual(b.width+1);
-    if (width===1440) for (const b of bounds) expect(b.scrollHeight).toBeLessThanOrEqual(b.height+1);
+    for (const b of bounds) expect(b.scrollHeight).toBeLessThanOrEqual(b.height+1);
     await page.screenshot({path:`docs/diagnostics/layout-resize-2026-10-01/verified-${width}.png`,fullPage:true});
   }
   await page.locator('.tile-settings summary').nth(1).click();
   await expect(page.locator('[gs-id="import-1"]').getByLabel('X label / unit')).toBeVisible();
+});
+
+test('SQL panel stays inside the viewport after tab expansion, results and viewport changes', async ({page}) => {
+  await page.setViewportSize({width:1160,height:884});
+  await ready(page);
+  await page.locator('[gs-id="import-1"] .tile-data-btn').click();
+  await page.getByRole('button',{name:'SQL',exact:true}).click();
+  const pop=page.locator('.data-popover');
+  const inside=async()=>pop.evaluate(el=>{
+    const r=el.getBoundingClientRect();
+    return r.top>=7 && r.bottom<=innerHeight-7 && r.left>=7 && r.right<=innerWidth-7;
+  });
+  await expect.poll(inside).toBe(true);
+  await expect(page.locator('.data-sql-run')).toBeEnabled({timeout:30000});
+  await page.locator('.data-sql-run').click();
+  const apply=page.getByRole('button',{name:'Apply to tile',exact:true});
+  await expect(apply).toBeEnabled();
+  await expect.poll(inside).toBe(true);
+  await page.setViewportSize({width:1024,height:768});
+  await expect.poll(inside).toBe(true);
+  const box=await apply.boundingBox();
+  expect(box.y+box.height).toBeLessThanOrEqual(768);
+  await apply.click();
+  await expect(pop).toHaveCount(0);
+  await expect(page.locator('[gs-id="import-1"] .tile-data-btn')).toContainText('Query 1');
+  await page.locator('[gs-id="import-1"] .tile-data-btn').click();
+  await page.keyboard.press('Escape');
+  await expect(pop).toHaveCount(0);
 });
 
 test('live pointer resize redraws before release and manual geometry survives reload, present and data changes', async ({page},info) => {

@@ -363,7 +363,7 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
       let legendSpace = 0;
       if (type === 'donut') {
         const legend = el.querySelector('.db-legend');
-        legendSpace = Math.max(0, legend.getBoundingClientRect().height + 12 - 80);
+        legendSpace = Math.max(0, legend.getBoundingClientRect().height + parseFloat(getComputedStyle(legend).marginTop) - 80);
       } else if (type === 'line') {
         const figure = el.querySelector('figure');
         const plot = figure && [...figure.querySelectorAll('svg')].sort((a,b) => b.getBoundingClientRect().height - a.getBoundingClientRect().height)[0];

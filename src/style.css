@@ -509,6 +509,11 @@ body.present .tile-toolbar { display: none; }
 }
 
 .data-actions {
+  position: sticky;
+  bottom: 0;
+  padding: 8px 0;
+  background: var(--white);
+  z-index: 1;
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;

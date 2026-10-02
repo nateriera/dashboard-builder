@@ -1,5 +1,7 @@
 # Dashboard Builder
 
+[Open the live demo](https://nateriera.github.io/dashboard-builder/)
+
 A local dashboard composer with nine chart types, a twelve-column grid,
 four themes, uploaded CSV/JSON data, browser SQL, and self-contained HTML export.
 

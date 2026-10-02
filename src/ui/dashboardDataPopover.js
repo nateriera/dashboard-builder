@@ -38,7 +38,7 @@ function onDocKeyDown(e) {
  * @param current {kind:"samples"} | {kind:"dataset", ref} — the active default
  * @param sampleKeys string[] — sample dataset keys to offer
  * @param onSelect({kind, ref}) — user picked an existing dataset/default
- * @param onUpload({name, columns, rows}) — user dropped a CSV/JSON (raw rows);
+ * @param onUpload({name, columns, rows, profile}) — user dropped a CSV/JSON (raw rows);
  *   the caller persists it and makes it the default
  */
 export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, onUpload }) {
@@ -140,9 +140,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     err.hidden = true;
     dropText.textContent = `Reading ${file.name}…`;
     try {
-      const { columns, rows } = await readUpload(file,pop);
+      const { columns, rows, profile } = await readUpload(file,pop);
       if (!pop.isConnected) return;
-      onUpload({ name: file.name, columns, rows });
+      onUpload({ name: file.name, columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
       err.textContent = e && e.message ? e.message : String(e);

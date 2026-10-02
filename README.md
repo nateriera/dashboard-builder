@@ -14,6 +14,7 @@
 - Drag-and-drop, resizable 12-column grid with content-aware tile sizing
 - 9 chart types (bar, column, line, scatter + trend, dot, donut, choropleth, KPI, text) rendered with Observable Plot
 - CSV/JSON upload processed locally — your data never leaves the browser — plus built-in sample datasets
+- Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
 - 4 themes, 6 starter templates, save/load dashboards as JSON
 - Export to a single self-contained HTML file — email it or host it anywhere, no server needed
@@ -37,6 +38,16 @@ Explore three original sample dashboards in the [starter template gallery](docs/
 - **Geographic snapshot** — state map with supporting metrics.
 
 Choose **Templates** in the composer to try these or the other three starters.
+
+## Start from an upload
+
+Choose **Data** and upload a CSV or JSON file to see its row and column counts,
+full-file missing-value counts, and inferred column types. Type inference uses
+up to 5,000 evenly spaced rows; it is a suggestion, not a change to the source
+data. The composer may offer a small set of charts when existing column-name
+mapping rules can map the fields conservatively. Review, change field choices,
+or uncheck suggestions before building. You can also set the upload as dashboard data or keep the
+current dashboard. Profiling and chart suggestions run locally in the browser.
 
 ## Contributing
 

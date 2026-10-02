@@ -44,6 +44,7 @@ import { toggleDataPopover, closeDataPopover } from "./ui/dataPopover.js";
 import { toggleDashboardPopover, closeDashboardPopover } from "./ui/dashboardDataPopover.js";
 import { toggleThemePopover, closeThemePopover } from "./ui/themePopover.js";
 import { openTemplateGallery } from "./ui/templateGallery.js";
+import { openGuidedStart } from "./ui/guidedStart.js";
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -763,6 +764,65 @@ function applyDashboardDefault(dd, statusMsg) {
   scheduleAutosave();
   if (statusMsg) setStatus(statusMsg);
 }
+async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
+  if (grid.save(false).length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
+  try {
+    const original = getDataset(id);
+    const raw = original?.raw || (original ? { columns: original.columns, rows: original.rows } : null);
+    if (!raw) throw new Error("The uploaded file is no longer available.");
+    const multi = suggestions.length > 1;
+    const prepared = suggestions.map((suggestion) => ({
+      suggestion,
+      entry: TILE_TYPES[suggestion.type],
+      rows: normalizeRows(TILE_TYPES[suggestion.type], raw.rows, suggestion.mapping).rows
+    }));
+    const chartDatasets = [];
+    for (const { suggestion, entry, rows } of prepared) {
+      const dataset = saveDataset({
+        name,
+        columns: raw.columns,
+        rows,
+        fieldKeys: entry.fields.map((field) => field.key),
+        mapping: { ...suggestion.mapping },
+        raw: null
+      });
+      const durable = await persistDataset(dataset.id);
+      chartDatasets.push({ id: dataset.id, durable });
+    }
+    const candidate = validateLayout({
+      app: "dashboard-builder",
+      version: 3,
+      rowHeight: ROW_HEIGHT,
+      theme: getThemeId(),
+      defaultDataset: { kind: "dataset", ref: `upload:${id}` },
+      tiles: suggestions.map((suggestion, index) => {
+        const entry = TILE_TYPES[suggestion.type];
+        return {
+          id: `guided-${Date.now().toString(36)}-${index}`,
+          type: suggestion.type,
+          title: suggestion.title,
+          source: name,
+          dataset: `upload:${chartDatasets[index].id}`,
+          binding: { mode: "explicit", ref: `upload:${chartDatasets[index].id}` },
+          sizing: "auto",
+          tileOptions: {},
+          x: multi ? (index % 2) * 6 : 0,
+          y: multi ? Math.floor(index / 2) * Math.max(15, entry.defaultSize.h) : 0,
+          w: multi ? 6 : 12,
+          h: Math.max(6, entry.defaultSize.h)
+        };
+      })
+    });
+    replaceLayout(candidate, { fit: true });
+    scheduleAutosave();
+    const allDurable = persisted && chartDatasets.every((dataset) => dataset.durable);
+    setStatus(`Built ${suggestions.length} suggested chart${suggestions.length === 1 ? "" : "s"} from ${name}.` + (allDurable ? "" : " Some upload data is session only; export JSON for a backup."));
+    return true;
+  } catch (error) {
+    setStatus(`Suggested dashboard failed: ${error.message}`);
+    return false;
+  }
+}
 if (btnData) {
   btnData.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -775,7 +835,7 @@ if (btnData) {
         applyDashboardDefault(dd);
         setStatus(`Dashboard data: ${dashboardDefaultName()}`);
       },
-      onUpload: async ({ name, columns, rows }) => {
+      onUpload: async ({ name, columns, rows, profile }) => {
         const { id } = saveDataset({
           name,
           columns,
@@ -785,13 +845,21 @@ if (btnData) {
           raw: { columns, rows }
         });
         const persisted = await persistDataset(id);
-
-        applyDashboardDefault(
-          { kind: "dataset", ref: `upload:${id}` },
-          persisted
-            ? `Dashboard data: ${name}`
-            : `Dashboard data: ${name} — browser storage unavailable, kept for this session only.`
-        );
+        openGuidedStart({
+          id,
+          name,
+          profile,
+          onUseData: () => applyDashboardDefault(
+            { kind: "dataset", ref: `upload:${id}` },
+            persisted
+              ? `Dashboard data: ${name}`
+              : `Dashboard data: ${name} — browser storage unavailable, kept for this session only.`
+          ),
+          onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
+          onKeep: () => setStatus(persisted
+            ? `Upload saved: ${name}. Current dashboard kept.`
+            : `Upload available for this session only: ${name}. Current dashboard kept.`)
+        });
       }
     });
   });

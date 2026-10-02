@@ -1,0 +1,23 @@
+Dashboard builder: Pages + screenshot automation (merge-safe patch)
+
+Your remediation revisions diverged from the original prep zip, so this
+replaces it. Extract these 4 paths over your repo checkout:
+
+  .github/workflows/pages.yml   (new — deploys dist/ to Pages on push to main; Node 24 to match your verified test env)
+  scripts/screenshots.mjs       (new — npm run shots)
+  package.json                  (YOUR current file + puppeteer-core devDep + "shots" script; nothing else touched)
+  APPLY.txt                     (this file — delete after applying)
+
+Do NOT extract package.json / package-lock.json / README.md from the
+original dashboard-builder-pages-prep.zip — those would clobber your
+remediation changes (Playwright, --configLoader runner, rewritten README).
+
+Then:
+  npm.cmd install
+  npm.cmd test
+  git add -A
+  git commit -m "Add Pages deployment and screenshot automation"
+  git push
+
+The workflow runs on the next push to main (you already set Pages source to
+GitHub Actions). Live demo: https://nateriera.github.io/dashboard-builder/

@@ -10,7 +10,7 @@
     "idb": "^8.0.3",
     "topojson-client": "^3.1.0"
   },
-  "description": "Free, open-source drag-and-drop dashboard composer. Pick chart types from a palette, drop them onto a grid, bind data, and export a self-contained HTML dashboard — no subscription, no server, no account.",
+  "description": "Free, open-source drag-and-drop dashboard composer. Pick chart types from a palette, drop them onto a grid, bind data, and export a self-contained HTML dashboard \u2014 no subscription, no server, no account.",
   "version": "0.1.0",
   "license": "MIT",
   "author": "Nate Riera",
@@ -26,6 +26,7 @@
     "@playwright/test": "^1.63.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.1.1",
+    "puppeteer-core": "^25.12.0",
     "vite": "^7.1.7",
     "vite-plugin-singlefile": "^2.3.3"
   },
@@ -37,7 +38,8 @@
     "build:export-template": "vite build --config vite.export.config.js --configLoader runner",
     "test": "node --no-warnings --loader ./tests/json-loader.mjs tests/render-sweep.mjs && node --no-warnings --loader ./tests/json-loader.mjs --test tests/remediation.test.mjs",
     "predev": "npm run build:export-template",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "shots": "npm run build && node scripts/screenshots.mjs"
   },
   "type": "module"
 }

@@ -4,7 +4,7 @@
 
 **[Open the live demo](https://nateriera.github.io/dashboard-builder/)**
 
-![Composer with the Paper theme](docs/screenshots/composer-paper.png)
+![Dashboard Builder: drag, resize, SQL Apply, and HTML export](docs/screenshots/demo.gif)
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deploy demo](https://github.com/nateriera/dashboard-builder/actions/workflows/pages.yml/badge.svg)](https://github.com/nateriera/dashboard-builder/actions)
@@ -27,6 +27,21 @@ No install needed — open the **[live demo](https://nateriera.github.io/dashboa
 npm ci
 npm run dev
 ```
+
+## Template gallery
+
+Explore three original sample dashboards in the [starter template gallery](docs/template-gallery.md):
+
+- **Executive overview** — KPIs, monthly trend, and category mix.
+- **Trend deep dive** — time series, small multiples, and scatter.
+- **Geographic snapshot** — state map with supporting metrics.
+
+Choose **Templates** in the composer to try these or the other three starters.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and PR guidelines.
+New contributors can browse [good first issues](https://github.com/nateriera/dashboard-builder/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22).
 
 ## Development
 
@@ -54,7 +69,9 @@ queries; browser tests use real DuckDB-WASM, fault injection, fresh storage,
 keyboard workflows and offline HTML. Evidence and scope are in
 [the remediation report](docs/remediation-verification-2026-10-01.md).
 
-## Data and chart contracts
+## Architecture
+
+### Data and chart contracts
 
 Each tile's Data control offers samples, a mapped upload, SQL, or following the
 dashboard default. Missing uploads, queries and SQL tables remain bound to their
@@ -78,7 +95,7 @@ JSON, HTML and the text table. Trend lines on sampled scatter plots describe the
 sample; use SQL aggregation when an authoritative statistical result is needed.
 Bar/category charts refuse more than 100 rows rather than silently omit them.
 
-## Layout schema and replacement
+### Layout schema and replacement
 
 Layouts carry `app: "dashboard-builder"`, `version: 3`, `rowHeight: 24`, theme, dashboard default,
 tile geometry, metadata and explicit binding modes:
@@ -122,7 +139,7 @@ IndexedDB transaction, and retain a recovery journal at
 the prior grid, queries and layout and rolls back only new import records.
 Templates use the same schema validation and preserve chart options.
 
-## Persistence and migration
+### Persistence and migration
 
 Uploads live in IndexedDB `dashbuilder`, object store `datasets`; queries live
 at `dashbuilder.queries.v1`. Data that cannot persist is labeled session only.
@@ -134,7 +151,7 @@ quota failures, unavailable storage and corrupt input retain the original source
 and expose a retry action. The old `klaro-dashboard` database is retained after
 copying. Failed migrations never claim durable persistence.
 
-## SQL and portability
+### SQL and portability
 
 DuckDB tables use sample keys (`categorical`, `timeseries`, etc.) and
 `upload_<id>`. Only one SELECT/WITH query is supported per run. Table
@@ -157,7 +174,7 @@ HTML export carries materialized query results, all tile rows, theme and options
 its viewer runs without SQL or network access. It rejects an export if the
 dashboard changes during preparation. Errors remain visible per tile.
 
-## Exact numbers and dates
+### Exact numbers and dates
 
 Safe SQL integers become Numbers; larger integers become exact decimal strings.
 KPI/text fields, IndexedDB and JSON preserve those strings. Numeric plotting
@@ -175,7 +192,7 @@ become UTC ISO strings; sub-millisecond values are refused with instructions to
 CAST AS VARCHAR to preserve exact text. This is a millisecond Date contract,
 not a claim of arbitrary timezone or fractional precision support.
 
-## Budgets, keyboard and offline scope
+### Budgets, keyboard and offline scope
 
 Engineering limits are separate from measured device capacity:
 
@@ -207,7 +224,7 @@ viewer template. These are runtime network requests. Downloaded HTML is tested
 with browser networking disabled. Composer startup and first SQL use offline
 are not promised; a cache hit is not a verified offline installation mode.
 
-## Templates and release
+### Templates and release
 
 Six original starter templates and user-saved templates retain theme and tile
 options. Applying a template asks before replacing the dashboard. Templates

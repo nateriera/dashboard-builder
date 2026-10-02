@@ -1,13 +1,36 @@
 # Dashboard Builder
 
-[Open the live demo](https://nateriera.github.io/dashboard-builder/)
+**A free, local-first dashboard composer.** Drag-and-drop grid, nine chart types, in-browser SQL, and one-click export to a self-contained HTML file. No account, no server, no subscription.
 
-A local dashboard composer with nine chart types, a twelve-column grid,
-four themes, uploaded CSV/JSON data, browser SQL, and self-contained HTML export.
+**[Open the live demo](https://nateriera.github.io/dashboard-builder/)**
 
 ![Composer with the Paper theme](docs/screenshots/composer-paper.png)
 
-## Run and verify
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Deploy demo](https://github.com/nateriera/dashboard-builder/actions/workflows/pages.yml/badge.svg)](https://github.com/nateriera/dashboard-builder/actions)
+
+## Features
+
+- Drag-and-drop, resizable 12-column grid with content-aware tile sizing
+- 9 chart types (bar, column, line, scatter + trend, dot, donut, choropleth, KPI, text) rendered with Observable Plot
+- CSV/JSON upload processed locally — your data never leaves the browser — plus built-in sample datasets
+- In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
+- 4 themes, 6 starter templates, save/load dashboards as JSON
+- Export to a single self-contained HTML file — email it or host it anywhere, no server needed
+- Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
+
+## Quick start
+
+No install needed — open the **[live demo](https://nateriera.github.io/dashboard-builder/)** and start dragging. To run it locally:
+
+```sh
+npm ci
+npm run dev
+```
+
+## Development
+
+### Run and verify
 
 Use Node 24 (the verified test environment) and an installed desktop Google Chrome for browser tests.
 

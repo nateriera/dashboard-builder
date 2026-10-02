@@ -194,9 +194,9 @@ body {
   border: none;
   box-shadow: none;
   border-radius: 0;
-  padding: 20px;
-  height: 100%;
-  overflow: auto;
+  padding: 16px;
+  height: auto;
+  overflow: visible;
 }
 
 /* ── Tile toolbar ───────────────────────────────────────────────────── */
@@ -960,8 +960,23 @@ body.present .tile-toolbar { display: none; }
 
 .palette-item { display: block; width: 100%; text-align: left; color: var(--ink); font: inherit; }
 :focus-visible { outline: 3px solid var(--periwinkle); outline-offset: 3px; }
-.tile-toolbar { flex-wrap: wrap; }
+.tile-toolbar { flex-wrap: nowrap; }
 .tile-control input[type=text] { width: 100px; color: var(--ink); background: var(--white); border: 1px solid var(--slate-300); border-radius: 6px; }
 .data-popover { max-height: calc(100vh - 16px); overflow: auto; }
 @media (max-width: 1100px) { #app-header { flex-wrap: wrap; gap: 8px; } .header-actions { flex-wrap: wrap; } #status { text-align: left; } }
 @media (max-width: 700px) { #palette { flex-basis: 160px; } .header-actions button { padding: 6px; } }
+
+/* One compact heading and a disclosure for secondary controls. */
+.tile-settings { position: relative; flex: 0 0 auto; cursor: default; }
+.tile-settings summary { cursor: pointer; font-size: 12px; }
+.tile-settings-body { position: absolute; right: 0; top: 28px; z-index: 20; width: 260px; padding: 16px; display: grid; gap: 12px; background: var(--white); border: 1px solid var(--slate-200); border-radius: 8px; box-shadow: var(--card-shadow); }
+.tile-settings .tile-control { display: grid; white-space: normal; }
+.tile-settings input[type=text] { width: 100%; min-width: 0; }
+.tile-title { flex-basis: 100px; }
+.tile-data-btn { flex: 0 1 auto; min-width: 48px; max-width: 150px; }
+.tile .db-chart-title, .export-tile .db-chart-title { font-size: 18px; line-height: 1.3; }
+.export-tile .db-card { margin: 0; padding: 16px; border: 0; box-shadow: none; }
+.grid-stack-item > .ui-resizable-handle { opacity: 0; }
+.grid-stack-item > .ui-resizable-se { opacity: 1; background: linear-gradient(135deg, transparent 50%, var(--slate-300) 50%, var(--slate-300) 58%, transparent 58%, transparent 68%, var(--slate-300) 68%, var(--slate-300) 76%, transparent 76%); background-size: 12px 12px; background-repeat: no-repeat; background-position: center; }
+.grid-stack-item:hover > .ui-resizable-handle { opacity: 1; }
+.tile-chart { min-width: 0; }

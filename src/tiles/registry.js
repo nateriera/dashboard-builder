@@ -1,3 +1,4 @@
+import { facetColumns } from './geometry.js';
 import { renderData } from "../charts/integrity.js";
 import { chartData } from "../ui/chartData.js";
 // Tile registry: the catalog of chart types the composer can place on the grid.
@@ -59,14 +60,18 @@ import { guessMapping, normalizeRows, promoteDate } from "./normalize.js";
 export { guessMapping, normalizeRows, promoteDate };
 
 // Mount helper for Plot-based charts: clears el, renders the chart function
-// at the container's measured width, and wraps it in a themed card carrying
+// at the container's measured width, height, and wraps it in a themed card carrying
 // the tile title and source line. Charts read the active theme themselves
 // (see src/charts/charts.js), so a theme switch just re-renders the tiles.
-function mount(el, chartFn, { title, source }) {
-  el.innerHTML = "";
-  // 48px of breathing room inside the card padding; floor keeps tiny tiles sane.
-  const width = Math.max(220, el.clientWidth - 48);
-  el.appendChild(card(chartFn(width), { title, source }));
+function mount(el, chartFn, options) {
+  el.replaceChildren();
+  const frame = card(document.createElement('span'), { title: options.hideTitle ? null : options.title, source: options.source });
+  el.append(frame);
+  const width = Math.max(120, (el.clientWidth || 640) - 32);
+  const chrome = frame.querySelector('.db-chart-head').offsetHeight + (frame.querySelector('.db-chart-source')?.offsetHeight || 0) + 48;
+  const preferred = options.preferredHeight || 260;
+  const height = options.sizing === 'auto' || !el.clientHeight ? preferred : Math.max(100, el.clientHeight - chrome - (options.footerHeight ?? 40) - (options.legendSpace || 0));
+  frame.querySelector('.db-chart-body').replaceChildren(chartFn(width, height));
 }
 
 export const TILE_TYPES = {
@@ -88,7 +93,7 @@ export const TILE_TYPES = {
     render(el, { data, options }) {
       mount(
         el,
-        (width) => barChart(data, { x: "value", y: "label", width, xLabel: options.tileOptions?.xLabel || null }),
+        (width, height) => barChart(data, { x: "value", y: "label", width, height, xLabel: options.tileOptions?.xLabel || null }),
         options
       );
     }
@@ -108,7 +113,7 @@ export const TILE_TYPES = {
     render(el, { data, options }) {
       mount(
         el,
-        (width) => columnChart(data, { x: "label", y: "value", width, yLabel: options.tileOptions?.yLabel || null }),
+        (width, height) => columnChart(data, { x: "label", y: "value", width, height, yLabel: options.tileOptions?.yLabel || null }),
         options
       );
     }
@@ -131,8 +136,8 @@ export const TILE_TYPES = {
       const rows = data.map((d) => ({ ...d, date: promoteDate(d.date) }));
       mount(
         el,
-        (width) =>
-          lineChart(rows, { x: "date", y: "value", stroke: "series", width, yLabel: options.tileOptions?.yLabel || null }),
+        (width, height) =>
+          lineChart(rows, { x: "date", y: "value", stroke: "series", width, height, yLabel: options.tileOptions?.yLabel || null }),
         options
       );
     }
@@ -155,13 +160,13 @@ export const TILE_TYPES = {
       const trend = options.tileOptions?.trend ?? true;
       mount(
         el,
-        (width) =>
+        (width, height) =>
           scatterChart(data, {
             x: "x",
             y: "y",
             fill: "group",
             trend,
-            width,
+            width, height,
             xLabel: options.tileOptions?.xLabel || null,
             yLabel: options.tileOptions?.yLabel || null
           }),
@@ -184,7 +189,7 @@ export const TILE_TYPES = {
     render(el, { data, options }) {
       mount(
         el,
-        (width) => dotChart(data, { x: "value", y: "label", width, xLabel: options.tileOptions?.xLabel || null }),
+        (width, height) => dotChart(data, { x: "value", y: "label", width, height, xLabel: options.tileOptions?.xLabel || null }),
         options
       );
     }
@@ -205,11 +210,11 @@ export const TILE_TYPES = {
       mount(
         el,
         // The donut is square; cap the width so wide tiles don't blow it up.
-        (width) =>
+        (width, height) =>
           donutChart(data, {
             value: "value",
             label: "label",
-            width: Math.min(width, 400)
+            width: Math.min(width, 400), height
           }),
         options
       );
@@ -235,14 +240,14 @@ export const TILE_TYPES = {
       const diverging = options.tileOptions?.diverging ?? false;
       mount(
         el,
-        (width) =>
+        (width, height) =>
           choropleth(data, {
             geo: usStates,
             object: "states",
             id: "id",
             value: "value",
             diverging,
-            width
+            width, height
           }),
         options
       );
@@ -271,16 +276,21 @@ export const TILE_TYPES = {
       const includeZero = options.tileOptions?.includeZero ?? true;
       mount(
         el,
-        (width) =>
-          smallMultiples(data, {
+        (width, height) => {
+          const count = new Set(data.map(d => d.facet)).size;
+          const columns = facetColumns(width, count);
+          const chartWidth = Math.floor((width - 24 * (columns - 1)) / columns);
+          const chartHeight = Math.max(100, height / Math.ceil(count / columns) - 44);
+          return smallMultiples(data, {
             facet: "facet",
             value: "value",
-            columns: 3,
+            columns,
             includeZero,
-            chartWidth: Math.max(220, Math.floor((width - 64) / 3)),
+            chartWidth,
             chart: (rows, { yDomain, width: cw }) =>
-              columnChart(rows, { x: "label", y: "value", width: cw, yDomain, yLabel: options.tileOptions?.yLabel || null })
-          }),
+              columnChart(rows, { x: "label", y: "value", width: cw, height: chartHeight, yDomain, yLabel: options.tileOptions?.yLabel || null })
+          });
+        },
         options
       );
     }
@@ -305,15 +315,27 @@ export const TILE_TYPES = {
     render(el, { data, options }) {
       // KPI cards carry their own layout; no width plumbing needed.
       el.innerHTML = "";
-      el.appendChild(card(kpiRow(data), { title: options.title, source: options.source }));
+      el.appendChild(card(kpiRow(data), { title: options.hideTitle ? null : options.title, source: options.source }));
     }
   }
 };
 
+const lastRender = new WeakMap();
+export function resizeTileChart(el, options = {}) {
+  // An unavailable/loading state must never resurrect a previous dataset.
+  if (!el?.querySelector('.db-card')) return;
+  const last = lastRender.get(el);
+  if (last) TILE_TYPES[last.type].render(el, { data: last.data, options: { ...last.options, ...options, resizeOnly: true } });
+}
+
 // One integrity boundary for both composer and standalone exports.
 for (const [type, entry] of Object.entries(TILE_TYPES)) {
+  entry.defaultSize.h *= 3;
   const render = entry.render;
   entry.render = (el, { data, options = {} }) => {
+    const previousDetails = options.resizeOnly ? el.querySelector('.chart-data') : null;
+    lastRender.set(el, { type, data, options });
+    options = { ...options, preferredHeight: type === 'bar' || type === 'dot' ? Math.min(600, Math.max(220, data.length * 24 + 50)) : type === 'donut' ? 340 : 260, legendSpace: options.legendSpace ?? (type === 'line' ? 32 : 0) };
     try {
       for (const f of entry.fields.filter(f => f.numeric)) {
         for (const r of data) {
@@ -331,6 +353,29 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
     } catch (err) {
       el.replaceChildren(); const error = document.createElement('div'); error.className = 'tile-error'; error.setAttribute('role','alert'); error.textContent = err.message; el.append(error);
     }
-    el.append(chartData(data,entry.fields,options.title));
+    el.append(previousDetails || chartData(data,entry.fields,options.title));
+    if (options.sizing !== 'auto' && el.clientHeight && el.querySelector('.db-card')) {
+      const extras = [...el.children].filter(node => !node.classList.contains('db-card'));
+      const footerHeight = extras.reduce((sum, node) => {
+        const css = getComputedStyle(node);
+        return sum + node.getBoundingClientRect().height + parseFloat(css.marginTop) + parseFloat(css.marginBottom);
+      }, 0);
+      let legendSpace = 0;
+      if (type === 'donut') {
+        const legend = el.querySelector('.db-legend');
+        legendSpace = Math.max(0, legend.getBoundingClientRect().height + 12 - 80);
+      } else if (type === 'line') {
+        const figure = el.querySelector('figure');
+        const plot = figure && [...figure.querySelectorAll('svg')].sort((a,b) => b.getBoundingClientRect().height - a.getBoundingClientRect().height)[0];
+        if (plot) legendSpace = figure.getBoundingClientRect().height - plot.getBoundingClientRect().height;
+      }
+      if (Math.abs(footerHeight - (options.footerHeight ?? 40)) > 1 || Math.abs(legendSpace - (options.legendSpace || 0)) > 1) {
+        options = { ...options, footerHeight, legendSpace };
+        render(el, { data: renderData(type,data).rows, options });
+        el.append(...extras);
+        for (const svg of el.querySelectorAll('svg')) { svg.setAttribute('role','img'); svg.setAttribute('aria-label', options.title || entry.label); }
+      }
+      lastRender.set(el, {type, data, options});
+    }
   };
 }

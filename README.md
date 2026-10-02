@@ -37,7 +37,7 @@ original references. A blocking notice offers **Repair data binding**. Choosing
 sample data is an explicit action; loading or exporting never substitutes it.
 
 Charts use neutral axis labels until a user enters **X label / unit** or
-**Y label / unit** in the toolbar. These choices travel through autosave, JSON,
+**Y label / unit** under each tile’s **Settings**. These choices travel through autosave, JSON,
 templates and HTML. Small-multiple columns use one zero-inclusive domain by
 default; disabling Include zero displays a cropped-domain notice.
 
@@ -55,17 +55,17 @@ Bar/category charts refuse more than 100 rows rather than silently omit them.
 
 ## Layout schema and replacement
 
-Layouts carry `app: "dashboard-builder"`, `version: 2`, theme, dashboard default,
+Layouts carry `app: "dashboard-builder"`, `version: 3`, `rowHeight: 24`, theme, dashboard default,
 tile geometry, metadata and explicit binding modes:
 
 ```json
 {
-  "app": "dashboard-builder", "version": 2, "theme": "paper",
+  "app": "dashboard-builder", "version": 3, "rowHeight": 24, "theme": "paper",
   "defaultDataset": { "kind": "samples" },
   "tiles": [{
     "id": "revenue", "type": "bar", "title": "Revenue", "source": "sales.csv",
     "dataset": "upload:sales", "binding": { "mode": "explicit", "ref": "upload:sales" },
-    "tileOptions": { "xLabel": "USD" }, "x": 0, "y": 0, "w": 6, "h": 5
+    "sizing": "manual", "tileOptions": { "xLabel": "USD" }, "x": 0, "y": 0, "w": 6, "h": 15
   }]
 }
 ```
@@ -76,7 +76,16 @@ tile's sample default. Version 1 migrates without guessing: every existing
 nonnull reference becomes explicit and missing/null references follow the
 dashboard. V1 cannot recover historical intent, so it never converts a matching
 sample reference into a follower. Validation clones its input; migration occurs
-once and the next save is V2. Other versions are rejected.
+once and the next save is V3. V1/V2 geometry uses 72px rows; migration
+multiplies y/h by three while preserving x/w and data bindings. V3 uses 24px
+rows with gutters inside each cell, also used by HTML exports. Other versions
+and row heights are rejected.
+
+Manual resize intent is saved with the tile and survives data changes, reload,
+import and present mode. **Settings → Fit content** chooses automatic sizing.
+Plots redraw during pointer resizing and use both available width and height.
+Very small manually sized tiles retain one outer scrolling fallback so labels,
+source notes and data alternatives remain reachable.
 
 Autosave remains at `dashboard-builder:layout:v1` for storage compatibility.
 Imports validate the complete candidate before side effects: own registry types,
@@ -152,7 +161,7 @@ Engineering limits are separate from measured device capacity:
 | Dense plotted marks | 2,000, with visible sampling notice |
 | Category/KPI rows | 100, otherwise unsupported-data notice |
 | Small-multiple facets | 12, otherwise filter/aggregate notice |
-| Layout | 32 MiB, 100 tiles, twelve columns, max geometry 1,000 rows |
+| Layout | 32 MiB, 100 tiles, twelve columns, max geometry 3,000 rows of 24px (same physical limit as legacy) |
 | JSON inline data | 500 KiB per dataset; omitted dependencies listed |
 
 Uploads parse in a worker, show progress, and can be cancelled. SQL runs in its

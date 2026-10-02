@@ -32,7 +32,7 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   await importJSON(page,data); await expect(page.locator('#status')).toContainText('Imported');
   await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
   await expect(page.locator('.tile-chart')).toContainText('USD');
-  const exported=await jsonExport(page); expect(exported.version).toBe(2); expect(exported.tiles[0].binding).toEqual({mode:'explicit',ref:'categorical'});
+  const exported=await jsonExport(page); expect(exported.version).toBe(3); expect(exported.tiles[0].binding).toEqual({mode:'explicit',ref:'categorical'});
   await page.locator('#btn-templates').focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.tpl-close')).toBeFocused(); await page.keyboard.press('Shift+Tab');
   expect(await page.evaluate(()=>document.querySelector('.tpl-modal').contains(document.activeElement))).toBe(true);

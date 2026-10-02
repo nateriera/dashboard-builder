@@ -1,3 +1,4 @@
+import { ROW_HEIGHT } from '../tiles/geometry.js';
 import { TILE_TYPES, DATASETS } from '../tiles/registry.js';
 import { THEMES } from '../themes/themes.js';
 import { LIMITS, assertRows } from './limits.js';
@@ -58,10 +59,12 @@ function records(v, kind) {
 /** Side-effect-free validation/migration. V1 references always remain explicit:
  * the old format cannot distinguish intent, so guessing a follower is unsafe. */
 export function validateLayout(input) {
-  if (!object(input) || input.app !== 'dashboard-builder' || ![1,2].includes(input.version)) fail('Unsupported layout app or version.');
+  if (!object(input) || input.app !== 'dashboard-builder' || ![1,2,3].includes(input.version)) fail('Unsupported layout app or version.');
   if (new TextEncoder().encode(JSON.stringify(input)).length > LIMITS.layoutBytes) fail('Layout exceeds the 32 MiB limit.');
   if (!Array.isArray(input.tiles) || input.tiles.length > LIMITS.tiles) fail('Invalid tiles or too many tiles (limit 100).');
   const data = structuredClone(input);
+  if (data.version === 3 && data.rowHeight !== ROW_HEIGHT) fail("Unsupported grid row height.");
+  const scale = data.version < 3 ? 3 : 1;
   const dd = data.defaultDataset || { kind: 'samples' };
   if (!object(dd) || !['samples','dataset'].includes(dd.kind)) fail('Invalid dashboard default.');
   const defaultDataset = dd.kind === 'samples' ? { kind: 'samples' } : { kind: 'dataset', ref: ref(dd.ref, false) };
@@ -75,11 +78,14 @@ export function validateLayout(input) {
     const id = t.id ?? `import-${i}`;
     if (!idPattern.test(id) || ids.has(id)) fail('Invalid or duplicate tile id.');
     ids.add(id);
-    const geometry = { x: t.x ?? 0, y: t.y ?? i * 6, w: t.w ?? e.defaultSize.w, h: t.h ?? e.defaultSize.h };
-    for (const [k,n] of Object.entries(geometry)) if (!Number.isInteger(n) || n < (['w','h'].includes(k) ? 1 : 0) || n > (['x','w'].includes(k) ? 12 : 1000)) fail('Invalid tile geometry.');
+    const geometry = { x: t.x ?? 0, y: t.y ?? i * 18 / scale, w: t.w ?? e.defaultSize.w, h: t.h ?? e.defaultSize.h / scale };
+    for (const [k,n] of Object.entries(geometry)) if (!Number.isInteger(n) || n < (['w','h'].includes(k) ? 1 : 0) || n > (['x','w'].includes(k) ? 12 : (data.version === 3 ? 3000 : 1000))) fail('Invalid tile geometry.');
+    geometry.y *= scale; geometry.h *= scale;
+    const sizing = t.sizing ?? 'manual';
+    if (!['auto','manual'].includes(sizing)) fail('Invalid sizing intent.');
     if (geometry.x + geometry.w > 12) fail('Tile exceeds grid width.');
     const dataset = ref(t.dataset ?? null);
-    const binding = data.version === 2 ? t.binding : { mode: dataset === null ? 'dashboard' : 'explicit', ...(dataset === null ? {} : { ref: dataset }) };
+    const binding = data.version >= 2 ? t.binding : { mode: dataset === null ? 'dashboard' : 'explicit', ...(dataset === null ? {} : { ref: dataset }) };
     if (!object(binding) || !['dashboard','explicit'].includes(binding.mode) || (binding.mode === 'explicit' && (ref(binding.ref) === null || binding.ref !== dataset)) || (binding.mode === 'dashboard' && dataset !== null)) fail('Invalid or inconsistent binding.');
     const opts = t.tileOptions ?? {};
     if (!object(opts)) fail('Invalid chart options.');
@@ -89,7 +95,7 @@ export function validateLayout(input) {
       else if (['trend','diverging','includeZero'].includes(k) && typeof v === 'boolean') tileOptions[k] = v;
       else fail(`Unsupported chart option: ${k}`);
     }
-    return { id, type: t.type, title: text(t.title ?? e.defaultTitle,'title'), source: text(t.source ?? 'Sample data','source'), dataset, binding, tileOptions, ...geometry };
+    return { id, type: t.type, title: text(t.title ?? e.defaultTitle,'title'), source: text(t.source ?? 'Sample data','source'), dataset, binding, tileOptions, sizing, ...geometry };
   });
   const datasets = records(data.datasets,'dataset'), queries = records(data.queries,'query');
   for (const t of tiles) {
@@ -104,7 +110,7 @@ export function validateLayout(input) {
       }
     }
   }
-  return { app: 'dashboard-builder', version: 2, theme, defaultDataset, tiles, datasets, queries };
+  return { app: 'dashboard-builder', version: 3, rowHeight: ROW_HEIGHT, theme, defaultDataset, tiles, datasets, queries };
 }
 
 export function assertNoCollisions(candidate, getDataset, getQuery) {

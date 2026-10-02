@@ -128,7 +128,7 @@ function trendLine(data, x, y) {
 // data: rows; x: numeric field; y: category field.
 // options: sort ("desc"|"asc"|null), fill (color or field), highlight (predicate),
 //   valueFormat, tip (default true), width, xLabel, theme.
-export function barChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, xLabel = null, xDomain = null, width = 640, theme = getTheme() } = {}) {
+export function barChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, xLabel = null, xDomain = null, width = 640, height, theme = getTheme() } = {}) {
   const t = theme.chart;
   const baseFill = fill ?? t.primary;
   const rows = sort
@@ -153,8 +153,9 @@ export function barChart(data, { x, y, sort = "desc", fill = null, highlight = n
   ];
   return themedPlot(theme, {
     width,
-    marginLeft: 120,
-    marginRight: 90,
+    height,
+    marginLeft: Math.min(120, Math.max(48, width * 0.22)),
+    marginRight: Math.min(72, Math.max(36, width * 0.12)),
     x: { label: xLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: xDomain ?? undefined },
     y: { label: null, domain: rows.map((d) => d[y]) },
     marks
@@ -162,7 +163,7 @@ export function barChart(data, { x, y, sort = "desc", fill = null, highlight = n
 }
 
 // ── Vertical column chart (categorical or time buckets) ──────────────────────
-export function columnChart(data, { x, y, fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, yLabel = null, yDomain = null, width = 640, theme = getTheme() } = {}) {
+export function columnChart(data, { x, y, fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, yLabel = null, yDomain = null, width = 640, height, theme = getTheme() } = {}) {
   const t = theme.chart;
   const baseFill = fill ?? t.primary;
   const marks = [
@@ -184,6 +185,7 @@ export function columnChart(data, { x, y, fill = null, highlight = null, valueFo
   ];
   return themedPlot(theme, {
     width,
+    height,
     marginBottom: 48,
     x: { label: null, tickRotate: data.length > 8 ? -30 : 0 },
     y: { label: yLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: yDomain ?? undefined },
@@ -193,7 +195,7 @@ export function columnChart(data, { x, y, fill = null, highlight = null, valueFo
 
 // ── Line chart (time series; one or many series via `stroke`) ───────────────
 // data: rows; x: date/number field; y: numeric field; stroke: optional series field.
-export function lineChart(data, { x, y, stroke = null, width = 680, xLabel = null, yLabel = null, yFormat = fmtInt.format.bind(fmtInt), xDomain = null, yDomain = null, tip = true, theme = getTheme() } = {}) {
+export function lineChart(data, { x, y, stroke = null, width = 680, height, xLabel = null, yLabel = null, yFormat = fmtInt.format.bind(fmtInt), xDomain = null, yDomain = null, tip = true, theme = getTheme() } = {}) {
   const t = theme.chart;
   const base = { x, y, tip, strokeWidth: 2 };
   const xType = data[0] && data[0][x] instanceof Date ? "time" : typeof (data[0] && data[0][x]) === "string" ? "point" : "linear";
@@ -209,6 +211,7 @@ export function lineChart(data, { x, y, stroke = null, width = 680, xLabel = nul
       ];
   return themedPlot(theme, {
     width,
+    height,
     x: { label: xLabel, type: xType, domain: xDomain ?? undefined },
     y: { label: yLabel, tickFormat: yFormat, domain: yDomain ?? undefined },
     color: stroke ? { range: t.categorical, legend: true } : undefined,
@@ -218,7 +221,7 @@ export function lineChart(data, { x, y, stroke = null, width = 680, xLabel = nul
 
 // ── Scatter chart (relationships; optional trend line, size, color) ─────────
 // fill: a hex color, or a field name for a color channel.
-export function scatterChart(data, { x, y, r = null, fill = null, trend = false, width = 640, xLabel = null, yLabel = null, xDomain = null, yDomain = null, tip = true, theme = getTheme() } = {}) {
+export function scatterChart(data, { x, y, r = null, fill = null, trend = false, width = 640, height, xLabel = null, yLabel = null, xDomain = null, yDomain = null, tip = true, theme = getTheme() } = {}) {
   const t = theme.chart;
   const fillIsChannel =
     typeof fill === "string" && !fill.startsWith("#") && data[0] && fill in data[0];
@@ -238,6 +241,7 @@ export function scatterChart(data, { x, y, r = null, fill = null, trend = false,
   }
   return themedPlot(theme, {
     width,
+    height,
     x: { label: xLabel, nice: true, domain: xDomain ?? undefined },
     y: { label: yLabel, nice: true, domain: yDomain ?? undefined },
     marks
@@ -245,7 +249,7 @@ export function scatterChart(data, { x, y, r = null, fill = null, trend = false,
 }
 
 // ── Dot plot / lollipop (clean alternative to bars for many categories) ──────
-export function dotChart(data, { x, y, sort = "desc", width = 640, xLabel = null, xDomain = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, theme = getTheme() } = {}) {
+export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabel = null, xDomain = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, theme = getTheme() } = {}) {
   const t = theme.chart;
   const rows = sort
     ? data.slice().sort((a, b) => (sort === "desc" ? b[x] - a[x] : a[x] - b[x]))
@@ -253,8 +257,9 @@ export function dotChart(data, { x, y, sort = "desc", width = 640, xLabel = null
   const tf = tickFormat ?? valueFormat;
   return themedPlot(theme, {
     width,
-    marginLeft: 140,
-    marginRight: 70,
+    height,
+    marginLeft: Math.min(120, Math.max(48, width * 0.22)),
+    marginRight: Math.min(64, Math.max(32, width * 0.12)),
     x: { label: xLabel, tickFormat: (d) => tf(d), domain: xDomain ?? undefined },
     y: { label: null, domain: rows.map((d) => d[y]) },
     marks: [
@@ -288,6 +293,7 @@ export function choropleth(data, {
   center = null,
   projection = "albers-usa",
   width = 640,
+  height = Math.round(width * 0.62),
   tip = true,
   theme = getTheme()
 } = {}) {
@@ -311,7 +317,7 @@ export function choropleth(data, {
 
   return themedPlot(theme, {
     width,
-    height: Math.round(width * 0.62),
+    height,
     projection,
     x: { axis: null, grid: false },
     y: { axis: null, grid: false },
@@ -383,8 +389,9 @@ export function smallMultiples(data, {
 // data: rows; value: numeric field; label: category field.
 // Note: Observable Plot has no arc/pie mark, so this renders raw SVG via
 // d3-shape pie+arc generators and htl — same theme, no Plot dependency.
-export function donutChart(data, { value, label, width = 420, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme() } = {}) {
+export function donutChart(data, { value, label, width = 420, height = width + 80, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme() } = {}) {
   const t = theme.chart;
+  width = Math.max(80, Math.min(width, height - 80, 400));
   data = donutParts(data, label, value);
   const total = data.reduce((s, d) => s + d[value], 0);
   const slices = d3pie().value((d) => d[value]).sort(null)(data);
@@ -484,19 +491,25 @@ export const chartStyles = html`<style>
     color: var(--slate-500);
     margin-top: 16px;
   }
+  .tile-chart .db-card { padding: 16px; margin: 0; }
+  .tile-chart .db-chart-title { font-size: 18px; line-height: 1.3; }
+  .db-chart-head:empty { display: none; }
+  .db-chart-body { min-width: 0; }
+  .db-chart-body svg { max-width: 100%; }
+  .db-chart-body figure { margin: 0; }
   .db-fig { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .db-kpi-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
     gap: 16px;
-    margin: 0 0 32px 0;
+    margin: 0;
   }
   .db-kpi {
     background: var(--white);
     border: 1px solid var(--slate-200);
     border-radius: 10px;
     box-shadow: var(--card-shadow);
-    padding: 20px 24px;
+    padding: 16px;
   }
   .db-kpi-value {
     font-family: var(--font-mono);

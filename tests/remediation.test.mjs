@@ -47,7 +47,7 @@ test('R3: every binding survives migration, reload and JSON without input mutati
     const v2 = validateLayout(original), roundTrip = validateLayout(JSON.parse(JSON.stringify(v2)));
     assert.equal(JSON.stringify(original),raw); assert.equal(roundTrip.tiles[0].dataset,dataset);
     assert.deepEqual(roundTrip.tiles[0].binding,dataset === null ? {mode:'dashboard'} : {mode:'explicit',ref:dataset});
-    assert.equal(roundTrip.version,2);
+    assert.equal(roundTrip.version,3);
   }
 });
 test('R7: malformed envelopes fail validation before any mutation', () => {
@@ -131,3 +131,23 @@ test('R2/R6: upload row boundaries and oversized dependency reasons are explicit
   const {inlined,skipped}=store.inlineDatasets([`upload:${id}`,'upload:missing']);
   assert.equal(Object.keys(inlined).length,0); assert.match(skipped[0],/Oversized input.*exceeds/); assert.match(skipped[1],/missing/);
 });
+
+ test('V3 geometry: legacy pixel positions and manual intent round-trip exactly', () => {
+  for (const version of [1,2]) {
+    const old = { ...layout(), version, tiles: [{...layout().tiles[0],y:900,h:1000,binding:{mode:'explicit',ref:'categorical'}}] };
+    const next=validateLayout(old);
+    assert.equal(next.rowHeight,24); assert.equal(next.tiles[0].y*24,900*72); assert.equal(next.tiles[0].h*24,1000*72);
+    assert.equal(next.tiles[0].sizing,'manual'); assert.deepEqual(validateLayout(next),next);
+  }
+  const auto=validateLayout(layout()); auto.tiles[0].sizing='auto'; assert.equal(validateLayout(auto).tiles[0].sizing,'auto');
+  assert.throws(()=>validateLayout({...auto,rowHeight:72}));
+ });
+ test('Content fit uses inset margins once and facets adapt without horizontal overflow', async () => {
+   const {rowsForContent,facetColumns}=await import('../src/tiles/geometry.js');
+   assert.equal(rowsForContent(336,24,12),15);
+   assert.deepEqual([220,480,800].map(w=>facetColumns(w,3)),[1,2,3]);
+   const el=document.createElement('div'); Object.defineProperty(el,'clientWidth',{value:320}); Object.defineProperty(el,'clientHeight',{value:500});
+   TILE_TYPES.smallMultiples.render(el,{data:DATASETS.facets,options:{sizing:'manual'}});
+   assert.equal(el.querySelector('.db-facets').style.gridTemplateColumns,'repeat(1, minmax(0, 1fr))');
+   for (const svg of el.querySelectorAll('.db-facet svg')) assert.ok(+svg.getAttribute('width')<=288);
+ });

@@ -71,6 +71,7 @@ function renderExport(payload) {
 
   const grid = document.createElement("div");
   grid.className = "export-grid";
+  grid.style.setProperty("--grid-row-height", `${payload.version >= 3 ? payload.rowHeight : 72}px`);
   root.appendChild(grid);
 
   const rendered = [];
@@ -97,7 +98,7 @@ function renderExport(payload) {
             options: {
               title: t.title,
               source: t.source,
-              tileOptions: t.tileOptions || {}
+              tileOptions: t.tileOptions || {}, sizing: window.matchMedia('print').matches ? 'auto' : 'manual'
             }
           });
         } catch (err) {
@@ -110,6 +111,8 @@ function renderExport(payload) {
     }
   };
 
+  window.addEventListener("beforeprint", paint);
+  window.addEventListener("afterprint", paint);
   // Paint after layout so charts measure their real widths.
   requestAnimationFrame(paint);
 

@@ -14,7 +14,9 @@ import "gridstack/dist/gridstack.min.css";
 import "./style.css";
 import { chartStyles } from "./charts/charts.js";
 import { getTheme, getThemeId, setTheme, THEMES } from "./themes/themes.js";
-import { TILE_TYPES, DATASETS, DATASET_LABELS } from "./tiles/registry.js";
+import { TILE_TYPES, DATASETS, DATASET_LABELS, resizeTileChart } from "./tiles/registry.js";
+import { ROW_HEIGHT } from "./tiles/geometry.js";
+import { fitTileToContent } from "./tiles/autofit.js";
 import { guessMapping, normalizeRows } from "./tiles/normalize.js";
 import {
   isUploadRef,
@@ -65,10 +67,12 @@ function setStatus(msg) {
 const grid = GridStack.init(
   {
     column: 12,
-    cellHeight: 72,
+    cellHeight: ROW_HEIGHT,
+    animate: false,
     margin: 12,
     // Drag tiles by their toolbar so chart tooltips/legends stay clickable.
     draggable: { handle: ".tile-toolbar" },
+    alwaysShowResizeHandle: true,
     resizable: { handles: "all" }
   },
   gridEl
@@ -175,11 +179,13 @@ function buildTileContent(type, meta) {
   const titleInput = document.createElement("input");
   titleInput.className = "tile-title";
   titleInput.value = meta.title;
+  titleInput.title = meta.title;
   titleInput.spellcheck = false;
   titleInput.setAttribute("aria-label", "Tile title");
   // 'change' (not 'input') so re-rendering the chart below doesn't steal focus.
   titleInput.addEventListener("change", () => {
     meta.title = titleInput.value;
+    titleInput.title = meta.title;
     renderTileById(meta.id);
     scheduleAutosave();
   });
@@ -255,6 +261,14 @@ function buildTileContent(type, meta) {
   });
 
   toolbar.append(titleInput, dataBtn);
+  const settings = document.createElement('details'); settings.className = 'tile-settings';
+  const summary = document.createElement('summary'); summary.textContent = 'Settings'; settings.append(summary);
+  const settingsBody = document.createElement('div'); settingsBody.className = 'tile-settings-body'; settings.append(settingsBody);
+  settings.addEventListener('pointerdown', e => e.stopPropagation());
+  settings.addEventListener('mousedown', e => e.stopPropagation());
+  const fitButton = document.createElement('button'); fitButton.type = 'button'; fitButton.textContent = 'Fit content';
+  fitButton.addEventListener('click', () => { meta.sizing = 'auto'; renderTileById(meta.id); scheduleAutosave(); });
+  settingsBody.append(fitButton); toolbar.append(settings);
 
   // Per-type extra controls declared by the registry (e.g. scatter trend toggle).
   for (const ctrl of entry.controls || []) {
@@ -270,7 +284,7 @@ function buildTileContent(type, meta) {
         scheduleAutosave();
       });
       label.append(box, document.createTextNode(ctrl.label));
-      toolbar.append(label);
+      settingsBody.append(label);
     }
   }
   if (entry.fields.some(f => f.numeric)) {
@@ -280,7 +294,7 @@ function buildTileContent(type, meta) {
       const input = document.createElement('input'); input.type = 'text'; input.maxLength = 120;
       input.setAttribute('aria-label',label.textContent.trim()); input.value = meta.tileOptions[key] || '';
       input.addEventListener('change', () => { meta.tileOptions[key] = input.value; renderTileById(meta.id); scheduleAutosave(); });
-      label.append(input); toolbar.append(label);
+      label.append(input); settingsBody.append(label);
     }
   }
   toolbar.append(removeBtn);
@@ -293,7 +307,7 @@ function buildTileContent(type, meta) {
 }
 
 // Add a tile of `type` to the grid. Omit x/y for auto-placement.
-function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions } = {}) {
+function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, sizing = "manual", fit = false } = {}) {
   const entry = TILE_TYPES[type];
   if (!entry) return null;
 
@@ -306,6 +320,7 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions } =
     // New tiles follow the dashboard-wide default (null); explicit refs are
     // per-tile overrides. Undefined (very old layouts) also follows.
     dataset: dataset === undefined ? null : dataset,
+    sizing: fit ? "auto" : sizing,
     tileOptions: { ...(tileOptions || {}) }
   };
   tileMeta.set(widgetId, meta);
@@ -326,8 +341,12 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions } =
   }
   host.appendChild(buildTileContent(type, meta));
 
-  // Measure after layout so the chart renders at the tile's real width.
-  requestAnimationFrame(() => renderTile(el));
+  // Measure after layout so the chart renders at the tile's real width,
+  // then frame the tile's rows to the rendered content.
+  requestAnimationFrame(() => {
+    renderTile(el);
+    fitTileNow(el);
+  });
   return el;
 }
 
@@ -407,7 +426,7 @@ function renderTile(el) {
   }
   entry.render(chartEl, {
     data,
-    options: { title: meta.title, source: meta.source, tileOptions: meta.tileOptions }
+    options: { title: meta.title, source: meta.source, tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present") }
   });
 }
 
@@ -423,7 +442,7 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   const options = () => ({
     title: meta.title,
     source: meta.source,
-    tileOptions: meta.tileOptions
+    tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present")
   });
 
   if (!q) {
@@ -437,6 +456,7 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   const cached = getCachedRows(qid, q, entry);
   if (cached) {
     entry.render(chartEl, { data: cached, options: options() });
+    if (meta.sizing === "auto") requestAnimationFrame(() => { if (meta.sizing === "auto") fitTileToContent(grid, el); });
     return;
   }
 
@@ -456,6 +476,9 @@ async function renderQueryTile(el, meta, entry, chartEl) {
     paintUnavailable(chartEl, 'Query unavailable', (err?.message || String(err)) + ' Choose Data to repair or rerun this query.');
   }
 
+  // Painted above (stale renders returned early): frame the tile, unless
+  // the user sized it manually.
+  if (meta.sizing === "auto") requestAnimationFrame(() => { if (meta.sizing === "auto") fitTileToContent(grid, el); });
 }
 
 subscribeDatasetChanges(() => refreshQueryTiles());
@@ -471,14 +494,29 @@ function refreshQueryTiles() {
 
 function renderTileById(id) {
   const el = gridEl.querySelector(`[gs-id="${id}"]`);
-  if (el) renderTile(el);
+  if (el) {
+    renderTile(el);
+    fitTileNow(el);
+  }
+}
+
+// Size a tile's rows to frame its rendered content — unless the user sized
+// it manually (resizestop), which is never overridden. Safe to call any
+// time: no-ops when the tile is gone or already fits. Query tiles paint
+// asynchronously, so they fit themselves when their query resolves.
+function fitTileNow(el) {
+  const node = el.gridstackNode;
+  const meta = node && tileMeta.get(node.id);
+  if (!meta || meta.sizing !== "auto" || isQueryRef(meta.dataset)) return;
+  requestAnimationFrame(() => { if (meta.sizing === "auto") fitTileToContent(grid, el); });
 }
 
 // ── Layout serialization ─────────────────────────────────────────────────
 function serializeLayout() {
   return {
     app: "dashboard-builder",
-    version: 2,
+    version: 3,
+    rowHeight: ROW_HEIGHT,
     savedAt: new Date().toISOString(),
     defaultDataset: dashboardDefault,
     theme: getThemeId(),
@@ -491,6 +529,7 @@ function serializeLayout() {
         source: meta.source,
         dataset: meta.dataset,
         binding: meta.dataset == null ? { mode: "dashboard" } : { mode: "explicit", ref: meta.dataset },
+        sizing: meta.sizing,
         tileOptions: meta.tileOptions,
         x: n.x,
         y: n.y,
@@ -503,7 +542,7 @@ function serializeLayout() {
 
 let bulkLoading = false; // suppresses autosave while a layout is being loaded
 
-function loadLayout(data) {
+function loadLayout(data, { fit = false } = {}) {
   data = validateLayout(data);
   bulkLoading = true;
   try {
@@ -516,7 +555,7 @@ function loadLayout(data) {
       refreshThemeButton();
     }
     for (const t of data.tiles) {
-      addTile(t.type, t);
+      addTile(t.type, { ...t, fit });
     }
   } finally {
     bulkLoading = false;
@@ -528,12 +567,12 @@ function loadLayout(data) {
 // default is left untouched — a template should look like its preview.
 function applyTemplate(tpl) {
   try {
-    const candidate = validateLayout({ app: 'dashboard-builder', version: 1, theme: tpl.theme || getThemeId(), defaultDataset: dashboardDefault, tiles: tpl.tiles });
+    const candidate = validateLayout({ app: 'dashboard-builder', version: tpl.rowHeight ? 3 : 1, rowHeight: tpl.rowHeight, theme: tpl.theme || getThemeId(), defaultDataset: dashboardDefault, tiles: tpl.tiles });
     replaceLayout(candidate);
     scheduleAutosave(); setStatus('Applied template “' + tpl.name + '”.');
   } catch (err) { setStatus('Template failed: ' + err.message); }
 }
-function replaceLayout(candidate) {
+function replaceLayout(candidate, { fit = false } = {}) {
   const previous = serializeLayout();
   // Construct controls/charts detached before changing the current grid.
   for (const t of candidate.tiles) {
@@ -544,7 +583,7 @@ function replaceLayout(candidate) {
     const rows = ds?.rows || DATASETS[t.dataset];
     if (rows) entry.render(host,{ data: rows, options: t });
   }
-  try { loadLayout(candidate); }
+  try { loadLayout(candidate, { fit }); }
   catch (err) { loadLayout(previous); throw err; }
 }
 
@@ -573,25 +612,37 @@ function saveNow() {
 }
 
 // ── Grid events ──────────────────────────────────────────────────────────
-grid.on("resizestop", (_event, el) => {
-  // Defer the re-render past GridStack's synchronous mouseup processing.
-  // GridStack removes its document-level move/up listeners only AFTER our
-  // handler returns; if renderTile() threw inside that call stack, the
-  // cleanup would be skipped and the resize would stay glued to the cursor
-  // permanently (even Escape re-enters the same path). A rAF keeps our work
-  // out of their cleanup chain entirely — the same pattern addTile() uses.
-  requestAnimationFrame(() => {
-    try {
-      renderTile(el);
-    } catch (err) {
-      // Never let a render failure wedge the grid: surface it instead.
-      console.error("Tile re-render failed after resize:", err);
-      setStatus(
-        `Couldn't re-render tile after resize: ${err && err.message ? err.message : String(err)}`
-      );
+// Coalesce pointer redraws to one frame. Rendering never runs in GridStack's
+// synchronous start/stop cleanup stack and never replaces handles.
+const pendingResize = new Map();
+let resizeFrame = 0;
+function scheduleResize(el) {
+  pendingResize.set(el, true);
+  if (resizeFrame) return;
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = 0;
+    for (const tile of pendingResize.keys()) {
+      if (!tile.isConnected) continue;
+      const meta = tileMeta.get(tile.gridstackNode?.id);
+      try { resizeTileChart(tile.querySelector('.tile-chart'), { sizing: meta?.sizing, hideTitle: !document.body.classList.contains('present') }); }
+      catch (err) { setStatus('Resize render failed: ' + err.message); }
     }
+    pendingResize.clear();
   });
-}); // re-render at the new width
+}
+grid.on('resizestart', (_event, el) => {
+  const meta = tileMeta.get(el.gridstackNode?.id);
+  if (meta) meta.sizing = 'manual';
+});
+grid.on('resize', (_event, el) => scheduleResize(el));
+grid.on('resizestop', (_event, el) => { scheduleResize(el); scheduleAutosave(); });
+let viewportFrame = 0;
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(viewportFrame);
+  viewportFrame = requestAnimationFrame(() => {
+    gridEl.querySelectorAll('.grid-stack-item').forEach(el => { scheduleResize(el); fitTileNow(el); });
+  });
+});
 grid.on("change", () => scheduleAutosave());
 grid.on("removed", (_event, items) => {
   for (const n of items) tileMeta.delete(n.id);
@@ -617,7 +668,7 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
 
   item.append(label, desc);
   item.addEventListener("click", () => {
-    addTile(type);
+    addTile(type, { fit: true });
     scheduleAutosave();
   });
   paletteEl.appendChild(item);
@@ -647,7 +698,7 @@ grid.on("dropped", (_event, _prevNode, newNode) => {
   const { x, y } = newNode;
   grid.removeWidget(el, true, false);
   if (type && TILE_TYPES[type]) {
-    addTile(type, { x, y });
+    addTile(type, { x, y, fit: true });
     scheduleAutosave();
   }
 });
@@ -699,7 +750,10 @@ function refreshAllDataLabels() {
   });
 }
 function renderAllTiles() {
-  gridEl.querySelectorAll(".grid-stack-item").forEach(renderTile);
+  gridEl.querySelectorAll(".grid-stack-item").forEach((el) => {
+    renderTile(el);
+    fitTileNow(el);
+  });
 }
 function applyDashboardDefault(dd, statusMsg) {
   dashboardDefault = dd;
@@ -838,7 +892,8 @@ async function exportHtml() {
 
     const payload = {
       app: "dashboard-builder",
-      version: 2,
+      version: 3,
+    rowHeight: ROW_HEIGHT,
       kind: "dashboard-export",
       title: "Dashboard",
       exportedAt: new Date().toISOString(),
@@ -952,7 +1007,9 @@ function setPresent(on) {
   }
   // Charts keep their rendered width; re-render in case chrome changes it.
   requestAnimationFrame(() =>
-    gridEl.querySelectorAll(".grid-stack-item").forEach(renderTile)
+    gridEl.querySelectorAll(".grid-stack-item").forEach((el) => {
+      renderTile(el);
+    })
   );
 }
 
@@ -963,13 +1020,13 @@ btnExitPresent.addEventListener("click", () => setPresent(false));
 function starterLayout() {
   return {
     app: "dashboard-builder",
-    version: 1,
+    version: 3, rowHeight: ROW_HEIGHT,
     tiles: [
-      { type: "kpi", title: "Headlines", dataset: "kpis" },
-      { type: "bar", title: "Requests by category", dataset: "categorical" },
-      { type: "line", title: "Monthly requests", dataset: "timeseries" },
-      { type: "donut", title: "Share of requests", dataset: "categorical", w: 4 },
-      { type: "scatter", title: "Rent burden vs. homelessness rate", dataset: "scatter", w: 8 }
+      { type: "kpi", title: "Headlines", dataset: "kpis", x: 0, y: 0, w: 12, h: 13, binding: {mode:"explicit",ref:"kpis"} },
+      { type: "bar", title: "Requests by category", dataset: "categorical", x: 0, y: 13, w: 6, h: 16, binding: {mode:"explicit",ref:"categorical"} },
+      { type: "line", title: "Monthly requests", dataset: "timeseries", x: 6, y: 13, w: 6, h: 16, binding: {mode:"explicit",ref:"timeseries"} },
+      { type: "donut", title: "Share of requests", dataset: "categorical", x: 0, y: 29, w: 4, h: 20, binding: {mode:"explicit",ref:"categorical"} },
+      { type: "scatter", title: "Rent burden vs. homelessness rate", dataset: "scatter", x: 4, y: 29, w: 8, h: 20, binding: {mode:"explicit",ref:"scatter"} }
     ]
   };
 }

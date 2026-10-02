@@ -1,0 +1,245 @@
+{
+  "browser": "154.0.8037.58",
+  "geometry": {
+    "grid": {
+      "cellHeight": 72,
+      "margin": 12,
+      "animate": true,
+      "resize": {
+        "handles": "all"
+      }
+    },
+    "tiles": [
+      {
+        "title": "Headlines",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 3,
+        "gridHeight": 216,
+        "toolbar": 43,
+        "boxWidth": 1150,
+        "boxHeight": 147,
+        "boxScroll": 184,
+        "cardHeight": 147,
+        "cardScroll": 263
+      },
+      {
+        "title": "Requests by category",
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 5,
+        "gridHeight": 360,
+        "toolbar": 73,
+        "boxWidth": 562,
+        "boxHeight": 261,
+        "boxScroll": 298,
+        "cardHeight": 261,
+        "cardScroll": 333,
+        "svgWidth": "514",
+        "svgHeight": "220"
+      },
+      {
+        "title": "Monthly requests",
+        "x": 0,
+        "y": 8,
+        "w": 6,
+        "h": 5,
+        "gridHeight": 360,
+        "toolbar": 73,
+        "boxWidth": 562,
+        "boxHeight": 261,
+        "boxScroll": 298,
+        "cardHeight": 261,
+        "cardScroll": 505,
+        "svgWidth": "15",
+        "svgHeight": "15"
+      },
+      {
+        "title": "Share of requests",
+        "x": 0,
+        "y": 13,
+        "w": 4,
+        "h": 6,
+        "gridHeight": 432,
+        "toolbar": 100,
+        "boxWidth": 366,
+        "boxHeight": 306,
+        "boxScroll": 395,
+        "cardHeight": 306,
+        "cardScroll": 545,
+        "svgWidth": "318",
+        "svgHeight": "318"
+      },
+      {
+        "title": "Rent burden vs. homelessness rate",
+        "x": 0,
+        "y": 19,
+        "w": 8,
+        "h": 5,
+        "gridHeight": 360,
+        "toolbar": 73,
+        "boxWidth": 758,
+        "boxHeight": 261,
+        "boxScroll": 298,
+        "cardHeight": 261,
+        "cardScroll": 513,
+        "svgWidth": "710",
+        "svgHeight": "400"
+      }
+    ]
+  },
+  "resize": {
+    "before": {
+      "width": 588,
+      "height": 360,
+      "w": 6,
+      "h": 5,
+      "svgWidth": "514",
+      "svgHeight": "220",
+      "resizing": false
+    },
+    "fast": [
+      {
+        "dx": 10,
+        "dy": 10,
+        "width": 598,
+        "height": 370,
+        "w": 6,
+        "h": 5,
+        "svgWidth": "514",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 25,
+        "dy": 20,
+        "width": 613,
+        "height": 380,
+        "w": 6,
+        "h": 5,
+        "svgWidth": "514",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 50,
+        "dy": 40,
+        "width": 638,
+        "height": 400,
+        "w": 6,
+        "h": 5,
+        "svgWidth": "514",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 80,
+        "dy": 60,
+        "width": 668,
+        "height": 420,
+        "w": 7,
+        "h": 6,
+        "svgWidth": "514",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 120,
+        "dy": 90,
+        "width": 708,
+        "height": 450,
+        "w": 7,
+        "h": 6,
+        "svgWidth": "514",
+        "svgHeight": "220",
+        "resizing": true
+      }
+    ],
+    "fastAfter": {
+      "width": 686,
+      "height": 432,
+      "w": 7,
+      "h": 6,
+      "svgWidth": "612",
+      "svgHeight": "220",
+      "resizing": false
+    },
+    "slow": [
+      {
+        "dx": 10,
+        "dy": 10,
+        "width": 696,
+        "height": 442,
+        "w": 7,
+        "h": 6,
+        "svgWidth": "612",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 25,
+        "dy": 20,
+        "width": 711,
+        "height": 452,
+        "w": 7,
+        "h": 6,
+        "svgWidth": "612",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 50,
+        "dy": 40,
+        "width": 736,
+        "height": 472,
+        "w": 7,
+        "h": 6,
+        "svgWidth": "612",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 80,
+        "dy": 60,
+        "width": 766,
+        "height": 492,
+        "w": 8,
+        "h": 7,
+        "svgWidth": "612",
+        "svgHeight": "220",
+        "resizing": true
+      },
+      {
+        "dx": 120,
+        "dy": 90,
+        "width": 806,
+        "height": 522,
+        "w": 8,
+        "h": 7,
+        "svgWidth": "612",
+        "svgHeight": "220",
+        "resizing": true
+      }
+    ],
+    "after": {
+      "width": 784,
+      "height": 504,
+      "w": 8,
+      "h": 7,
+      "svgWidth": "710",
+      "svgHeight": "220",
+      "resizing": false
+    },
+    "afterRelease": {
+      "width": 784,
+      "height": 504,
+      "w": 8,
+      "h": 7,
+      "svgWidth": "710",
+      "svgHeight": "220",
+      "resizing": false
+    }
+  }
+}

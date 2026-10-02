@@ -101,9 +101,9 @@ const USER_TPL_KEY = "dashbuilder.templates.v1";
 const LEGACY_USER_TPL_KEY = "klaroDash.templates.v1"; // pre-theme era; read once, then dropped
 
 /** Drop tiles with unknown types and clamp geometry to sane ranges. */
-export function sanitizeTiles(tiles) {
+export function sanitizeTiles(tiles, rowHeight) {
   try {
-    return validateLayout({ app: 'dashboard-builder', version: 1, tiles }).tiles.map(({ id,binding,...t }) => t);
+    return validateLayout({ app: 'dashboard-builder', version: rowHeight ? 3 : 1, rowHeight, tiles }).tiles.map(({ id,...t }) => t);
   } catch { return []; }
 }
 
@@ -115,7 +115,7 @@ export function loadUserTemplates() {
     if (!Array.isArray(list)) return [];
     return list
       .filter((t) => t && typeof t.id === "string" && typeof t.name === "string")
-      .map((t) => ({ ...t, tiles: sanitizeTiles(t.tiles) }))
+      .map((t) => ({ ...t, rowHeight: 24, tiles: sanitizeTiles(t.tiles, t.rowHeight) }))
       .filter((t) => t.tiles.length > 0);
   } catch {
     return [];
@@ -132,14 +132,15 @@ function writeUserTemplates(list) {
 }
 
 export function saveUserTemplate(name, tiles, theme = "paper") {
-  const clean = sanitizeTiles(tiles);
+  const clean = sanitizeTiles(tiles, 24);
   if (!name.trim() || clean.length === 0) return null;
   const list = loadUserTemplates();
   const tpl = {
     id: `user-${Date.now().toString(36)}`,
     name: name.trim().slice(0, 60),
     theme,
-    version: 2,
+    version: 3,
+    rowHeight: 24,
     createdAt: new Date().toISOString(),
     inspiredBy: null,
     tiles: clean

@@ -1,0 +1,21 @@
+{
+  "before": {
+    "w": 6,
+    "h": 16,
+    "width": 530,
+    "height": 212
+  },
+  "during": {
+    "w": 7,
+    "h": 19,
+    "width": 630,
+    "height": 275
+  },
+  "after": {
+    "w": 7,
+    "h": 19,
+    "width": 628,
+    "height": 284
+  },
+  "firstRedrawMs": 43.5
+}

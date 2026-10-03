@@ -968,13 +968,13 @@ body.present .tile-toolbar { display: none; }
 .tile-toolbar { flex-wrap: nowrap; }
 .tile-control input[type=text] { width: 100px; color: var(--ink); background: var(--white); border: 1px solid var(--slate-300); border-radius: 6px; }
 .data-popover { max-height: calc(100vh - 16px); overflow: auto; }
-@media (max-width: 1100px) { #app-header { flex-wrap: wrap; gap: 8px; } .header-actions { flex-wrap: wrap; } #status { text-align: left; } }
-@media (max-width: 700px) { #palette { flex-basis: 160px; } .header-actions button { padding: 6px; } }
+@media (max-width: 1100px) { #app-header { flex-wrap: wrap; gap: 8px 16px; } .header-actions { flex-wrap: wrap; } #status { text-align: left; } }
 
 /* One compact heading and a disclosure for secondary controls. */
 .tile-settings { position: relative; flex: 0 0 auto; cursor: default; }
 .tile-settings summary { cursor: pointer; font-size: 12px; }
 .tile-settings-body { position: absolute; right: 0; top: 28px; z-index: 20; width: 260px; padding: 16px; display: grid; gap: 12px; background: var(--white); border: 1px solid var(--slate-200); border-radius: 8px; box-shadow: var(--card-shadow); }
+.tile-settings:not([open]) > .tile-settings-body { display: none; }
 .tile-settings .tile-control { display: grid; white-space: normal; }
 .tile-settings input[type=text] { width: 100%; min-width: 0; }
 .tile-title { flex-basis: 100px; }
@@ -985,6 +985,181 @@ body.present .tile-toolbar { display: none; }
 .grid-stack-item > .ui-resizable-se { opacity: 1; background: linear-gradient(135deg, transparent 50%, var(--slate-300) 50%, var(--slate-300) 58%, transparent 58%, transparent 68%, var(--slate-300) 68%, var(--slate-300) 76%, transparent 76%); background-size: 12px 12px; background-repeat: no-repeat; background-position: center; }
 .grid-stack-item:hover > .ui-resizable-handle { opacity: 1; }
 .tile-chart { min-width: 0; }
+
+/* Responsive editor shell: frequent actions stay visible; secondary actions
+   live in a small disclosure so labels remain readable at every width. */
+body { height: 100vh; height: 100dvh; overflow-x: hidden; }
+#app-header { gap: 16px; }
+.header-actions { position: relative; flex-wrap: nowrap; white-space: nowrap; }
+.header-actions > button { min-height: 40px; white-space: nowrap; }
+.header-actions #btn-data,
+.header-actions #btn-templates,
+.header-actions #btn-export-html { color: var(--dusk); }
+.header-actions #btn-export-html { color: var(--white); background: var(--dusk); border-color: var(--dusk); }
+.header-actions #btn-export-html:hover { background: var(--ink); }
+#btn-charts { display: none; }
+.header-menu,
+.header-menu[hidden] { display: none; }
+.header-menu:not([hidden]) {
+  position: absolute;
+  z-index: 11000;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(360px, calc(100vw - 20px));
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  white-space: normal;
+  background: var(--white);
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(30, 35, 71, 0.18);
+}
+.header-menu button { min-height: 40px; text-align: left; }
+.header-menu button.danger { border-color: color-mix(in srgb, var(--danger) 45%, var(--white)); }
+.palette-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.palette-head h2 { margin-bottom: 12px; }
+#btn-close-charts { display: none; }
+#chart-backdrop { display: none; }
+.data-drop-primary { margin-bottom: 7px; min-height: 48px; display: grid; place-items: center; }
+.data-local-note { margin: -1px 0 12px; color: var(--slate-500); font-size: 11px; line-height: 1.4; }
+.data-popover { width: min(340px, calc(100vw - 16px)); max-width: calc(100vw - 16px); }
+
+@media (min-width: 701px) and (max-width: 1100px) {
+  #app-header { gap: 8px 16px; }
+  .brand { flex: 1 0 42%; }
+  .header-actions { order: 3; flex: 1 0 100%; margin-left: 0; }
+  #status { order: 2; flex: 1 1 42%; text-align: right; }
+}
+
+@media (max-width: 700px) {
+  body { min-width: 320px; }
+  #app-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "brand" "actions" "status";
+    gap: 8px;
+    padding: 10px 12px 8px;
+  }
+  .brand { grid-area: brand; min-width: 0; }
+  .brand h1 { font-size: 18px; letter-spacing: .02em; }
+  .brand-sub { display: none; }
+  .header-actions {
+    grid-area: actions;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    margin: 0;
+  }
+  .header-actions > button { width: 100%; min-width: 0; min-height: 44px; padding: 7px 8px; font-size: 13px; }
+  .header-actions #btn-charts { display: inline-flex; align-items: center; justify-content: center; }
+  .header-actions #btn-more { grid-column: 1 / -1; }
+  .header-menu:not([hidden]) {
+    position: static;
+    grid-column: 1 / -1;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    box-shadow: none;
+  }
+  .header-menu button { min-height: 44px; white-space: normal; }
+  #status { grid-area: status; min-width: 0; width: 100%; text-align: left; font-size: 10px; line-height: 1.3; }
+  #app-body { position: relative; min-width: 0; }
+  #grid-wrap { width: 100%; padding: 8px; }
+  .grid-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: auto !important;
+    min-height: 0;
+    overflow: visible;
+  }
+  .grid-stack > .grid-stack-item {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0;
+    margin: 0 !important;
+  }
+  .grid-stack > .grid-stack-item > .grid-stack-item-content {
+    position: relative !important;
+    inset: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .grid-stack-item > .ui-resizable-handle { display: none !important; }
+  .tile-chart { flex: none; height: auto; min-height: 0; overflow: visible; }
+  .chart-data { max-width: 100%; }
+  .chart-data > summary { display: flex; align-items: center; min-height: 44px; }
+  .chart-data > div button { min-height: 44px; }
+  .chart-data table { display: block; max-width: 100%; overflow-x: auto; }
+  .chart-data th, .chart-data td { overflow-wrap: anywhere; }
+  #palette {
+    position: fixed;
+    z-index: 10001;
+    inset: 0 auto 0 0;
+    flex: none;
+    width: min(320px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    height: 100vh;
+    height: 100dvh;
+    padding: 16px;
+    border-right: 1px solid var(--slate-200);
+    box-shadow: 8px 0 28px rgba(30, 35, 57, .18);
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition: transform .2s ease;
+  }
+  body.chart-drawer-open #palette { transform: translateX(0); visibility: visible; }
+  body:not(.chart-drawer-open) #palette { visibility: hidden; pointer-events: none; }
+  #btn-close-charts {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-top: -8px;
+    border: 1px solid var(--slate-300);
+    border-radius: 6px;
+    color: var(--ink);
+    background: var(--white);
+    font-size: 24px;
+    cursor: pointer;
+  }
+  #chart-backdrop:not([hidden]) {
+    display: block;
+    position: fixed;
+    z-index: 10000;
+    inset: 0;
+    background: rgba(30, 35, 57, .36);
+  }
+  .tile-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto;
+    gap: 4px 6px;
+    padding: 6px 8px;
+    cursor: default;
+  }
+  .tile-title { grid-column: 1 / -1; width: 100%; min-height: 40px; font-size: 16px; }
+  .tile-data-btn { min-width: 0; max-width: min(44vw, 180px); min-height: 44px; padding: 6px 8px; }
+  .tile-settings summary { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; font-size: 12px; }
+  .tile-remove { width: 44px; height: 44px; padding: 0; }
+  .tile-settings-body { position: absolute; z-index: 12000; top: calc(100% + 4px); right: 0; left: auto; width: min(300px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; transform: none; }
+  .tile-settings-body button, .tile-settings-body input, .tile-settings-body select { min-height: 44px; }
+  .tile-control input[type=text] { min-height: 44px; }
+  .grid-stack-item > .ui-resizable-handle { opacity: 0; }
+  .grid-stack-item > .ui-resizable-se { width: 44px; height: 44px; opacity: 1; background-size: 16px 16px; }
+  .data-popover { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .data-sample-btn, .data-drop, .data-sql-run, .data-sql-table { min-height: 44px; }
+  .data-sql-input { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #palette { transition: none !important; }
+}
 
 /* ── Guided local upload summary ─────────────────────────────────────── */
 .guided-backdrop {

@@ -11,6 +11,7 @@ async function importJSON(page,data) {
   await expect(page.locator('#status')).toContainText(/Imported|Import failed/);
 }
 async function jsonExport(page) {
+  await page.locator('#btn-more').click();
   const downloaded=page.waitForEvent('download'); await page.locator('#btn-export').click();
   const download=await downloaded; return JSON.parse(await fs.readFile(await download.path(),'utf8'));
 }
@@ -173,8 +174,11 @@ test('R6/R9: worker upload, keyboard save/import/export and cancel remain operab
   await expect(page.locator('.data-preview-note').first()).toContainText('2 rows');
   await page.locator('.data-apply').first().focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.tile-data-label')).toContainText('revenue.csv');
+  await page.locator('#btn-more').focus(); await page.keyboard.press('Enter');
   await page.locator('#btn-save').focus(); await page.keyboard.press('Enter'); await expect(page.locator('#status')).toContainText('Saved');
+  await page.locator('#btn-more').focus(); await page.keyboard.press('Enter');
   const downloaded=page.waitForEvent('download'); await page.locator('#btn-export').focus(); await page.keyboard.press('Enter'); await downloaded;
+  await page.locator('#btn-more').focus(); await page.keyboard.press('Enter');
   const chooser=page.waitForEvent('filechooser'); await page.locator('#btn-import').focus(); await page.keyboard.press('Enter');
   await (await chooser).setFiles({name:'keyboard.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(envelope([tile('categorical')])))});
   await expect(page.locator('#status')).toContainText('Imported');

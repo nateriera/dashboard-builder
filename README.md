@@ -223,11 +223,15 @@ it does not terminate the engine computation. Wait for execution to settle
 before the next Run. Returned results are capped before JS materialization.
 
 Core controls are keyboard operable; dialogs enter/trap/return focus and Escape
-closes them. Chart tables provide text alternatives. The verified editor viewport
-is desktop Chrome at 1440×900 and 1024×768. The exported viewer has print rules
-that keep each tile together and start a page per tile. Chrome print media is
-tested; printer-specific output, screen-reader acceptance, mobile editing and
-other browser engines are outside the retained acceptance evidence.
+closes them. Chart tables provide text alternatives. The editor was verified in
+Chrome viewport emulation at 320×740, 375×812, 768×1024, 1024×768, 1280×800 and
+1440×900. Coverage includes phone chart creation and removal, tile editing,
+data/table controls, save/export, viewport-contained drawers and popovers, and
+desktop resize plus phone-first layout persistence. These are emulated
+viewports, not physical-device acceptance. Screen-reader acceptance and other
+browser engines remain unverified. The exported viewer has print rules that
+keep each tile together and start a page per tile. Chrome print media is tested;
+printer-specific output is unverified.
 
 Uploaded data is processed locally. The composer loads application assets and
 lazy DuckDB/WASM assets from its static host; HTML export fetches a generated

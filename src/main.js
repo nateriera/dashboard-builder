@@ -45,6 +45,7 @@ import { toggleDashboardPopover, closeDashboardPopover } from "./ui/dashboardDat
 import { toggleThemePopover, closeThemePopover } from "./ui/themePopover.js";
 import { openTemplateGallery } from "./ui/templateGallery.js";
 import { openGuidedStart } from "./ui/guidedStart.js";
+import { focusDialog } from "./ui/focus.js";
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -68,6 +69,7 @@ function setStatus(msg) {
 const grid = GridStack.init(
   {
     column: 12,
+    columnOpts: { breakpoints: [{ w: 700, c: 1, layout: "list" }] },
     cellHeight: ROW_HEIGHT,
     animate: false,
     margin: 12,
@@ -322,7 +324,10 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, si
     // per-tile overrides. Undefined (very old layouts) also follows.
     dataset: dataset === undefined ? null : dataset,
     sizing: fit ? "auto" : sizing,
-    tileOptions: { ...(tileOptions || {}) }
+    tileOptions: { ...(tileOptions || {}) },
+    // A chart authored in the one-column phone view needs a desktop-sized
+    // placement when saved; GridStack's phone geometry is only one column.
+    addedOnPhone: !bulkLoading && grid.getColumn() === 1
   };
   tileMeta.set(widgetId, meta);
 
@@ -514,6 +519,12 @@ function fitTileNow(el) {
 
 // ── Layout serialization ─────────────────────────────────────────────────
 function serializeLayout() {
+  const nodes = grid.save(false);
+  const desktopBottom = nodes.reduce((bottom, n) => {
+    const meta = tileMeta.get(n.id) || {};
+    return meta.addedOnPhone ? bottom : Math.max(bottom, n.y + n.h);
+  }, 0);
+  let appendedBottom = desktopBottom;
   return {
     app: "dashboard-builder",
     version: 3,
@@ -521,8 +532,14 @@ function serializeLayout() {
     savedAt: new Date().toISOString(),
     defaultDataset: dashboardDefault,
     theme: getThemeId(),
-    tiles: grid.save(false).map((n) => {
+    tiles: nodes.map((n) => {
       const meta = tileMeta.get(n.id) || {};
+      const entry = TILE_TYPES[meta.type];
+      const x = meta.addedOnPhone ? 0 : n.x;
+      const y = meta.addedOnPhone ? appendedBottom : n.y;
+      const w = meta.addedOnPhone ? entry.defaultSize.w : n.w;
+      const h = n.h;
+      if (meta.addedOnPhone) appendedBottom += h;
       return {
         id: n.id,
         type: meta.type,
@@ -532,10 +549,10 @@ function serializeLayout() {
         binding: meta.dataset == null ? { mode: "dashboard" } : { mode: "explicit", ref: meta.dataset },
         sizing: meta.sizing,
         tileOptions: meta.tileOptions,
-        x: n.x,
-        y: n.y,
-        w: n.w,
-        h: n.h
+        x,
+        y,
+        w,
+        h
       };
     })
   };
@@ -641,10 +658,26 @@ let viewportFrame = 0;
 window.addEventListener('resize', () => {
   cancelAnimationFrame(viewportFrame);
   viewportFrame = requestAnimationFrame(() => {
+    if (window.innerWidth > 700) {
+      closeChartDrawer({ returnFocus: false });
+      paletteShell.inert = false;
+      paletteShell.removeAttribute("aria-hidden");
+      paletteShell.style.removeProperty("visibility");
+      paletteShell.style.removeProperty("pointer-events");
+    } else if (!document.body.classList.contains("chart-drawer-open")) {
+      paletteShell.inert = true;
+      paletteShell.setAttribute("aria-hidden", "true");
+      paletteShell.style.visibility = "hidden";
+      paletteShell.style.pointerEvents = "none";
+    }
     gridEl.querySelectorAll('.grid-stack-item').forEach(el => { scheduleResize(el); fitTileNow(el); });
   });
 });
-grid.on("change", () => scheduleAutosave());
+grid.on("change", () => {
+  // GridStack emits a change when it projects the dashboard into one phone
+  // column. That responsive projection is not an authored layout change.
+  if (!grid.isIgnoreChangeCB()) scheduleAutosave();
+});
 grid.on("removed", (_event, items) => {
   for (const n of items) tileMeta.delete(n.id);
   scheduleAutosave();
@@ -652,6 +685,60 @@ grid.on("removed", (_event, items) => {
 
 // ── Palette: drag onto the grid (GridStack drag-in) or click to add ──────
 const paletteEl = document.getElementById("palette-items");
+const paletteShell = document.getElementById("palette");
+const btnCharts = document.getElementById("btn-charts");
+const btnCloseCharts = document.getElementById("btn-close-charts");
+const chartBackdrop = document.getElementById("chart-backdrop");
+let releaseChartFocus = null;
+
+function closeChartDrawer({ returnFocus = true } = {}) {
+  if (!document.body.classList.contains("chart-drawer-open")) return;
+  document.body.classList.remove("chart-drawer-open");
+  btnCharts.setAttribute("aria-expanded", "false");
+  chartBackdrop.hidden = true;
+  const release = releaseChartFocus;
+  releaseChartFocus = null;
+  release?.();
+  paletteShell.removeAttribute("aria-modal");
+  paletteShell.removeAttribute("tabindex");
+  paletteShell.removeAttribute("role");
+  paletteShell.setAttribute("aria-hidden", "true");
+  paletteShell.inert = true;
+  paletteShell.style.visibility = "hidden";
+  paletteShell.style.pointerEvents = "none";
+  if (!returnFocus) btnCharts.blur();
+}
+
+function openChartDrawer() {
+  paletteShell.inert = false;
+  paletteShell.removeAttribute("aria-hidden");
+  paletteShell.style.visibility = "visible";
+  paletteShell.style.pointerEvents = "auto";
+  document.body.classList.add("chart-drawer-open");
+  btnCharts.setAttribute("aria-expanded", "true");
+  chartBackdrop.hidden = false;
+  releaseChartFocus = focusDialog(paletteShell, btnCharts);
+}
+
+if (window.innerWidth <= 700) {
+  paletteShell.inert = true;
+  paletteShell.setAttribute("aria-hidden", "true");
+  paletteShell.style.visibility = "hidden";
+  paletteShell.style.pointerEvents = "none";
+}
+
+btnCharts.addEventListener("click", () => {
+  if (document.body.classList.contains("chart-drawer-open")) closeChartDrawer();
+  else openChartDrawer();
+});
+btnCloseCharts.addEventListener("click", () => closeChartDrawer());
+chartBackdrop.addEventListener("click", () => closeChartDrawer());
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && document.body.classList.contains("chart-drawer-open")) {
+    closeChartDrawer();
+  }
+});
+
 const paletteItems = [];
 for (const [type, entry] of Object.entries(TILE_TYPES)) {
   const item = document.createElement("button");
@@ -669,8 +756,12 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
 
   item.append(label, desc);
   item.addEventListener("click", () => {
-    addTile(type, { fit: true });
+    const added = addTile(type, { fit: true });
     scheduleAutosave();
+    if (document.body.classList.contains("chart-drawer-open")) {
+      closeChartDrawer();
+      requestAnimationFrame(() => added?.querySelector(".tile-title")?.focus());
+    }
   });
   paletteEl.appendChild(item);
   paletteItems.push(item);
@@ -708,6 +799,39 @@ grid.on("dropped", (_event, _prevNode, newNode) => {
 const btnData = document.getElementById("btn-data");
 const btnTemplates = document.getElementById("btn-templates");
 const btnTheme = document.getElementById("btn-theme");
+const btnMore = document.getElementById("btn-more");
+const headerMenu = document.getElementById("header-menu");
+function closeHeaderMenu({ returnFocus = false } = {}) {
+  if (headerMenu.hidden) return;
+  headerMenu.hidden = true;
+  btnMore.setAttribute("aria-expanded", "false");
+  if (returnFocus) btnMore.focus();
+}
+function openHeaderMenu() {
+  headerMenu.hidden = false;
+  btnMore.setAttribute("aria-expanded", "true");
+}
+btnMore.addEventListener("click", () => {
+  if (headerMenu.hidden) openHeaderMenu();
+  else closeHeaderMenu();
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!headerMenu.hidden && !headerMenu.contains(event.target) && !btnMore.contains(event.target) && !event.target.closest(".theme-popover")) {
+    closeHeaderMenu();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !headerMenu.hidden && !document.querySelector(".theme-popover")) {
+    closeHeaderMenu({ returnFocus: true });
+  }
+});
+headerMenu.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button || button.id === "btn-theme") return;
+  closeHeaderMenu();
+  if (button.id === "btn-present") requestAnimationFrame(() => btnExitPresent.focus());
+});
+
 function refreshThemeButton() {
   if (btnTheme) btnTheme.textContent = `Theme: ${getTheme().name}`;
 }
@@ -740,7 +864,11 @@ if (btnTemplates) {
   });
 }
 function refreshDashboardButton() {
-  if (btnData) btnData.textContent = `Data: ${dashboardDefaultName()}`;
+  if (btnData) {
+    btnData.textContent = "Add data";
+    btnData.title = `Add CSV or JSON data. Current dashboard data: ${dashboardDefaultName()}`;
+    btnData.setAttribute("aria-label", `Add data. Current dashboard data: ${dashboardDefaultName()}`);
+  }
 }
 function refreshAllDataLabels() {
   gridEl.querySelectorAll(".grid-stack-item").forEach((el) => {
@@ -1082,7 +1210,10 @@ function setPresent(on) {
 }
 
 btnPresent.addEventListener("click", () => setPresent(true));
-btnExitPresent.addEventListener("click", () => setPresent(false));
+btnExitPresent.addEventListener("click", () => {
+  setPresent(false);
+  requestAnimationFrame(() => btnData.focus());
+});
 
 // ── Startup: restore autosaved layout, else a starter dashboard ──────────
 function starterLayout() {

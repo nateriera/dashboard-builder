@@ -9,6 +9,7 @@ async function ready(page) {
   await expect(page.locator('[gs-id="import-1"] svg').first()).toBeVisible();
 }
 async function saved(page) {
+  await page.locator('#btn-more').click();
   await page.locator('#btn-save').click();
   return page.evaluate(k => JSON.parse(localStorage.getItem(k)), key);
 }
@@ -104,7 +105,7 @@ test('live pointer resize redraws before release and manual geometry survives re
   expect(layout.tiles[1].sizing).toBe('manual');
   await page.reload(); await expect(tile.locator('svg').first()).toBeVisible();
   expect(await dimensions(tile)).toEqual(after);
-  await page.locator('#btn-present').click();
+  await page.locator('#btn-more').click(); await page.locator('#btn-present').click();
   const presented=await dimensions(tile); expect([presented.w,presented.h]).toEqual([after.w,after.h]);
   await page.locator('#btn-exit-present').click();
   await tile.locator('.tile-data-btn').click();

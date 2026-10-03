@@ -7,7 +7,13 @@ async function ready(page) {
 }
 
 async function uploadMetrics(page) {
+  await expect(page.getByRole('button', { name: /Add data/ })).toBeVisible();
   await page.locator('#btn-data').click();
+  await expect(page.locator('.data-popover .data-drop')).toContainText('Upload CSV or JSON');
+  await expect(page.locator('.data-popover .data-local-note')).toContainText('not sent to a server');
+  expect(await page.locator('.data-popover .data-drop').evaluate(el =>
+    !!(el.compareDocumentPosition(el.parentElement.querySelector('.data-sql-note')) & Node.DOCUMENT_POSITION_FOLLOWING)
+  )).toBe(true);
   await page.locator('.data-popover .data-drop input').setInputFiles({
     name: 'metrics.csv',
     mimeType: 'text/csv',
@@ -44,6 +50,7 @@ test('guided upload profiles locally, permits field choice, and builds only afte
   expect(prompt).toContain('Replace the current dashboard');
   await expect(page.locator('#status')).toContainText('Built 3 suggested charts');
 
+  await page.locator('#btn-more').click();
   const downloadEvent = page.waitForEvent('download');
   await page.locator('#btn-export').click();
   const download = await downloadEvent;

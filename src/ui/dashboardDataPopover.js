@@ -68,6 +68,23 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
   const body = document.createElement("div");
   body.className = "data-panel";
 
+  // Upload is the primary action exposed by Add data, so keep it above samples.
+  const dropLabel = document.createElement("label");
+  dropLabel.className = "data-drop data-drop-primary";
+  const dropText = document.createElement("span");
+  dropText.textContent = "Upload CSV or JSON";
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".csv,.json,text/csv,application/json";
+  fileInput.hidden = true;
+  dropLabel.append(dropText, fileInput);
+  body.appendChild(dropLabel);
+
+  const localNote = document.createElement("div");
+  localNote.className = "data-local-note";
+  localNote.textContent = "Processed locally in this browser. Your file is not sent to a server.";
+  body.appendChild(localNote);
+
   const note = document.createElement("div");
   note.className = "data-sql-note";
   note.textContent =
@@ -119,18 +136,6 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     }
   }
 
-  // ── Upload a new CSV/JSON as the dashboard dataset ──
-  const dropLabel = document.createElement("label");
-  dropLabel.className = "data-drop";
-  const dropText = document.createElement("span");
-  dropText.textContent = "Drop a CSV here, or click to choose a file";
-  const fileInput = document.createElement("input");
-  fileInput.type = "file";
-  fileInput.accept = ".csv,.json,text/csv,application/json";
-  fileInput.hidden = true;
-  dropLabel.append(dropText, fileInput);
-  body.appendChild(dropLabel);
-
   const err = document.createElement("div");
   err.className = "data-error";
   err.hidden = true;
@@ -147,7 +152,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     } catch (e) {
       err.textContent = e && e.message ? e.message : String(e);
       err.hidden = false;
-      dropText.textContent = "Drop a CSV here, or click to choose a file";
+      dropText.textContent = "Upload CSV or JSON";
     }
     fileInput.value = "";
   }

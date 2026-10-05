@@ -151,3 +151,13 @@ test('R2/R6: upload row boundaries and oversized dependency reasons are explicit
    assert.equal(el.querySelector('.db-facets').style.gridTemplateColumns,'repeat(1, minmax(0, 1fr))');
    for (const svg of el.querySelectorAll('.db-facet svg')) assert.ok(+svg.getAttribute('width')<=288);
  });
+
+test('default tile titles avoid collisions while explicit titles stay unchanged', async () => {
+  const { resolveTileTitle } = await import('../src/tiles/titles.js');
+  const used = ['Requests by category'];
+  const bar = resolveTileTitle(null, 'Requests by category', used);
+  assert.equal(bar, 'Requests by category 2');
+  const dot = resolveTileTitle(null, 'Requests by category', [...used, bar]);
+  assert.equal(dot, 'Requests by category 3');
+  assert.equal(resolveTileTitle('Monthly volume', 'Requests by category', [...used, bar]), 'Monthly volume');
+});

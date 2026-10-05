@@ -15,12 +15,19 @@ import { validateLayout } from "./data/layout.js";
 // deterministically no matter what the dashboard-wide default is.
 
 import { TILE_TYPES } from "./tiles/registry.js";
+import executiveOverviewScreenshot from "./assets/template-thumbs/executive-overview.png";
+import salesPerformanceScreenshot from "./assets/template-thumbs/sales-performance.png";
+import trendDeepDiveScreenshot from "./assets/template-thumbs/trend-deep-dive.png";
+import geographicSnapshotScreenshot from "./assets/template-thumbs/geographic-snapshot.png";
+import categoryComparisonScreenshot from "./assets/template-thumbs/category-comparison.png";
+import performanceScorecardScreenshot from "./assets/template-thumbs/performance-scorecard.png";
 
 export const BUILT_IN_TEMPLATES = [
   {
     id: "executive-overview",
     theme: "paper",
     name: "Executive overview",
+    screenshot: executiveOverviewScreenshot,
     description: "KPI strip, monthly trend, and category mix — the classic leadership summary.",
     inspiredBy: null,
     tiles: [
@@ -35,6 +42,7 @@ export const BUILT_IN_TEMPLATES = [
     id: "sales-performance",
     theme: "paper",
     name: "Sales performance",
+    screenshot: salesPerformanceScreenshot,
     description: "How revenue breaks down and where it's heading.",
     inspiredBy: null,
     tiles: [
@@ -48,6 +56,7 @@ export const BUILT_IN_TEMPLATES = [
     id: "trend-deep-dive",
     theme: "paper",
     name: "Trend deep dive",
+    screenshot: trendDeepDiveScreenshot,
     description: "One metric, three angles: over time, by group, and against volume.",
     inspiredBy: null,
     tiles: [
@@ -60,6 +69,7 @@ export const BUILT_IN_TEMPLATES = [
     id: "geographic-snapshot",
     theme: "paper",
     name: "Geographic snapshot",
+    screenshot: geographicSnapshotScreenshot,
     description: "Where things happen: map first, details alongside.",
     inspiredBy: null,
     tiles: [
@@ -73,6 +83,7 @@ export const BUILT_IN_TEMPLATES = [
     id: "category-comparison",
     theme: "paper",
     name: "Category comparison",
+    screenshot: categoryComparisonScreenshot,
     description: "Small multiples for the full picture, ranked and share views below.",
     inspiredBy: null,
     tiles: [
@@ -85,6 +96,7 @@ export const BUILT_IN_TEMPLATES = [
     id: "performance-scorecard",
     theme: "paper",
     name: "Performance scorecard",
+    screenshot: performanceScorecardScreenshot,
     description: "Dense ops view: KPIs up top, trend, breakdown, and correlation.",
     inspiredBy: null,
     tiles: [

@@ -1,0 +1,122 @@
+[
+  {
+    "label": "North",
+    "series": "New",
+    "value": 18
+  },
+  {
+    "label": "North",
+    "series": "Returning",
+    "value": 25
+  },
+  {
+    "label": "North",
+    "series": "Partner",
+    "value": 32
+  },
+  {
+    "label": "South",
+    "series": "New",
+    "value": 22
+  },
+  {
+    "label": "South",
+    "series": "Returning",
+    "value": 30
+  },
+  {
+    "label": "South",
+    "series": "Partner",
+    "value": 38
+  },
+  {
+    "label": "East",
+    "series": "New",
+    "value": 26
+  },
+  {
+    "label": "East",
+    "series": "Returning",
+    "value": 35
+  },
+  {
+    "label": "East",
+    "series": "Partner",
+    "value": 44
+  },
+  {
+    "label": "West",
+    "series": "New",
+    "value": 30
+  },
+  {
+    "label": "West",
+    "series": "Returning",
+    "value": 40
+  },
+  {
+    "label": "West",
+    "series": "Partner",
+    "value": 45
+  },
+  {
+    "label": "Central",
+    "series": "New",
+    "value": 34
+  },
+  {
+    "label": "Central",
+    "series": "Returning",
+    "value": 45
+  },
+  {
+    "label": "Central",
+    "series": "Partner",
+    "value": 51
+  },
+  {
+    "label": "Coastal",
+    "series": "New",
+    "value": 38
+  },
+  {
+    "label": "Coastal",
+    "series": "Returning",
+    "value": 45
+  },
+  {
+    "label": "Coastal",
+    "series": "Partner",
+    "value": 52
+  },
+  {
+    "label": "Mountain",
+    "series": "New",
+    "value": 42
+  },
+  {
+    "label": "Mountain",
+    "series": "Returning",
+    "value": 50
+  },
+  {
+    "label": "Mountain",
+    "series": "Partner",
+    "value": 58
+  },
+  {
+    "label": "Metro",
+    "series": "New",
+    "value": 46
+  },
+  {
+    "label": "Metro",
+    "series": "Returning",
+    "value": 55
+  },
+  {
+    "label": "Metro",
+    "series": "Partner",
+    "value": 64
+  }
+]

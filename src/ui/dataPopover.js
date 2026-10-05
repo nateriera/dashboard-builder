@@ -213,6 +213,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
 
   function buildMappingUI() {
     mapWrap.innerHTML = "";
+    if (entry.dynamicFields) {
+      const note=document.createElement('p');note.textContent='All source columns are kept in their original order and cell types.';mapWrap.append(note);mapWrap.hidden=false;return;
+    }
     for (const f of entry.fields) {
       const row = document.createElement("div");
       row.className = "data-field-row";
@@ -268,7 +271,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     state.normalized = rows;
 
     previewTable.innerHTML = "";
-    const mappedKeys = entry.fields.filter((f) => state.mapping[f.key]).map((f) => f.key);
+    const mappedKeys = entry.dynamicFields ? state.columns : entry.fields.filter((f) => state.mapping[f.key]).map((f) => f.key);
     const thead = document.createElement("thead");
     const hr = document.createElement("tr");
     for (const k of mappedKeys) {
@@ -330,7 +333,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       name: state.fileName,
       columns: state.columns,
       rows: state.normalized,
-      fieldKeys: entry.fields.map((f) => f.key),
+      fieldKeys: entry.dynamicFields ? [...state.columns] : entry.fields.map((f) => f.key),
       mapping: { ...state.mapping },
       // Keep the pre-normalization parse too: the dashboard-wide default
       // and the SQL tables work from the file's original columns.
@@ -530,6 +533,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
 
   function buildQueryMappingUI() {
     qMapWrap.innerHTML = "";
+    if (entry.dynamicFields) {
+      const note=document.createElement('p');note.textContent='All query result columns are kept in their original order and cell types.';qMapWrap.append(note);qMapWrap.hidden=false;return;
+    }
     for (const f of entry.fields) {
       const row = document.createElement("div");
       row.className = "data-field-row";
@@ -585,7 +591,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     qstate.normalized = rows;
 
     qPreviewTable.innerHTML = "";
-    const mappedKeys = entry.fields.filter((f) => qstate.mapping[f.key]).map((f) => f.key);
+    const mappedKeys = entry.dynamicFields ? qstate.columns : entry.fields.filter((f) => qstate.mapping[f.key]).map((f) => f.key);
     const thead = document.createElement("thead");
     const hr = document.createElement("tr");
     for (const k of mappedKeys) {
@@ -657,7 +663,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       sql: qstate.sql,
       dependencies: listDatasets().map(ds => `upload:${ds.id}`),
       columns: qstate.columns,
-      fieldKeys: entry.fields.map((f) => f.key),
+      fieldKeys: entry.dynamicFields ? [...qstate.columns] : entry.fields.map((f) => f.key),
       mapping: { ...qstate.mapping }
     });
     onQuery({ id, name, persisted });

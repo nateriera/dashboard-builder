@@ -1,0 +1,152 @@
+[
+  {
+    "x": "Jan",
+    "y": "North",
+    "value": 12
+  },
+  {
+    "x": "Feb",
+    "y": "North",
+    "value": 16
+  },
+  {
+    "x": "Mar",
+    "y": "North",
+    "value": 20
+  },
+  {
+    "x": "Apr",
+    "y": "North",
+    "value": 24
+  },
+  {
+    "x": "May",
+    "y": "North",
+    "value": 24
+  },
+  {
+    "x": "Jun",
+    "y": "North",
+    "value": 28
+  },
+  {
+    "x": "Jan",
+    "y": "South",
+    "value": 18
+  },
+  {
+    "x": "Feb",
+    "y": "South",
+    "value": 22
+  },
+  {
+    "x": "Mar",
+    "y": "South",
+    "value": 26
+  },
+  {
+    "x": "Apr",
+    "y": "South",
+    "value": 26
+  },
+  {
+    "x": "May",
+    "y": "South",
+    "value": 30
+  },
+  {
+    "x": "Jun",
+    "y": "South",
+    "value": 34
+  },
+  {
+    "x": "Jan",
+    "y": "East",
+    "value": 24
+  },
+  {
+    "x": "Feb",
+    "y": "East",
+    "value": 28
+  },
+  {
+    "x": "Mar",
+    "y": "East",
+    "value": 28
+  },
+  {
+    "x": "Apr",
+    "y": "East",
+    "value": 32
+  },
+  {
+    "x": "May",
+    "y": "East",
+    "value": 36
+  },
+  {
+    "x": "Jun",
+    "y": "East",
+    "value": 40
+  },
+  {
+    "x": "Jan",
+    "y": "West",
+    "value": 30
+  },
+  {
+    "x": "Feb",
+    "y": "West",
+    "value": 30
+  },
+  {
+    "x": "Mar",
+    "y": "West",
+    "value": 34
+  },
+  {
+    "x": "Apr",
+    "y": "West",
+    "value": 38
+  },
+  {
+    "x": "May",
+    "y": "West",
+    "value": 42
+  },
+  {
+    "x": "Jun",
+    "y": "West",
+    "value": 42
+  },
+  {
+    "x": "Jan",
+    "y": "Central",
+    "value": 32
+  },
+  {
+    "x": "Feb",
+    "y": "Central",
+    "value": 36
+  },
+  {
+    "x": "Mar",
+    "y": "Central",
+    "value": 40
+  },
+  {
+    "x": "Apr",
+    "y": "Central",
+    "value": 44
+  },
+  {
+    "x": "May",
+    "y": "Central",
+    "value": 44
+  },
+  {
+    "x": "Jun",
+    "y": "Central",
+    "value": 48
+  }
+]

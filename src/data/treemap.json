@@ -1,0 +1,62 @@
+[
+  {
+    "label": "Housing Access",
+    "parent": "Housing",
+    "value": 8
+  },
+  {
+    "label": "Housing Support",
+    "parent": "Housing",
+    "value": 13
+  },
+  {
+    "label": "Housing Outreach",
+    "parent": "Housing",
+    "value": 18
+  },
+  {
+    "label": "Health Access",
+    "parent": "Health",
+    "value": 14
+  },
+  {
+    "label": "Health Support",
+    "parent": "Health",
+    "value": 19
+  },
+  {
+    "label": "Health Outreach",
+    "parent": "Health",
+    "value": 21
+  },
+  {
+    "label": "Community Access",
+    "parent": "Community",
+    "value": 20
+  },
+  {
+    "label": "Community Support",
+    "parent": "Community",
+    "value": 22
+  },
+  {
+    "label": "Community Outreach",
+    "parent": "Community",
+    "value": 27
+  },
+  {
+    "label": "Work Access",
+    "parent": "Work",
+    "value": 23
+  },
+  {
+    "label": "Work Support",
+    "parent": "Work",
+    "value": 28
+  },
+  {
+    "label": "Work Outreach",
+    "parent": "Work",
+    "value": 33
+  }
+]

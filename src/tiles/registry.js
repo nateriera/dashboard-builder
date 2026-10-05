@@ -27,6 +27,15 @@ import {
   donutChart,
   choropleth,
   smallMultiples,
+  stackedBarChart,
+  stackedColumnChart,
+  histogramChart,
+  boxplotChart,
+  areaChart,
+  heatmapChart,
+  treemapChart,
+  dataTableChart,
+  textAnnotation,
   kpiRow,
   card
 } from "../charts/charts.js";
@@ -37,13 +46,17 @@ import scatter from "../data/scatter.json";
 import kpis from "../data/kpis.json";
 import states from "../data/states.json";
 import facets from "../data/facets.json";
+import stacked from "../data/stacked.json";
+import boxdata from "../data/boxdata.json";
+import heatmap from "../data/heatmap.json";
+import treemap from "../data/treemap.json";
 import usStates from "../data/us-states-10m.json";
 
 // Sample datasets shipped with the app. Later phases will let tiles bind
 // their own data (CSV/JSON upload, then DuckDB-WASM queries).
 // states: synthetic per-state values (FIPS ids) for the choropleth sample;
 // usStates is the TopoJSON topology the choropleth renders against.
-export const DATASETS = { categorical, timeseries, scatter, kpis, states, facets };
+export const DATASETS = { categorical, timeseries, scatter, kpis, states, facets, stacked, boxdata, heatmap, treemap };
 
 export const DATASET_LABELS = {
   categorical: "Categories (8)",
@@ -51,7 +64,11 @@ export const DATASET_LABELS = {
   scatter: "Scatter points (24)",
   kpis: "KPI cards (4)",
   states: "States — sample values (51)",
-  facets: "Facets — 3 groups × 5 categories (15)"
+  facets: "Facets — 3 groups × 5 categories (15)",
+  stacked: "Segment totals — 3 series × 8 categories (24)",
+  boxdata: "Distribution groups — 4 × 30 values (120)",
+  heatmap: "Service matrix — 6 × 5 cells (30)",
+  treemap: "Program hierarchy — 4 groups (12)"
 };
 
 // Pure normalization helpers live in ./normalize.js (no DOM/kit imports, so
@@ -317,6 +334,66 @@ export const TILE_TYPES = {
       el.innerHTML = "";
       el.appendChild(card(kpiRow(data), { title: options.hideTitle ? null : options.title, source: options.source }));
     }
+  },
+
+  table: {
+    label: "Table", description: "Scrollable rows and source columns", fields: [], dynamicFields: true,
+    datasets: ["categorical"], defaultDataset: "categorical", defaultSize: {w:12,h:8}, defaultTitle: "Data table",
+    render(el,{data}) { el.replaceChildren(dataTableChart(data)); }
+  },
+
+  text: {
+    label: "Text / annotation", description: "Notes, headings and methodology", fields: [], noData: true,
+    datasets: [], defaultSize: {w:12,h:2}, defaultTitle: "Annotation",
+    controls: [{type:"textarea",key:"body",label:"Text",default:"",maxLength:10000,rows:5}],
+    render(el,{options}) { el.replaceChildren(textAnnotation(options.tileOptions?.body || "")); }
+  },
+
+  stackedBar: {
+    label: "Stacked bar", description: "Compare series across categories", fields:[
+      {key:"label",label:"Category column"},{key:"value",label:"Value column",numeric:true},{key:"series",label:"Series column"}
+    ], datasets:["stacked"], defaultDataset:"stacked", defaultSize:{w:6,h:7}, defaultTitle:"Segment mix by category",
+    controls:[{type:"select",key:"mode",label:"Mode",default:"stacked",options:[["stacked","Stacked"],["grouped","Grouped"]]}],
+    render(el,{data,options}) { mount(el,(width,height)=>stackedBarChart(data,{mode:options.tileOptions?.mode||"stacked",width,height,xLabel:options.tileOptions?.xLabel||null}),options); }
+  },
+
+  stackedColumn: {
+    label: "Stacked column", description: "Vertical series by category", fields:[
+      {key:"label",label:"Category column"},{key:"value",label:"Value column",numeric:true},{key:"series",label:"Series column"}
+    ], datasets:["stacked"], defaultDataset:"stacked", defaultSize:{w:6,h:7}, defaultTitle:"Category totals by segment",
+    controls:[{type:"select",key:"mode",label:"Mode",default:"stacked",options:[["stacked","Stacked"],["grouped","Grouped"]]}],
+    render(el,{data,options}) { mount(el,(width,height)=>stackedColumnChart(data,{mode:options.tileOptions?.mode||"stacked",width,height,yLabel:options.tileOptions?.yLabel||null}),options); }
+  },
+
+  histogram: {
+    label: "Histogram", description: "Distribution of numeric values", fields:[{key:"value",label:"Numeric value",numeric:true}],
+    datasets:["scatter"], defaultDataset:"scatter", defaultSize:{w:6,h:7}, defaultTitle:"Value distribution",
+    controls:[{type:"number",key:"binCount",label:"Bins",default:20,min:5,max:100,step:1}],
+    render(el,{data,options}) { const rows=data.map(d=>({...d,value:d.value??d.y??d.x})); mount(el,(width,height)=>histogramChart(rows,{value:"value",bins:Math.min(100,Math.max(5,Math.round(+options.tileOptions?.binCount||20))),width,height,xLabel:options.tileOptions?.xLabel||null}),options); }
+  },
+
+  boxplot: {
+    label: "Box plot", description: "Compare category distributions", fields:[{key:"label",label:"Category column"},{key:"value",label:"Numeric value",numeric:true}],
+    datasets:["boxdata"], defaultDataset:"boxdata", defaultSize:{w:6,h:7}, defaultTitle:"Distribution by group",
+    render(el,{data,options}) { mount(el,(width,height)=>boxplotChart(data,{width,height,yLabel:options.tileOptions?.yLabel||null}),options); }
+  },
+
+  area: {
+    label: "Area chart", description: "Filled time series", fields:[{key:"date",label:"Date column"},{key:"value",label:"Numeric value",numeric:true},{key:"series",label:"Series column",optional:true}],
+    datasets:["timeseries"], defaultDataset:"timeseries", defaultSize:{w:8,h:7}, defaultTitle:"Volume over time",
+    render(el,{data,options}) { const rows=data.map(d=>({...d,date:promoteDate(d.date)})); mount(el,(width,height)=>areaChart(rows,{series:rows.some(d=>d.series!=null)?"series":null,width,height,xLabel:options.tileOptions?.xLabel||null,yLabel:options.tileOptions?.yLabel||null}),{...options,legendSpace:options.legendSpace??32}); }
+  },
+
+  heatmap: {
+    label: "Heatmap", description: "Category by category matrix", fields:[{key:"x",label:"X category"},{key:"y",label:"Y category"},{key:"value",label:"Value",numeric:true}],
+    datasets:["heatmap"], defaultDataset:"heatmap", defaultSize:{w:8,h:8}, defaultTitle:"Service matrix",
+    render(el,{data,options}) { mount(el,(width,height)=>heatmapChart(data,{width,height,xLabel:options.tileOptions?.xLabel||null,yLabel:options.tileOptions?.yLabel||null}),options); }
+  },
+
+  treemap: {
+    label: "Treemap", description: "Hierarchical part-to-whole", fields:[{key:"label",label:"Category column"},{key:"value",label:"Value column",numeric:true},{key:"parent",label:"Parent group",optional:true}],
+    datasets:["treemap"], defaultDataset:"treemap", defaultSize:{w:8,h:7}, defaultTitle:"Program composition",
+    render(el,{data,options}) { el.replaceChildren(card(treemapChart(data,{width:Math.max(240,el.clientWidth-32),height:Math.max(180,el.clientHeight-140)}),{title:options.hideTitle?null:options.title,source:options.source})); }
   }
 };
 
@@ -335,7 +412,7 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
   entry.render = (el, { data, options = {} }) => {
     const previousDetails = options.resizeOnly ? el.querySelector('.chart-data') : null;
     lastRender.set(el, { type, data, options });
-    options = { ...options, preferredHeight: type === 'bar' || type === 'dot' ? Math.min(600, Math.max(220, data.length * 24 + 50)) : type === 'donut' ? 340 : 260, legendSpace: options.legendSpace ?? (type === 'line' ? 32 : 0) };
+    options = { ...options, preferredHeight: type === 'bar' || type === 'dot' ? Math.min(600, Math.max(220, data.length * 24 + 50)) : type === 'donut' ? 340 : type === 'table' ? 420 : type === 'treemap' ? 380 : 260, legendSpace: options.legendSpace ?? (['line','area'].includes(type) ? 32 : 0) };
     try {
       for (const f of entry.fields.filter(f => f.numeric)) {
         for (const r of data) {
@@ -353,7 +430,7 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
     } catch (err) {
       el.replaceChildren(); const error = document.createElement('div'); error.className = 'tile-error'; error.setAttribute('role','alert'); error.textContent = err.message; el.append(error);
     }
-    el.append(previousDetails || chartData(data,entry.fields,options.title));
+    if (!entry.dynamicFields && !entry.noData) el.append(previousDetails || chartData(data,entry.fields,options.title));
     if (options.sizing !== 'auto' && el.clientHeight && el.querySelector('.db-card')) {
       const extras = [...el.children].filter(node => !node.classList.contains('db-card'));
       const footerHeight = extras.reduce((sum, node) => {

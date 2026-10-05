@@ -1,6 +1,6 @@
 # Dashboard Builder
 
-**A free, local-first dashboard composer.** Drag-and-drop grid, nine chart types, in-browser SQL, and one-click export to a self-contained HTML file. No account, no server, no subscription.
+**A free, local-first dashboard composer.** Drag-and-drop grid, 18 chart and content tile types, in-browser SQL, and one-click export to a self-contained HTML file. No account, no server, no subscription.
 
 **[Open the live demo](https://nateriera.github.io/dashboard-builder/)**
 
@@ -12,7 +12,7 @@
 ## Features
 
 - Drag-and-drop, resizable 12-column grid with content-aware tile sizing
-- 9 chart types (bar, column, line, scatter + trend, dot, donut, choropleth, small multiples, KPI) rendered with Observable Plot
+- 18 tile types: bar, column, line, scatter + trend, dot, donut, choropleth, small multiples, KPI, table, text/annotation, stacked bar, stacked column, histogram, box plot, area, heatmap, and treemap
 - CSV/JSON upload processed locally — your data never leaves the browser — plus built-in sample datasets
 - Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
@@ -80,7 +80,7 @@ avoids the Windows sandbox path traversal encountered with its bundling loader.
 The browser suite starts its own local server at port 4173 and uses isolated
 browser storage. Close any server on that port first.
 
-The render sweep covers every registry renderer under all four themes (36 cases).
+The render sweep covers every registry renderer under all four themes (72 cases).
 Focused tests cover data correctness, migration, precision, limits and serialized
 queries; browser tests use real DuckDB-WASM, fault injection, fresh storage,
 keyboard workflows and offline HTML. Evidence and scope are in
@@ -105,12 +105,12 @@ categories plus an explicitly labeled Other bucket when needed. Every
 contribution remains in the total. Negative, nonfinite or zero-total inputs
 produce a clear unsupported-data state. The eight-category sample totals 48,240.
 
-Every chart has an expandable, paginated text table of its authoritative data.
+Chart tiles have an expandable, paginated text table of their authoritative data. The Table tile instead renders the dataset's original columns in a scrollable grid, capped at 500 displayed rows with an explicit notice; annotation tiles have no data table.
 Scatter and line plots with more than 2,000 rows show 2,000 evenly spaced rows
 and a visible transformation notice. Their underlying rows remain in storage,
 JSON, HTML and the text table. Trend lines on sampled scatter plots describe the
 sample; use SQL aggregation when an authoritative statistical result is needed.
-Bar/category charts refuse more than 100 rows rather than silently omit them.
+Category charts refuse more than 100 distinct categories rather than silently omit them. Box plots retain every value for up to 100 distinct labels. Heatmaps permit at most 2,000 unique x/y cells and require duplicate coordinates to be aggregated in SQL first. Treemaps use the optional parent column for one level of grouping.
 
 ### Layout schema and replacement
 
@@ -220,7 +220,9 @@ Engineering limits are separate from measured device capacity:
 | Upload | 16 MiB, 250,000 rows, 100 columns |
 | SQL returned rows / columns | 10,000 / 100; add LIMIT or aggregate |
 | Dense plotted marks | 2,000, with visible sampling notice |
-| Category/KPI rows | 100, otherwise unsupported-data notice |
+| Bar-like categories, box plot labels and treemap labels | 100 distinct values, otherwise unsupported-data notice |
+| Table tile | First 500 displayed rows, with a visible notice; source data remains intact |
+| Heatmap | 2,000 distinct x/y cells; aggregate duplicates or larger matrices in SQL |
 | Small-multiple facets | 12, otherwise filter/aggregate notice |
 | Layout | 32 MiB, 100 tiles, twelve columns, max geometry 3,000 rows of 24px (same physical limit as legacy) |
 | JSON inline data | 500 KiB per dataset; omitted dependencies listed |
@@ -261,6 +263,7 @@ remain separate owner-authorized actions.
 | [gridstack](https://github.com/gridstack/gridstack.js) | 13.x | MIT | Drag/resize dashboard grid |
 | [@observablehq/plot](https://github.com/observablehq/plot) | 0.6.x | ISC | Chart rendering |
 | [d3-shape](https://github.com/d3/d3-shape) | 3.x | ISC | Donut arcs |
+| [d3-hierarchy](https://github.com/d3/d3-hierarchy) | 3.x | ISC | Treemap layout (installed package license verified) |
 | [d3-interpolate](https://github.com/d3/d3-interpolate) | 3.x | ISC | Color ramps |
 | [htl](https://github.com/observablehq/htl) | 0.3.x | ISC | HTML/SVG templating |
 | [d3-dsv](https://github.com/d3-dsv) | 3.x | ISC | CSV parsing for uploads |

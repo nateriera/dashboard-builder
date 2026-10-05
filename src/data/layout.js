@@ -85,14 +85,21 @@ export function validateLayout(input) {
     if (!['auto','manual'].includes(sizing)) fail('Invalid sizing intent.');
     if (geometry.x + geometry.w > 12) fail('Tile exceeds grid width.');
     const dataset = ref(t.dataset ?? null);
-    const binding = data.version >= 2 ? t.binding : { mode: dataset === null ? 'dashboard' : 'explicit', ...(dataset === null ? {} : { ref: dataset }) };
-    if (!object(binding) || !['dashboard','explicit'].includes(binding.mode) || (binding.mode === 'explicit' && (ref(binding.ref) === null || binding.ref !== dataset)) || (binding.mode === 'dashboard' && dataset !== null)) fail('Invalid or inconsistent binding.');
+    const binding = e.noData
+      ? (data.version >= 2 ? t.binding : {mode:'none'})
+      : data.version >= 2 ? t.binding : { mode: dataset === null ? 'dashboard' : 'explicit', ...(dataset === null ? {} : { ref: dataset }) };
+    if (e.noData) {
+      if (!object(binding) || binding.mode !== 'none' || dataset !== null || Object.keys(binding).length !== 1) fail('Invalid no-data tile binding.');
+    } else if (!object(binding) || !['dashboard','explicit'].includes(binding.mode) || (binding.mode === 'explicit' && (ref(binding.ref) === null || binding.ref !== dataset)) || (binding.mode === 'dashboard' && dataset !== null)) fail('Invalid or inconsistent binding.');
     const opts = t.tileOptions ?? {};
     if (!object(opts)) fail('Invalid chart options.');
     const tileOptions = {};
     for (const [k,v] of Object.entries(opts)) {
       if (['xLabel','yLabel'].includes(k)) tileOptions[k] = text(v, 'axis label', 120);
       else if (['trend','diverging','includeZero'].includes(k) && typeof v === 'boolean') tileOptions[k] = v;
+      else if (k === 'body' && e.noData) tileOptions.body = text(v,'annotation',10000);
+      else if (k === 'mode' && ['stacked','grouped'].includes(v) && ['stackedBar','stackedColumn'].includes(t.type)) tileOptions.mode = v;
+      else if (k === 'binCount' && Number.isInteger(v) && v >= 5 && v <= 100 && t.type === 'histogram') tileOptions.binCount = v;
       else fail(`Unsupported chart option: ${k}`);
     }
     return { id, type: t.type, title: text(t.title ?? e.defaultTitle,'title'), source: text(t.source ?? 'Sample data','source'), dataset, binding, tileOptions, sizing, ...geometry };

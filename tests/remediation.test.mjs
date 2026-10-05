@@ -161,3 +161,69 @@ test('default tile titles avoid collisions while explicit titles stay unchanged'
   assert.equal(dot, 'Requests by category 3');
   assert.equal(resolveTileTitle('Monthly volume', 'Requests by category', [...used, bar]), 'Monthly volume');
 });
+
+test('Phase 1: dynamic table preserves source columns and reports its 500-row cap', () => {
+  const rows = Array.from({length: LIMITS.tableRows + 1}, (_, i) => ({'Record ID': String(i), amount: i + 0.25, active: i % 2 === 0}));
+  const normalized = normalizeRows(TILE_TYPES.table, rows, {}).rows;
+  assert.deepEqual(normalized[0], rows[0]);
+  assert.equal(normalized[0]['Record ID'], '0');
+  const prepared = renderData('table', normalized);
+  assert.equal(prepared.rows.length, 500);
+  assert.match(prepared.note, /showing first 500 of 501/i);
+  const el = document.createElement('div');
+  TILE_TYPES.table.render(el, {data: prepared.rows, options:{}});
+  assert.deepEqual([...el.querySelectorAll('thead th')].map(th => th.textContent), ['Record ID','amount','active']);
+  assert.equal(el.querySelectorAll('tbody tr').length, 500);
+});
+
+test('Phase 1: annotation has no data binding and renders plain text safely through layout round-trip', () => {
+  const candidate = validateLayout({app:'dashboard-builder',version:3,rowHeight:24,tiles:[{
+    id:'note',type:'text',dataset:null,binding:{mode:'none'},tileOptions:{body:'Methodology\n<script>window.pwned=true</script>'},x:0,y:0,w:12,h:6
+  }]});
+  assert.deepEqual(candidate.tiles[0].binding,{mode:'none'});
+  assert.deepEqual(validateLayout(JSON.parse(JSON.stringify(candidate))).tiles[0].tileOptions,{body:'Methodology\n<script>window.pwned=true</script>'});
+  assert.throws(()=>validateLayout({...candidate,tiles:[{...candidate.tiles[0],dataset:'categorical',binding:{mode:'explicit',ref:'categorical'}}]}),/no data|binding/i);
+  const el=document.createElement('div');
+  TILE_TYPES.text.render(el,{data:[],options:{tileOptions:{body:'Methodology\n<script>window.pwned=true</script>'}}});
+  assert.equal(el.querySelector('.db-annotation').textContent,'Methodology\n<script>window.pwned=true</script>');
+  assert.equal(el.querySelector('script'),null);
+});
+
+test('Phase 1: heatmap bounds distinct cells and rejects duplicate cell coordinates explicitly', () => {
+  const rows=Array.from({length:LIMITS.heatmapCells+1},(_,i)=>({x:`x${i}`,y:'only',value:i}));
+  assert.throws(()=>renderData('heatmap',rows),/2,000 distinct cells.*aggregate/i);
+  assert.throws(()=>renderData('heatmap',[{x:'a',y:'b',value:1},{x:'a',y:'b',value:2}]),/duplicate.*aggregate/i);
+  assert.equal(renderData('heatmap',[{x:'a',y:'b',value:1}]).rows.length,1);
+  assert.throws(()=>renderData('heatmap',[{x:1,y:'b',value:1},{x:'1',y:'b',value:2}]),/duplicate/i);
+  assert.throws(()=>renderData('treemap',[{label:'zero',value:0}]),/positive total/i);
+});
+
+test('Phase 1: new chart renderers produce visible marks across all themes and chart modes', async () => {
+  const {setTheme,THEMES}=await import('../src/themes/themes.js');
+  const load=(name)=>JSON.parse(readFileSync(new URL(`../src/data/${name}`,import.meta.url),'utf8'));
+  const cases=[
+    ['stackedBar','stacked.json',{mode:'stacked'}],['stackedBar','stacked.json',{mode:'grouped'}],
+    ['stackedColumn','stacked.json',{mode:'stacked'}],['stackedColumn','stacked.json',{mode:'grouped'}],
+    ['histogram','scatter.json',{binCount:20}],['boxplot','boxdata.json',{}],['area','timeseries.json',{}],
+    ['heatmap','heatmap.json',{}],['treemap','treemap.json',{}]
+  ];
+  for(const theme of THEMES){
+    setTheme(theme.id);
+    for(const [type,file,tileOptions] of cases){
+      const el=document.createElement('div');
+      TILE_TYPES[type].render(el,{data:load(file),options:{title:type,tileOptions}});
+      assert.ok(el.querySelector('svg'),`${theme.id}/${type}/${tileOptions.mode||'default'} should render SVG`);
+    }
+    const withoutSeries=load('timeseries.json').map(({series,...row})=>row);
+    const area=document.createElement('div');TILE_TYPES.area.render(area,{data:withoutSeries,options:{tileOptions:{}}});assert.ok(area.querySelector('svg'),`${theme.id}/area without series`);
+  }
+  setTheme('paper');
+  for(const type of ['histogram','area']){
+    const dense=Array.from({length:LIMITS.marks+1},(_,i)=>({value:i,date:i,label:'x'}));
+    const prepared=renderData(type,dense);assert.equal(prepared.rows.length,LIMITS.marks);assert.match(prepared.note,/2,000 evenly spaced rows/);
+  }
+  assert.throws(()=>renderData('boxplot',Array.from({length:101},(_,i)=>({label:`g${i}`,value:i}))),/100 categories/);
+  const histLayout=validateLayout({app:'dashboard-builder',version:3,rowHeight:24,tiles:[{id:'hist',type:'histogram',dataset:'scatter',binding:{mode:'explicit',ref:'scatter'},tileOptions:{binCount:100},x:0,y:0,w:6,h:15}]});
+  assert.equal(histLayout.tiles[0].tileOptions.binCount,100);
+  assert.throws(()=>validateLayout({...histLayout,tiles:[{...histLayout.tiles[0],tileOptions:{binCount:101}}]}),/Unsupported chart option/);
+});

@@ -16,6 +16,7 @@ import { donutParts } from "./integrity.js";
 
 import * as Plot from "@observablehq/plot";
 import { pie as d3pie, arc as d3arc } from "d3-shape";
+import { hierarchy, treemap as d3treemap } from "d3-hierarchy";
 import { feature, mesh } from "topojson-client";
 import { html, svg } from "htl";
 import { interpolateRgb, interpolateRgbBasis } from "d3-interpolate";
@@ -278,6 +279,111 @@ export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabe
   });
 }
 
+// ── Stacked and grouped category comparisons ────────────────────────────────
+export function stackedBarChart(data, { mode = "stacked", width = 640, height, xLabel = null, theme = getTheme() } = {}) {
+  const t = theme.chart;
+  const series = [...new Set(data.map(d => d.series))];
+  const color = { domain: series, range: t.categorical, legend: true };
+  let marks, domain;
+  if (mode === "grouped") {
+    const labelByBand = new Map();
+    const rows = data.map(d => {
+      const band = JSON.stringify([d.label, d.series]); labelByBand.set(band, d.label);
+      return { ...d, _band: band };
+    });
+    domain = [...labelByBand.keys()];
+    marks = [Plot.barX(rows, {x:"value", y:"_band", fill:"series", tip:true})];
+    return themedPlot(theme, {width,height,marginLeft:Math.min(140,Math.max(60,width*.24)),x:{label:xLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},y:{label:null,domain,tickFormat:k=>labelByBand.get(k)},color,marks});
+  }
+  marks = [Plot.barX(data, Plot.stackX({z:"series"},{x:"value",y:"label",fill:"series",tip:true}))];
+  return themedPlot(theme, {width,height,marginLeft:Math.min(140,Math.max(60,width*.24)),x:{label:xLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},y:{label:null},color,marks});
+}
+
+export function stackedColumnChart(data, { mode = "stacked", width = 640, height, yLabel = null, theme = getTheme() } = {}) {
+  const t = theme.chart;
+  const series = [...new Set(data.map(d => d.series))];
+  const color = { domain: series, range: t.categorical, legend: true };
+  if (mode === "grouped") {
+    const labelByBand = new Map();
+    const rows = data.map(d => {
+      const band = JSON.stringify([d.label, d.series]); labelByBand.set(band, d.label);
+      return { ...d, _band: band };
+    });
+    return themedPlot(theme, {width,height,marginBottom:56,x:{label:null,domain:[...labelByBand.keys()],tickFormat:k=>labelByBand.get(k),tickRotate:data.length>12?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(rows,{x:"_band",y:"value",fill:"series",tip:true}),Plot.ruleY([0],{stroke:t.border})]});
+  }
+  return themedPlot(theme, {width,height,marginBottom:48,x:{label:null,tickRotate:data.length>8?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(data,Plot.stackY({z:"series"},{x:"label",y:"value",fill:"series",tip:true})),Plot.ruleY([0],{stroke:t.border})]});
+}
+
+export function histogramChart(data, { value = "value", bins = 20, width = 640, height, xLabel = null, theme = getTheme() } = {}) {
+  return themedPlot(theme,{width,height,marginLeft:56,x:{label:xLabel??null},y:{label:"Count",grid:true,tickFormat:fmtInt.format.bind(fmtInt)},marks:[Plot.rectY(data,Plot.binX({y:"count"},{x:value,thresholds:bins,tip:true})),Plot.ruleY([0],{stroke:theme.chart.border})]});
+}
+
+export function boxplotChart(data, { label = "label", value = "value", width = 640, height, yLabel = null, theme = getTheme() } = {}) {
+  const t=theme.chart;
+  return themedPlot(theme,{width,height,marginBottom:48,x:{label:null,tickRotate:data.length>12?-30:0},y:{label:yLabel,grid:true,tickFormat:fmtInt.format.bind(fmtInt)},marks:[Plot.boxY(data,{x:label,y:value,fill:t.primary,tip:true}),Plot.ruleY([0],{stroke:t.border})]});
+}
+
+export function areaChart(data, { x = "date", y = "value", series = null, width = 680, height, xLabel = null, yLabel = null, theme = getTheme() } = {}) {
+  const t=theme.chart;
+  const xType=data[0]?.[x] instanceof Date?"time":typeof data[0]?.[x]==="string"?"point":"linear";
+  const marks=series?
+    [Plot.areaY(data,{x,y1:0,y2:y,z:series,fill:series,fillOpacity:.18,tip:true}),Plot.lineY(data,{x,y,z:series,stroke:series,strokeWidth:1.5})]:
+    [Plot.areaY(data,{x,y1:0,y2:y,fill:t.primary,fillOpacity:.45,tip:true}),Plot.lineY(data,{x,y,stroke:t.primary,strokeWidth:2})];
+  return themedPlot(theme,{width,height,x:{label:xLabel??null,type:xType},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt),grid:true},color:series?{range:t.categorical,legend:true}:undefined,marks});
+}
+
+export function heatmapChart(data, { x = "x", y = "y", value = "value", width = 640, height, xLabel = null, yLabel = null, theme = getTheme() } = {}) {
+  const t=theme.chart,extent=numericExtent(data.map(d=>d[value]));
+  const xDomain=[...new Set(data.map(d=>d[x]))],yDomain=[...new Set(data.map(d=>d[y]))];
+  const plot=themedPlot(theme,{width,height,marginLeft:64,marginBottom:52,x:{label:xLabel??null,domain:xDomain},y:{label:yLabel??null,domain:yDomain},color:{type:"linear",range:t.sequential,domain:extent,legend:false},marks:[Plot.cell(data,{x,y,fill:value,inset:1,tip:true})]});
+  const root=document.createElement("div");root.className="db-heatmap";root.append(plot);
+  const legend=document.createElement("div");legend.className="db-heatmap-legend";
+  const ramp=document.createElement("div");ramp.className="db-heatmap-ramp";ramp.style.background=`linear-gradient(90deg, ${t.sequential.join(", ")})`;
+  const labels=document.createElement("div");labels.className="db-heatmap-domain";
+  const lo=document.createElement("span"),hi=document.createElement("span");lo.textContent=fmt2.format(extent[0]);hi.textContent=fmt2.format(extent[1]);labels.append(lo,hi);
+  legend.append(ramp,labels);root.append(legend);return root;
+}
+
+export function treemapChart(data, { label = "label", value = "value", parent = "parent", width = 640, height = 360, theme = getTheme() } = {}) {
+  const t=theme.chart, groups=new Map();
+  for(const row of data){
+    const group=row[parent]==null||row[parent]===""?"":String(row[parent]);
+    if(!groups.has(group))groups.set(group,[]);
+    groups.get(group).push({name:String(row[label]??"Unlabeled"),value:row[value]});
+  }
+  const children=[...groups].map(([name,items])=>name?{name,children:items}:items).flat();
+  const root=hierarchy({name:"",children}).sum(d=>typeof d.value==="number"?d.value:0).sort((a,b)=>b.value-a.value);
+  d3treemap().size([width,height]).paddingOuter(2).paddingInner(2)(root);
+  const ns="http://www.w3.org/2000/svg", svgNode=document.createElementNS(ns,"svg");
+  svgNode.setAttribute("width",String(width));svgNode.setAttribute("height",String(height));svgNode.setAttribute("viewBox",`0 0 ${width} ${height}`);
+  svgNode.setAttribute("role","img");
+  const colorIndex=new Map([...groups.keys()].map((k,i)=>[k||"",i]));
+  for(const leaf of root.leaves()){
+    const group=leaf.parent?.data.name||"", fill=t.categorical[(colorIndex.get(group)||0)%t.categorical.length];
+    const rect=document.createElementNS(ns,"rect");rect.setAttribute("x",String(leaf.x0));rect.setAttribute("y",String(leaf.y0));rect.setAttribute("width",String(Math.max(0,leaf.x1-leaf.x0)));rect.setAttribute("height",String(Math.max(0,leaf.y1-leaf.y0)));rect.setAttribute("rx","2");rect.setAttribute("fill",fill);rect.setAttribute("stroke",t.card);rect.setAttribute("stroke-width","1");
+    const titleNode=document.createElementNS(ns,"title");titleNode.textContent=`${leaf.data.name}: ${fmt2.format(leaf.value)}`;rect.append(titleNode);svgNode.append(rect);
+    const w=leaf.x1-leaf.x0,h=leaf.y1-leaf.y0,maxChars=Math.floor((w-10)/7);
+    if(w>=38&&h>=22&&maxChars>=2){const labelNode=document.createElementNS(ns,"text");labelNode.setAttribute("x",String(leaf.x0+5));labelNode.setAttribute("y",String(leaf.y0+Math.min(17,h/2+5)));labelNode.setAttribute("fill",textOn(fill,t));labelNode.setAttribute("font-family",t.fonts.body);labelNode.setAttribute("font-size","12");labelNode.textContent=leaf.data.name.length>maxChars?`${leaf.data.name.slice(0,maxChars-1)}…`:leaf.data.name;svgNode.append(labelNode);}
+  }
+  return svgNode;
+}
+
+export function dataTableChart(data) {
+  const wrap=document.createElement("div");wrap.className="db-data-table";
+  const scroll=document.createElement("div");scroll.className="db-data-table-scroll";scroll.setAttribute("role","region");scroll.setAttribute("aria-label","Data table");
+  const table=document.createElement("table");table.className="db-data-table-grid";
+  const columns=[...new Set(data.flatMap(row=>Object.keys(row)))];
+  const thead=document.createElement("thead"),head=document.createElement("tr");
+  for(const key of columns){const th=document.createElement("th");th.scope="col";th.textContent=key;head.append(th);}thead.append(head);
+  const tbody=document.createElement("tbody");
+  for(const row of data){const tr=document.createElement("tr");for(const key of columns){const td=document.createElement("td"),v=row[key];td.textContent=v==null?"—":v instanceof Date?v.toISOString().slice(0,10):typeof v==="number"?(Number.isInteger(v)?fmtInt.format(v):fmt2.format(v)):String(v);tr.append(td);}tbody.append(tr);}
+  table.append(thead,tbody);scroll.append(table);wrap.append(scroll);return wrap;
+}
+
+export function textAnnotation(body = "") {
+  const node=document.createElement("div");node.className="db-annotation";node.textContent=String(body);return node;
+}
+
 // ── Choropleth (state / county maps) ─────────────────────────────────────────
 // data: rows with an id field matching the topology's feature ids (e.g. FIPS
 // codes for us-atlas). geo: a TopoJSON topology object; object: the key inside
@@ -453,6 +559,16 @@ export const chartStyles = html`<style>
 .chart-data button { margin: 4px 8px; }
 .chart-transform-note { color: var(--slate-600); font-size: 12px; }
 .tile-chart .chart-transform-note { margin: 8px 0; }
+.db-data-table { min-width: 0; }
+.db-data-table-scroll { max-width: 100%; max-height: min(60vh, 560px); overflow: auto; }
+.db-data-table-grid { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12px; }
+.db-data-table-grid th, .db-data-table-grid td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--slate-200); white-space: nowrap; }
+.db-data-table-grid th { position: sticky; top: 0; z-index: 1; background: var(--white); color: var(--slate-600); font-weight: 600; }
+.db-data-table-grid td { font-variant-numeric: tabular-nums; }
+.db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.55; padding: 10px 4px; }
+.db-heatmap-legend { margin: 2px 6% 4px 12%; }
+.db-heatmap-ramp { height: 9px; border-radius: 2px; }
+.db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 11px; margin-top: 3px; }
 :focus-visible { outline: 3px solid var(--periwinkle); outline-offset: 3px; }
   .db-card {
     background: var(--white);

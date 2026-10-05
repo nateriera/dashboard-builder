@@ -2,6 +2,7 @@
 export const LIMITS = Object.freeze({
   fileBytes: 16 * 1024 * 1024, columns: 100, rows: 250000,
   queryRows: 10000, marks: 2000, categories: 100, facets: 12,
+  tableRows: 500, heatmapCells: 2000,
   tiles: 100, layoutBytes: 32 * 1024 * 1024
 });
 export function numericExtent(values, includeZero = false) {

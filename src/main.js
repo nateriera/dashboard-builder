@@ -143,6 +143,7 @@ function resolveDashboardRows(entry) {
 // Mirrors renderTile/renderQueryTile's data logic; returns {rows} or {error}
 // without touching the DOM or mutating tile metadata.
 async function resolveExportRows(meta, entry) {
+  if (entry.noData) return { rows: [] };
   if (isQueryRef(meta.dataset)) {
     const qid = queryId(meta.dataset);
     const q = getQuery(qid);
@@ -181,6 +182,7 @@ function buildTileContent(type, meta) {
 
   const titleInput = document.createElement("input");
   titleInput.className = "tile-title";
+  titleInput.hidden = !!entry.noData;
   titleInput.value = meta.title;
   titleInput.title = meta.title;
   titleInput.spellcheck = false;
@@ -197,6 +199,7 @@ function buildTileContent(type, meta) {
   const dataBtn = document.createElement("button");
   dataBtn.type = "button";
   dataBtn.className = "tile-data-btn";
+  dataBtn.hidden = !!entry.noData;
   dataBtn.title = "Choose or upload data";
   const dataLabel = document.createElement("span");
   dataLabel.className = "tile-data-label";
@@ -288,6 +291,23 @@ function buildTileContent(type, meta) {
       });
       label.append(box, document.createTextNode(ctrl.label));
       settingsBody.append(label);
+    } else if (ctrl.type === "select") {
+      const label=document.createElement('label');label.className='tile-control';label.textContent=ctrl.label;
+      const select=document.createElement('select');select.setAttribute('aria-label',ctrl.label);
+      for(const [value,caption] of ctrl.options){const option=document.createElement('option');option.value=value;option.textContent=caption;select.append(option);}
+      select.value=meta.tileOptions[ctrl.key]??ctrl.default;
+      select.addEventListener('change',()=>{meta.tileOptions[ctrl.key]=select.value;renderTileById(meta.id);scheduleAutosave();});
+      label.append(select);settingsBody.append(label);
+    } else if (ctrl.type === "number") {
+      const label=document.createElement('label');label.className='tile-control';label.textContent=ctrl.label;
+      const input=document.createElement('input');input.type='number';input.min=String(ctrl.min);input.max=String(ctrl.max);input.step=String(ctrl.step||1);input.value=String(meta.tileOptions[ctrl.key]??ctrl.default);input.setAttribute('aria-label',ctrl.label);
+      input.addEventListener('change',()=>{meta.tileOptions[ctrl.key]=Math.min(ctrl.max,Math.max(ctrl.min,Math.round(Number(input.value)||ctrl.default)));input.value=String(meta.tileOptions[ctrl.key]);renderTileById(meta.id);scheduleAutosave();});
+      label.append(input);settingsBody.append(label);
+    } else if (ctrl.type === "textarea") {
+      const label=document.createElement('label');label.className='tile-control tile-control-textarea';label.textContent=ctrl.label;
+      const input=document.createElement('textarea');input.rows=ctrl.rows||4;input.maxLength=ctrl.maxLength||10000;input.value=meta.tileOptions[ctrl.key]??ctrl.default??'';input.setAttribute('aria-label',ctrl.label);
+      input.addEventListener('input',()=>{meta.tileOptions[ctrl.key]=input.value;renderTileById(meta.id);scheduleAutosave();});
+      label.append(input);settingsBody.append(label);
     }
   }
   if (entry.fields.some(f => f.numeric)) {
@@ -396,6 +416,11 @@ function renderTile(el) {
   const entry = TILE_TYPES[meta.type];
   const chartEl = el.querySelector(".tile-chart");
   if (!entry || !chartEl) return;
+
+  if (entry.noData) {
+    entry.render(chartEl,{data:[],options:{title:meta.title,source:meta.source,tileOptions:meta.tileOptions,sizing:meta.sizing}});
+    return;
+  }
 
   if (isQueryRef(meta.dataset)) {
     renderQueryTile(el, meta, entry, chartEl);
@@ -531,7 +556,7 @@ function serializeLayout() {
         title: meta.title,
         source: meta.source,
         dataset: meta.dataset,
-        binding: meta.dataset == null ? { mode: "dashboard" } : { mode: "explicit", ref: meta.dataset },
+        binding: TILE_TYPES[meta.type]?.noData ? { mode: "none" } : meta.dataset == null ? { mode: "dashboard" } : { mode: "explicit", ref: meta.dataset },
         sizing: meta.sizing,
         tileOptions: meta.tileOptions,
         x: n.x,

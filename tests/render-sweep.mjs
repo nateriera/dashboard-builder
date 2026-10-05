@@ -1,4 +1,4 @@
-// Render sweep: all 9 tile types x all 4 themes through the export render path.
+// Render sweep: all 18 tile types x all 4 themes through the export render path.
 import { JSDOM } from "jsdom";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
@@ -26,9 +26,11 @@ const load = (n) => JSON.parse(readFileSync(join(ROOT, "src", "data", n), "utf8"
 const CASES = [
   ["bar", "categorical.json"], ["column", "categorical.json"], ["line", "timeseries.json"],
   ["scatter", "scatter.json"], ["dot", "categorical.json"], ["donut", "categorical.json"],
-  ["choropleth", "states.json"], ["smallMultiples", "facets.json"], ["kpi", "kpis.json"]
+  ["choropleth", "states.json"], ["smallMultiples", "facets.json"], ["kpi", "kpis.json"],
+  ["table", "categorical.json"], ["text", null], ["stackedBar", "stacked.json"], ["stackedColumn", "stacked.json"],
+  ["histogram", "scatter.json"], ["boxplot", "boxdata.json"], ["area", "timeseries.json"], ["heatmap", "heatmap.json"], ["treemap", "treemap.json"]
 ];
-const key = { bar:"categorical", column:"categorical", line:"timeseries", scatter:"scatter", dot:"categorical", donut:"categorical", choropleth:"states", smallMultiples:"facets", kpi:"kpis" };
+const key = { bar:"categorical", column:"categorical", line:"timeseries", scatter:"scatter", dot:"categorical", donut:"categorical", choropleth:"states", smallMultiples:"facets", kpi:"kpis", table:"categorical", text:null, stackedBar:"stacked", stackedColumn:"stacked", histogram:"scatter", boxplot:"boxdata", area:"timeseries", heatmap:"heatmap", treemap:"treemap" };
 
 let fails = 0;
 for (const theme of THEMES) {
@@ -41,7 +43,7 @@ for (const theme of THEMES) {
   }
   for (const [type, file] of CASES) {
     const entry = TILE_TYPES[type];
-    const rows = load(file);
+    const rows = file ? load(file) : [];
     if (type === "choropleth") {
       var topo = load("us-states-10m.json");
     }
@@ -51,10 +53,12 @@ for (const theme of THEMES) {
     try {
       if (type === "kpi") {
         entry.render(el, { data: rows.map((d) => ({ value: String(d.value ?? d.requests ?? ""), label: d.label ?? d.category ?? "" })), options: { title: "t" } });
+      } else if (type === "text") {
+        entry.render(el, { data: [], options: { title: "t", tileOptions: { body: "Synthetic annotation" } } });
       } else {
-        entry.render(el, { data: rows, options: { title: "t", tileOptions: {} } });
+        entry.render(el, { data: rows, options: { title: "t", tileOptions: type.startsWith('stacked') ? {mode:'stacked'} : {} } });
       }
-      const ok = type === "kpi" ? el.querySelector(".db-kpi-row") : el.querySelector("svg");
+      const ok = type === "kpi" ? el.querySelector(".db-kpi-row") : type === "table" ? el.querySelector(".db-data-table") : type === "text" ? el.querySelector(".db-annotation") : el.querySelector("svg");
       console.log(`${theme.id} / ${type}: ${ok ? "OK" : "NO SVG"}`);
       if (!ok) fails++;
     } catch (e) {
@@ -64,5 +68,5 @@ for (const theme of THEMES) {
     el.remove();
   }
 }
-console.log(fails === 0 ? "ALL 36 OK" : `${fails} FAILURES`);
+console.log(fails === 0 ? "ALL 72 OK" : `${fails} FAILURES`);
 process.exit(fails ? 1 : 0);

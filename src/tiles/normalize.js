@@ -21,6 +21,7 @@ const SYNONYMS = {
 /** Suggest a column mapping: case-insensitive match on field key, known
  *  synonyms, and label words — then substring fallback. */
 export function guessMapping(entry, columns) {
+  if (entry.dynamicFields) return {};
   const cols = columns.map((c) => ({ orig: c, n: norm(c) }));
   const mapping = {};
   for (const f of entry.fields) {
@@ -44,6 +45,9 @@ export function guessMapping(entry, columns) {
 /** Rename mapped columns to field keys; coerce numeric fields (non-numeric
  *  values become null and are counted). Returns {rows, dropped}. */
 export function normalizeRows(entry, rawRows, mapping) {
+  // Table tiles deliberately retain every source column and its original
+  // scalar type; IDs and exact decimal strings must not be coerced.
+  if (entry.dynamicFields) return { rows: rawRows.map(row => ({ ...row })), dropped: 0 };
   let dropped = 0;
   const rows = rawRows.map((raw) => {
     const out = {};

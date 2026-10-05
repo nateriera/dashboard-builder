@@ -346,6 +346,8 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   // tab triggers it, as does the first query tile render.
   const qstate = { sql: null, columns: null, rows: null, mapping: {}, normalized: null };
   let sqlModule = null;
+  let sqlReady = false;
+  let sqlReadyPromise = null;
   let sqlRunning = false;
 
   const sqlTableWrap = document.createElement("div");
@@ -400,9 +402,15 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   const sqlStatus = document.createElement("span");
   sqlStatus.className = "data-sql-status";
   sqlStatus.textContent = "Loading DuckDB…";
+  const sqlRetryBtn = document.createElement("button");
+  sqlRetryBtn.type = "button";
+  sqlRetryBtn.className = "data-sql-retry";
+  sqlRetryBtn.textContent = "Retry load";
+  sqlRetryBtn.setAttribute("aria-label", "Retry loading the in-browser database");
+  sqlRetryBtn.hidden = true;
   const cancelRun = document.createElement("button"); cancelRun.type = "button"; cancelRun.textContent = "Discard running result";
   cancelRun.onclick = () => { previewGate.invalidate(); qApplyBtn.disabled = true; sqlStatus.textContent = "Result discarded; wait for execution to finish before running again."; };
-  sqlRunRow.append(runBtn, cancelRun, sqlStatus);
+  sqlRunRow.append(runBtn, cancelRun, sqlStatus, sqlRetryBtn);
 
   const sqlError = document.createElement("div");
   sqlError.className = "data-error";
@@ -464,19 +472,48 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   }
 
   async function ensureSqlReady() {
+    if (sqlReadyPromise) return sqlReadyPromise;
+
+    const initialLoad = !sqlReady;
+    sqlRetryBtn.hidden = true;
+    sqlError.hidden = true;
+    sqlError.textContent = "";
+    if (initialLoad) {
+      runBtn.disabled = true;
+      sqlStatus.textContent = "Loading DuckDB…";
+    }
+
+    const slowTimer = initialLoad
+      ? window.setTimeout(() => {
+          sqlStatus.textContent = "Still loading the in-browser database (one-time ~39 MB download)…";
+        }, 5000)
+      : null;
+
+    sqlReadyPromise = (async () => {
     try {
       if (!sqlModule) sqlModule = await import("../data/duckdb.js");
       await sqlModule.ensureTables();
       buildTableList(); // rebuild every time: uploads may have added tables
+      sqlReady = true;
       runBtn.disabled = false;
       if (!sqlRunning) sqlStatus.textContent = "DuckDB ready";
       return true;
     } catch (err) {
+      sqlReady = false;
+      runBtn.disabled = true;
       sqlStatus.textContent = "DuckDB failed to load";
+      sqlRetryBtn.hidden = false;
       showSqlError(err && err.message ? err.message : String(err));
       return false;
+    } finally {
+      if (slowTimer != null) window.clearTimeout(slowTimer);
+      sqlReadyPromise = null;
     }
+    })();
+    return sqlReadyPromise;
   }
+
+  sqlRetryBtn.addEventListener("click", () => { ensureSqlReady(); });
 
   const previewGate = createPreviewGate(datasetVersion);
   releaseRevision = subscribeDatasetChanges(() => { previewGate.invalidate(); qApplyBtn.disabled = true; sqlStatus.textContent = "Data changed — Run again"; });

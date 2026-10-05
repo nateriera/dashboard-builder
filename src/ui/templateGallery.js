@@ -164,7 +164,7 @@ export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrent
     card.className = "tpl-card";
     cardInfo.set(card, { tpl, deletable });
 
-    card.appendChild(buildPreview(tpl.tiles));
+    card.appendChild(buildPreview(deletable ? { ...tpl, screenshot: null } : tpl));
 
     const name = document.createElement("div");
     name.className = "tpl-card-name";
@@ -268,8 +268,22 @@ export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrent
   }
 }
 
-// Miniature 12-column schematic of the template layout.
-function buildPreview(tiles) {
+// Starter templates use bundled dashboard screenshots; user templates keep
+// the layout schematic because their charts may contain private data.
+function buildPreview(tpl) {
+  if (tpl.screenshot) {
+    const preview = document.createElement("div");
+    preview.className = "tpl-preview has-screenshot";
+    preview.setAttribute("aria-hidden", "true");
+    const image = document.createElement("img");
+    image.src = tpl.screenshot;
+    image.alt = "";
+    image.decoding = "async";
+    preview.appendChild(image);
+    return preview;
+  }
+
+  const tiles = tpl.tiles;
   const ROW_H = 13;
   const prev = document.createElement("div");
   prev.className = "tpl-preview";

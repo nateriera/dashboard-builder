@@ -95,6 +95,51 @@ body {
 
 .header-actions button.danger { color: var(--danger); }
 
+.first-run-hint {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1500;
+  width: min(340px, calc(100vw - 40px));
+  box-sizing: border-box;
+  padding: 16px 18px;
+  border: 1px solid var(--slate-300);
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: 0 12px 36px rgba(30, 35, 71, 0.18);
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.first-run-hint strong {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.first-run-hint ul {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+  color: var(--slate-600);
+  font-size: 12.5px;
+}
+
+.first-run-hint li + li { margin-top: 4px; }
+
+.first-run-hint button {
+  border: 1px solid var(--slate-300);
+  border-radius: 6px;
+  padding: 6px 12px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.first-run-hint button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+body.present .first-run-hint { display: none; }
+
 #status {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -593,6 +638,7 @@ body.present .tile-toolbar { display: none; }
 
 .data-sql-runrow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-bottom: 4px;
@@ -618,9 +664,24 @@ body.present .tile-toolbar { display: none; }
 }
 
 .data-sql-status {
+  flex: 1 0 100%;
   font-size: 12px;
   color: var(--slate-500);
 }
+
+.data-sql-retry {
+  border: 1px solid var(--slate-300);
+  border-radius: 6px;
+  padding: 5px 9px;
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.data-sql-retry:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.data-sql-retry[hidden] { display: none; }
 
 /* ── Tile async states (query loading / query errors) ─────────────────── */
 .tile-loading {
@@ -828,6 +889,16 @@ body.present .tile-toolbar { display: none; }
   border-radius: 4px;
   margin-bottom: 10px;
   overflow: hidden;
+}
+
+.tpl-preview.has-screenshot { height: 156px; }
+
+.tpl-preview.has-screenshot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
 }
 
 .tpl-block {

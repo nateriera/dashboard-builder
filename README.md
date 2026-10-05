@@ -12,7 +12,7 @@
 ## Features
 
 - Drag-and-drop, resizable 12-column grid with content-aware tile sizing
-- 9 chart types (bar, column, line, scatter + trend, dot, donut, choropleth, KPI, text) rendered with Observable Plot
+- 9 chart types (bar, column, line, scatter + trend, dot, donut, choropleth, small multiples, KPI) rendered with Observable Plot
 - CSV/JSON upload processed locally — your data never leaves the browser — plus built-in sample datasets
 - Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
@@ -38,6 +38,12 @@ Explore three original sample dashboards in the [starter template gallery](docs/
 - **Geographic snapshot** — state map with supporting metrics.
 
 Choose **Templates** in the composer to try these or the other three starters.
+
+## Beginner guides
+
+- [Map a CSV to a chart and repair a missing upload](docs/csv-mapping-walkthrough.md)
+- [Run a categorical SQL aggregation](docs/sql-aggregation-recipe.md)
+- [Choose between JSON backup and HTML sharing](docs/json-backup-html-sharing.md)
 
 ## Start from an upload
 
@@ -180,6 +186,8 @@ Export JSON includes eligible inputs, saved SQL and mappings. Missing/oversized
 inputs and failed queries are listed before downloading; proceeding retains
 broken references and an `omittedDependencies` list. Each dataset's inline
 budget is 500 KiB. Portability therefore depends on carrying every dependency.
+See the [JSON backup and HTML sharing guide](docs/json-backup-html-sharing.md)
+for the difference between the editable backup and the standalone viewer.
 
 HTML export carries materialized query results, all tile rows, theme and options;
 its viewer runs without SQL or network access. It rejects an export if the

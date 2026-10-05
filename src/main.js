@@ -45,6 +45,7 @@ import { toggleDashboardPopover, closeDashboardPopover } from "./ui/dashboardDat
 import { toggleThemePopover, closeThemePopover } from "./ui/themePopover.js";
 import { openTemplateGallery } from "./ui/templateGallery.js";
 import { openGuidedStart } from "./ui/guidedStart.js";
+import { resolveTileTitle } from "./tiles/titles.js";
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -54,6 +55,7 @@ document.head.appendChild(chartStyles);
 setTheme(getThemeId());
 
 const STORAGE_KEY = "dashboard-builder:layout:v1";
+const FIRST_RUN_HINT_KEY = "dashbuilder.seenHint.v1";
 // Build stamp, shown in the status bar on boot. Bump on every shipped archive
 // so it's always possible to confirm which code is actually running.
 const BUILD = "2f-pages-fit";
@@ -316,7 +318,7 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, si
   const meta = {
     id: widgetId,
     type,
-    title: title ?? entry.defaultTitle,
+    title: resolveTileTitle(title, entry.defaultTitle, [...tileMeta.values()].map((tile) => tile.title)),
     source: source ?? "Sample data",
     // New tiles follow the dashboard-wide default (null); explicit refs are
     // per-tile overrides. Undefined (very old layouts) also follows.
@@ -1069,9 +1071,13 @@ function setPresent(on) {
   btnExitPresent.hidden = !on;
   grid.setStatic(on); // locks drag + resize
   if (on) {
+    firstRunHint?.remove();
+    firstRunHint = null;
     closeDataPopover();
     closeDashboardPopover();
     closeThemePopover();
+  } else {
+    showFirstRunHint();
   }
   // Charts keep their rendered width; re-render in case chrome changes it.
   requestAnimationFrame(() =>
@@ -1083,6 +1089,44 @@ function setPresent(on) {
 
 btnPresent.addEventListener("click", () => setPresent(true));
 btnExitPresent.addEventListener("click", () => setPresent(false));
+
+let firstRunHint = null;
+function showFirstRunHint() {
+  if (document.body.classList.contains("present") || firstRunHint?.isConnected) return;
+  try {
+    if (localStorage.getItem(FIRST_RUN_HINT_KEY) === "1") return;
+  } catch {
+    // The hint remains available when storage cannot be read.
+  }
+
+  const hint = document.createElement("aside");
+  hint.className = "first-run-hint";
+  hint.setAttribute("aria-labelledby", "first-run-hint-title");
+  const heading = document.createElement("strong");
+  heading.id = "first-run-hint-title";
+  heading.textContent = "Getting started";
+  const list = document.createElement("ul");
+  for (const text of [
+    "Charts: drag one onto the grid or click to add it.",
+    "A tile’s Data button binds samples, uploads, or SQL to that chart.",
+    "Export HTML creates a shareable dashboard file."
+  ]) {
+    const item = document.createElement("li");
+    item.textContent = text;
+    list.appendChild(item);
+  }
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.textContent = "Got it";
+  dismiss.addEventListener("click", () => {
+    try { localStorage.setItem(FIRST_RUN_HINT_KEY, "1"); } catch { /* dismiss for this page */ }
+    hint.remove();
+    firstRunHint = null;
+  });
+  hint.append(heading, list, dismiss);
+  document.body.appendChild(hint);
+  firstRunHint = hint;
+}
 
 // ── Startup: restore autosaved layout, else a starter dashboard ──────────
 function starterLayout() {
@@ -1128,4 +1172,5 @@ function starterLayout() {
     statusEl.after(retry);
   }
   setStatus(`${statusEl.textContent} · build ${BUILD}`);
+  showFirstRunHint();
 })();

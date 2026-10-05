@@ -27,5 +27,8 @@ Use this for a geographic view with supporting detail.
 ![Geographic snapshot](screenshots/template-geographic-snapshot.png)
 
 All six starter definitions live in [src/templates.js](../src/templates.js).
+The gallery shows a bundled screenshot for each starter. Custom saved
+templates continue to use schematic previews so private chart contents are not
+captured into an image.
 Custom uploads and saved queries must travel with your dashboard to work in
 another browser; missing data references require repair.

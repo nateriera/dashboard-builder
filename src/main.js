@@ -1,4 +1,6 @@
 import { validateLayout, assertNoCollisions } from "./data/layout.js";
+import { validateFilters, applyFilters, distinctValues, filterFieldType, sortAndLimitRows } from "./data/filters.js";
+import { validateParameters, substituteParameters } from "./data/parameters.js";
 import { datasetVersion, listDatasets, storageIssues, rollbackDatasets, subscribeDatasetChanges } from "./data/store.js";
 import { querySnapshot, rollbackQueries, serializeQueries } from "./data/queries.js";
 import { LIMITS } from "./data/limits.js";
@@ -46,6 +48,7 @@ import { toggleThemePopover, closeThemePopover } from "./ui/themePopover.js";
 import { openTemplateGallery } from "./ui/templateGallery.js";
 import { openGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
+import { toggleFiltersPopover } from "./ui/filtersPopover.js";
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -92,6 +95,8 @@ const tileMeta = new Map(); // widget id -> {id, type, title, source, dataset, t
 // {kind:"samples"} = each tile type's own sample data (the classic behavior),
 // {kind:"dataset", ref} = one sample key or "upload:<id>" for every following tile.
 let dashboardDefault = { kind: "samples" };
+let filters = [];
+let parameters = [];
 
 function dashboardDefaultName() {
   const dd = dashboardDefault;
@@ -136,7 +141,17 @@ function resolveDashboardRows(entry) {
   const mapping = guessMapping(entry, raw.columns);
   const required = entry.fields.filter((f) => !f.optional);
   if (!required.every((f) => mapping[f.key])) return null; // can't map: caller shows a notice
-  return normalizeRows(entry, raw.rows, mapping).rows;
+  return mergeSourceColumns(normalizeRows(entry, raw.rows, mapping).rows, raw.rows);
+}
+
+function mergeSourceColumns(normalized, sourceRows) {
+  if (!Array.isArray(sourceRows) || sourceRows.length !== normalized.length) return normalized;
+  return normalized.map((row, index) => ({ ...sourceRows[index], ...row }));
+}
+
+function resolveUploadRows(dataset) {
+  const sourceRows = dataset.raw?.rows;
+  return mergeSourceColumns(dataset.rows, sourceRows);
 }
 
 // Resolve a tile's render-ready (normalized) rows for static export.
@@ -150,8 +165,8 @@ async function resolveExportRows(meta, entry) {
     if (!q) return { error: "Saved query is missing." };
     try {
       const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
-      const rows = getCachedRows(qid, q, entry) || (await runTileQuery(qid, q, entry));
-      return { rows };
+      const rows = getCachedRows(qid, q, entry, parameters) || (await runTileQuery(qid, q, entry, parameters));
+      return prepareTileRows(meta, rows);
     } catch (err) {
       return { error: `Query failed: ${err && err.message ? err.message : err}` };
     }
@@ -159,15 +174,15 @@ async function resolveExportRows(meta, entry) {
   if (meta.dataset == null) {
     const rows = resolveDashboardRows(entry);
     return rows
-      ? { rows }
+      ? prepareTileRows(meta, rows)
       : { error: `Dashboard data (“${dashboardDefaultName()}”) can't be used for this chart type.` };
   }
   if (isUploadRef(meta.dataset)) {
     const ds = getDataset(uploadId(meta.dataset));
-    return ds ? { rows: ds.rows } : { error: "Uploaded dataset is missing." };
+    return ds ? prepareTileRows(meta, resolveUploadRows(ds)) : { error: "Uploaded dataset is missing." };
   }
   const rows = DATASETS[meta.dataset];
-  return rows ? { rows } : { error: "Sample dataset is missing." };
+  return rows ? prepareTileRows(meta, rows) : { error: "Sample dataset is missing." };
 }
 
 // ── Tile DOM ─────────────────────────────────────────────────────────────
@@ -214,6 +229,7 @@ function buildTileContent(type, meta) {
       type,
       meta,
       dashboard: { name: dashboardDefaultName(), table: dashboardTableName() },
+      getParameters: () => parameters,
       onDashboard: () => {
         meta.dataset = null;
         meta.source = "Dashboard default";
@@ -274,7 +290,7 @@ function buildTileContent(type, meta) {
   settings.addEventListener('mousedown', e => e.stopPropagation());
   const fitButton = document.createElement('button'); fitButton.type = 'button'; fitButton.textContent = 'Fit content';
   fitButton.addEventListener('click', () => { meta.sizing = 'auto'; renderTileById(meta.id); scheduleAutosave(); });
-  settingsBody.append(fitButton); toolbar.append(settings);
+  settingsBody.append(fitButton);
 
   // Per-type extra controls declared by the registry (e.g. scatter trend toggle).
   for (const ctrl of entry.controls || []) {
@@ -300,8 +316,23 @@ function buildTileContent(type, meta) {
       label.append(select);settingsBody.append(label);
     } else if (ctrl.type === "number") {
       const label=document.createElement('label');label.className='tile-control';label.textContent=ctrl.label;
-      const input=document.createElement('input');input.type='number';input.min=String(ctrl.min);input.max=String(ctrl.max);input.step=String(ctrl.step||1);input.value=String(meta.tileOptions[ctrl.key]??ctrl.default);input.setAttribute('aria-label',ctrl.label);
-      input.addEventListener('change',()=>{meta.tileOptions[ctrl.key]=Math.min(ctrl.max,Math.max(ctrl.min,Math.round(Number(input.value)||ctrl.default)));input.value=String(meta.tileOptions[ctrl.key]);renderTileById(meta.id);scheduleAutosave();});
+      const input=document.createElement('input');input.type='number';
+      if (ctrl.min !== undefined) input.min=String(ctrl.min);
+      if (ctrl.max !== undefined) input.max=String(ctrl.max);
+      input.step=String(ctrl.step??1);input.value=String(meta.tileOptions[ctrl.key]??ctrl.default??'');input.setAttribute('aria-label',ctrl.label);
+      input.addEventListener('change',()=>{
+        if (ctrl.allowEmpty && input.value === '') delete meta.tileOptions[ctrl.key];
+        else {
+          const raw=Number(input.value);
+          if (!Number.isFinite(raw)) { input.value=String(meta.tileOptions[ctrl.key]??ctrl.default??''); return; }
+          const step=ctrl.step === 'any' ? null : Number(ctrl.step||1);
+          const rounded=step ? Math.round(raw/step)*step : raw;
+          const min=ctrl.min??-Infinity,max=ctrl.max??Infinity;
+          meta.tileOptions[ctrl.key]=Math.min(max,Math.max(min,rounded));
+        }
+        input.value=String(meta.tileOptions[ctrl.key]??'');
+        renderTileById(meta.id);scheduleAutosave();
+      });
       label.append(input);settingsBody.append(label);
     } else if (ctrl.type === "textarea") {
       const label=document.createElement('label');label.className='tile-control tile-control-textarea';label.textContent=ctrl.label;
@@ -320,6 +351,7 @@ function buildTileContent(type, meta) {
       label.append(input); settingsBody.append(label);
     }
   }
+  toolbar.append(settings);
   toolbar.append(removeBtn);
 
   const chart = document.createElement("div");
@@ -379,9 +411,20 @@ function resolveTileData(meta, entry) {
   if (meta.dataset == null) return resolveDashboardRows(entry);
   if (isUploadRef(meta.dataset)) {
     const ds = getDataset(uploadId(meta.dataset));
-    return ds ? ds.rows : null;
+    return ds ? resolveUploadRows(ds) : null;
   }
   return DATASETS[meta.dataset] || null;
+}
+
+function prepareTileRows(meta, rows) {
+  const filtered = applyFilters(rows, filters, { sourceTile: meta.id });
+  if (filtered.applied && filtered.rows.length === 0) return { rows: [], empty: true, filtered: true };
+  const sortable = ['bar','column','dot','stackedBar','stackedColumn'].includes(meta.type);
+  const topN = sortable ? meta.tileOptions?.topN ?? null : null;
+  const prepared = topN !== null
+    ? sortAndLimitRows(meta.type, filtered.rows, { sort: meta.tileOptions?.sort ?? 'desc', topN })
+    : filtered.rows;
+  return { rows: prepared, empty: false, filtered: filtered.applied };
 }
 
 function datasetDisplayName(meta) {
@@ -405,6 +448,40 @@ function paintUnavailable(el, title, message) {
   const repair = document.createElement("button"); repair.type = "button"; repair.textContent = "Repair data binding";
   repair.onclick = () => el.closest(".tile")?.querySelector(".tile-data-btn")?.click();
   box.append(head,msg,repair); el.append(box);
+}
+
+function paintFilteredEmpty(el) {
+  el.replaceChildren();
+  const box=document.createElement('div');box.className='tile-empty';box.setAttribute('role','status');
+  box.textContent='No rows match the active filters.';
+  el.append(box);
+}
+
+function crossfilterValuesFromTarget(target) {
+  const dataMark=target.closest?.('[data-crossfilter-values]');
+  const encoded=dataMark?.getAttribute('data-crossfilter-values');
+  if (encoded) {
+    try { const values=JSON.parse(decodeURIComponent(encoded)); return Array.isArray(values) ? values : [values]; } catch { return null; }
+  }
+  const link=target.closest?.('a');
+  const href=link?.getAttributeNS?.('http://www.w3.org/1999/xlink','href') || link?.getAttribute?.('href') || '';
+  const prefix='#db-crossfilter:';
+  if (!href.startsWith(prefix)) return null;
+  try { const values=JSON.parse(decodeURIComponent(href.slice(prefix.length))); return Array.isArray(values) ? values : [values]; } catch { return null; }
+}
+
+function wireCrossfilter(chartEl, meta, entry) {
+  chartEl.onclick=(event)=>{
+    if (!entry.crossfilterField) return;
+    const values=crossfilterValuesFromTarget(event.target);
+    if (!values?.length) return;
+    event.preventDefault();
+    const current=filters.find(filter=>filter.source==='crossfilter');
+    const same=current?.sourceTile===meta.id && current.field===entry.crossfilterField && JSON.stringify(current.values)===JSON.stringify(values);
+    const next=filters.filter(filter=>filter.source!=='crossfilter');
+    if (!same) next.push({id:`cross-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,field:entry.crossfilterField,op:'is',values,source:'crossfilter',sourceTile:meta.id});
+    setFilters(next);
+  };
 }
 
 function renderTile(el) {
@@ -452,10 +529,13 @@ function renderTile(el) {
     paintUnavailable(chartEl, 'Data unavailable', 'The saved reference ' + meta.dataset + ' is missing. Choose Data to repair the binding.');
     return;
   }
+  const prepared=prepareTileRows(meta,data);
+  if (prepared.empty) { paintFilteredEmpty(chartEl); return; }
   entry.render(chartEl, {
-    data,
-    options: { title: meta.title, source: meta.source, tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present") }
+    data: prepared.rows,
+    options: { title: meta.title, source: meta.source, tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present"), crossfilterField: entry.crossfilterField }
   });
+  wireCrossfilter(chartEl,meta,entry);
 }
 
 // Query tiles resolve asynchronously: the DuckDB module (and its .wasm) loads
@@ -467,11 +547,18 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   const capturedRevision = datasetVersion();
   const renderToken = meta.renderToken = (meta.renderToken || 0) + 1;
   const capturedDataset = meta.dataset; // stale-render guard (see below)
+  const capturedParameters = structuredClone(parameters);
   const options = () => ({
     title: meta.title,
     source: meta.source,
-    tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present")
+    tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present"), crossfilterField: entry.crossfilterField
   });
+  const paintRows = rows => {
+    const prepared=prepareTileRows(meta,rows);
+    if (prepared.empty) { paintFilteredEmpty(chartEl); return; }
+    entry.render(chartEl,{data:prepared.rows,options:options()});
+    wireCrossfilter(chartEl,meta,entry);
+  };
 
   if (!q) {
     paintUnavailable(chartEl, 'Saved query unavailable', 'Reference ' + meta.dataset + ' was retained. Choose Data to repair it.');
@@ -481,9 +568,9 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   try {
   const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
   if (!el.isConnected || tileMeta.get(meta.id) !== meta || meta.renderToken !== renderToken || meta.dataset !== capturedDataset) return;
-  const cached = getCachedRows(qid, q, entry);
+  const cached = getCachedRows(qid, q, entry, capturedParameters);
   if (cached) {
-    entry.render(chartEl, { data: cached, options: options() });
+    paintRows(cached);
     if (meta.sizing === "auto") requestAnimationFrame(() => { if (meta.sizing === "auto") fitTileToContent(grid, el); });
     return;
   }
@@ -494,11 +581,11 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   loading.textContent = "Running query…";
   chartEl.appendChild(loading);
 
-    const rows = await runTileQuery(qid, q, entry);
+    const rows = await runTileQuery(qid, q, entry, capturedParameters);
     // The tile may have been removed, re-bound, or re-rendered while the
     // query was in flight — never paint a stale result.
     if (!el.isConnected || tileMeta.get(meta.id) !== meta || meta.renderToken !== renderToken || datasetVersion() !== capturedRevision || meta.dataset !== capturedDataset) return;
-    entry.render(chartEl, { data: rows, options: options() });
+    paintRows(rows);
   } catch (err) {
     if (!el.isConnected || tileMeta.get(meta.id) !== meta || meta.renderToken !== renderToken || datasetVersion() !== capturedRevision || meta.dataset !== capturedDataset) return;
     paintUnavailable(chartEl, 'Query unavailable', (err?.message || String(err)) + ' Choose Data to repair or rerun this query.');
@@ -547,6 +634,8 @@ function serializeLayout() {
     rowHeight: ROW_HEIGHT,
     savedAt: new Date().toISOString(),
     defaultDataset: dashboardDefault,
+    filters,
+    parameters,
     theme: getThemeId(),
     tiles: grid.save(false).map((n) => {
       const meta = tileMeta.get(n.id) || {};
@@ -577,6 +666,8 @@ function loadLayout(data, { fit = false } = {}) {
     grid.removeAll();
     tileMeta.clear();
     dashboardDefault = validateDashboardDefault(data.defaultDataset);
+    filters = data.filters || [];
+    parameters = data.parameters || [];
     refreshDashboardButton();
     if (data.theme) {
       setTheme(data.theme);
@@ -595,7 +686,7 @@ function loadLayout(data, { fit = false } = {}) {
 // default is left untouched — a template should look like its preview.
 function applyTemplate(tpl) {
   try {
-    const candidate = validateLayout({ app: 'dashboard-builder', version: tpl.rowHeight ? 3 : 1, rowHeight: tpl.rowHeight, theme: tpl.theme || getThemeId(), defaultDataset: dashboardDefault, tiles: tpl.tiles });
+    const candidate = validateLayout({ app: 'dashboard-builder', version: tpl.rowHeight ? 3 : 1, rowHeight: tpl.rowHeight, theme: tpl.theme || getThemeId(), defaultDataset: dashboardDefault, filters: [], parameters: [], tiles: tpl.tiles });
     replaceLayout(candidate);
     scheduleAutosave(); setStatus('Applied template “' + tpl.name + '”.');
   } catch (err) { setStatus('Template failed: ' + err.message); }
@@ -674,7 +765,10 @@ window.addEventListener('resize', () => {
 grid.on("change", () => scheduleAutosave());
 grid.on("removed", (_event, items) => {
   for (const n of items) tileMeta.delete(n.id);
-  scheduleAutosave();
+  const removed=new Set(items.map(item=>item.id));
+  const next=filters.filter(filter=>filter.source!=='crossfilter'||!removed.has(filter.sourceTile));
+  if (!bulkLoading && next.length!==filters.length) setFilters(next);
+  else scheduleAutosave();
 });
 
 // ── Palette: drag onto the grid (GridStack drag-in) or click to add ──────
@@ -733,8 +827,44 @@ grid.on("dropped", (_event, _prevNode, newNode) => {
 
 // ── Header actions ───────────────────────────────────────────────────────
 const btnData = document.getElementById("btn-data");
+const btnFilters = document.getElementById("btn-filters");
 const btnTemplates = document.getElementById("btn-templates");
 const btnTheme = document.getElementById("btn-theme");
+function dashboardFilterRows() {
+  if (dashboardDefault.kind === 'samples') return Object.values(DATASETS).flat();
+  if (!isUploadRef(dashboardDefault.ref)) return DATASETS[dashboardDefault.ref] || [];
+  const dataset=getDataset(uploadId(dashboardDefault.ref));
+  return dataset?.raw?.rows || dataset?.rows || [];
+}
+function dashboardFilterFields() {
+  const rows=dashboardFilterRows();
+  const keys=[...new Set(rows.flatMap(row=>Object.keys(row)))];
+  return keys.map(field=>({field,type:filterFieldType(rows,field),...distinctValues(rows,field)})).filter(option=>option.type!=='date');
+}
+function setFilters(next) {
+  filters=validateFilters(next);
+  renderAllTiles();
+  scheduleAutosave();
+}
+function setParameters(next) {
+  parameters=validateParameters(next);
+  refreshQueryTiles();
+  scheduleAutosave();
+}
+if (btnFilters) {
+  btnFilters.addEventListener('click',e=>{
+    e.stopPropagation();
+    toggleFiltersPopover({
+      anchor:btnFilters,
+      filters,
+      parameters,
+      fields:dashboardFilterFields(),
+      tileTitle:id=>tileMeta.get(id)?.title || id,
+      onFiltersChange:setFilters,
+      onParametersChange:setParameters
+    });
+  });
+}
 function refreshThemeButton() {
   if (btnTheme) btnTheme.textContent = `Theme: ${getTheme().name}`;
 }
@@ -970,7 +1100,7 @@ async function exportHtml() {
       const meta = tileMeta.get(node.id);
       const entry = meta && TILE_TYPES[meta.type];
       if (!meta || !entry) continue;
-      const { rows, error } = await resolveExportRows(meta, entry);
+      const resolved = await resolveExportRows(meta, entry);
       tiles.push({
         type: meta.type,
         title: meta.title,
@@ -980,8 +1110,9 @@ async function exportHtml() {
         w: node.w,
         h: node.h,
         tileOptions: meta.tileOptions || {},
-        rows: rows || null,
-        error: error || null
+        rows: resolved.empty ? null : resolved.rows || null,
+        error: resolved.error || null,
+        emptyMessage: resolved.empty ? "No rows match the active filters." : null
       });
     }
 

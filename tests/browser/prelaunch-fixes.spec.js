@@ -109,7 +109,7 @@ test('prelaunch: first-run hint is non-modal, does not shift the grid, persists 
 });
 
 test('prelaunch: slow DuckDB loading shows progressive status without changing the fast path', async ({ page }) => {
-  await page.route('**/src/data/duckdb.js', async route => {
+  await page.route('**/src/data/duckdb.js*', async route => {
     await new Promise(resolve => setTimeout(resolve, 5500));
     await route.continue();
   });
@@ -128,7 +128,7 @@ test('prelaunch: slow DuckDB loading shows progressive status without changing t
 test('prelaunch: DuckDB load failure shows an error and Retry load recovers', async ({ page }) => {
   test.setTimeout(120000);
   let faultInjected = false;
-  await page.route('**/src/data/duckdb.js', async route => {
+  await page.route('**/src/data/duckdb.js*', async route => {
     const response = await route.fetch();
     const source = await response.text();
     const marker = 'async function initDB() {';

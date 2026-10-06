@@ -18,6 +18,8 @@ const { validateLayout, assertNoCollisions } = await import('../src/data/layout.
 const { migrateLegacy } = await import('../src/data/migrate.js');
 const { createQueryCoordinator, createPreviewGate } = await import('../src/data/queryCoordinator.js');
 const { parseFile } = await import('../src/data/parse.js');
+const { validateFilters, applyFilters, distinctValues, filterFieldType, sortAndLimitRows } = await import('../src/data/filters.js');
+const { validateParameters, substituteParameters } = await import('../src/data/parameters.js');
 const store = await import('../src/data/store.js');
 const layout = (dataset = 'categorical') => ({ app: 'dashboard-builder', version: 1, defaultDataset: {kind:'dataset',ref:'upload:revenue'}, tiles: [{id:'bar1',type:'bar',dataset,x:0,y:0,w:6,h:5}] });
 const total = rows => rows.reduce((s,r)=>s+r.value,0);
@@ -226,4 +228,94 @@ test('Phase 1: new chart renderers produce visible marks across all themes and c
   const histLayout=validateLayout({app:'dashboard-builder',version:3,rowHeight:24,tiles:[{id:'hist',type:'histogram',dataset:'scatter',binding:{mode:'explicit',ref:'scatter'},tileOptions:{binCount:100},x:0,y:0,w:6,h:15}]});
   assert.equal(histLayout.tiles[0].tileOptions.binCount,100);
   assert.throws(()=>validateLayout({...histLayout,tiles:[{...histLayout.tiles[0],tileOptions:{binCount:101}}]}),/Unsupported chart option/);
+});
+
+test('Phase 2: categorical and numeric dashboard filters preserve absent-field tiles', () => {
+  const rows=[
+    {category:'Housing',amount:10},
+    {category:'Food',amount:20},
+    {category:'Housing',amount:30}
+  ];
+  assert.deepEqual(applyFilters(rows,[{id:'f1',field:'category',op:'is',values:['Housing']}]).rows,[rows[0],rows[2]]);
+  assert.deepEqual(applyFilters(rows,[{id:'f1',field:'category',op:'is-not',values:['Housing']}]).rows,[rows[1]]);
+  assert.deepEqual(applyFilters(rows,[{id:'f1',field:'amount',op:'between',values:[15,30]}]).rows,[rows[1],rows[2]]);
+  const absent=applyFilters([{label:'A',value:1}],[{id:'f1',field:'category',op:'is',values:['Housing']}]);
+  assert.equal(absent.applied,false);
+  assert.deepEqual(absent.rows,[{label:'A',value:1}]);
+  const self=applyFilters(rows,[{id:'cf',field:'category',op:'is',values:['Housing'],source:'crossfilter',sourceTile:'bar1'}],{sourceTile:'bar1'});
+  assert.equal(self.applied,false);
+  assert.deepEqual(self.rows,rows);
+  assert.equal(filterFieldType(rows,'amount'),'number');
+  assert.equal(filterFieldType([...DATASETS.categorical,...DATASETS.kpis],'value'),'number');
+  assert.equal(filterFieldType([{fips:'01'},{fips:'06'}],'fips'),'category');
+  assert.equal(filterFieldType([{date:'2025-01-01'},{date:'2025-02-01'}],'date'),'date');
+});
+
+test('Phase 2: filter validation and distinct-value caps are bounded', () => {
+  assert.throws(()=>validateFilters([{id:'bad',field:'x',op:'between',values:[0]}]),/filter/i);
+  assert.throws(()=>validateFilters([{id:'bad',field:'__proto__',op:'is',values:['x']}]),/filter/i);
+  const values=distinctValues(Array.from({length:205},(_,i)=>({field:`v${i}`})),'field');
+  assert.equal(values.values.length,200);
+  assert.equal(values.truncated,true);
+  assert.equal(distinctValues([{field:'a'},{field:'a'}],'field').truncated,false);
+});
+
+test('Phase 2: sort then top-N keeps whole categories and stacked groups', () => {
+  const rows=[
+    {label:'B',value:2},{label:'A',value:5},{label:'C',value:1},{label:'B',value:4}
+  ];
+  assert.deepEqual([...new Set(sortAndLimitRows('bar',rows,{sort:'desc',topN:2}).map(r=>r.label))],['B','A']);
+  assert.deepEqual([...new Set(sortAndLimitRows('bar',rows,{sort:'asc',topN:2}).map(r=>r.label))],['C','A']);
+  assert.deepEqual([...new Set(sortAndLimitRows('bar',rows,{sort:'data',topN:2}).map(r=>r.label))],['B','A']);
+  const stacked=[{label:'A',series:'x',value:5},{label:'B',series:'x',value:4},{label:'B',series:'y',value:3},{label:'C',series:'x',value:1}];
+  assert.deepEqual([...new Set(sortAndLimitRows('stackedBar',stacked,{topN:1}).map(r=>r.label))],['B']);
+  assert.equal(sortAndLimitRows('bar',rows,{sort:'desc',topN:null}).length,rows.length);
+});
+
+test('Phase 2: SQL parameters validate names and substitute safe SQL literals', () => {
+  const params=validateParameters([
+    {name:'growth',type:'number',value:1.25,min:0,max:2},
+    {name:'owner',type:'text',value:"O'Brien"}
+  ]);
+  assert.equal(substituteParameters("SELECT {{growth}}, {{owner}}",params),"SELECT 1.25, 'O''Brien'");
+  assert.throws(()=>substituteParameters('SELECT {{missing}}',params),/unknown.*missing/i);
+  assert.throws(()=>validateParameters([{name:'bad-name',type:'text',value:'x'}]),/parameter/i);
+  assert.throws(()=>validateParameters([{name:'growth',type:'number',value:3,min:0,max:2}]),/parameter/i);
+});
+
+test('Phase 2: labeled reference lines render zero and negative values across chart types and themes', async () => {
+  const {setTheme,THEMES}=await import('../src/themes/themes.js');
+  const {referenceMarks}=await import('../src/charts/charts.js');
+  const cases=[
+    ['bar','categorical'],['column','categorical'],['dot','categorical'],
+    ['line','timeseries'],['area','timeseries'],['scatter','scatter'],
+    ['histogram','scatter'],['boxplot','boxdata']
+  ];
+  assert.deepEqual(referenceMarks('y',null,'Target'),[]);
+  for(const theme of THEMES){
+    setTheme(theme.id);
+    for(const [type,dataset] of cases) for(const value of [0,-1]){
+      const el=document.createElement('div');
+      TILE_TYPES[type].render(el,{data:DATASETS[dataset],options:{title:type,tileOptions:{referenceValue:value,referenceLabel:'Target'}}});
+      const svg=[...el.querySelectorAll('svg')].find(node=>node.textContent.includes('Target'))||el.querySelector('svg');
+      assert.ok(svg,`${theme.id}/${type}/${value} should render`);
+      assert.match(el.textContent,/Target/,`${theme.id}/${type}/${value} should label the reference line: ${el.innerHTML.slice(-1400)}`);
+      assert.ok(el.querySelector('[stroke-dasharray], [style*="stroke-dasharray"]'),`${theme.id}/${type}/${value} should render a dashed rule: ${el.innerHTML.slice(-1200)}`);
+    }
+  }
+  setTheme('paper');
+});
+
+test('Phase 2: filters and parameters persist through layout validation and JSON round-trip', () => {
+  const input={app:'dashboard-builder',version:3,rowHeight:24,theme:'paper',defaultDataset:{kind:'samples'},
+    filters:[{id:'filter-1',field:'label',op:'is',values:['Housing']}],
+    parameters:[{name:'growth',type:'number',value:1.1,min:0,max:2}],
+    tiles:[{id:'bar1',type:'bar',dataset:'categorical',binding:{mode:'explicit',ref:'categorical'},tileOptions:{topN:3,sort:'asc'},x:0,y:0,w:6,h:15}]};
+  const candidate=validateLayout(input);
+  const restored=validateLayout(JSON.parse(JSON.stringify(candidate)));
+  assert.deepEqual(restored.filters,input.filters);
+  assert.deepEqual(restored.parameters,input.parameters);
+  assert.equal(restored.tiles[0].tileOptions.topN,3);
+  assert.deepEqual(validateLayout({...input,filters:undefined,parameters:undefined}).filters,[]);
+  assert.throws(()=>validateLayout({...input,filters:[{id:'f',field:'label',op:'unknown',values:[]}]}),/filter/i);
 });

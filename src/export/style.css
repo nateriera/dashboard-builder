@@ -107,6 +107,15 @@ body {
   color: var(--slate-500);
 }
 
+.export-tile-empty {
+  min-height: 90px;
+  padding: 20px;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--slate-500);
+}
+
 @media print {
   body { background: var(--white); }
   #export-root { max-width: none; padding: 0; }

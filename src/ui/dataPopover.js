@@ -1,3 +1,4 @@
+import { toggleWranglingPopover } from "./dataWranglingPopover.js";
 import { focusDialog } from "./focus.js";
 import { anchorPopover } from "./anchoredPopover.js";
 import { createPreviewGate } from "../data/queryCoordinator.js";
@@ -100,7 +101,17 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   tabSql.type = "button";
   tabSql.className = "data-tab";
   tabSql.textContent = "SQL";
-  tabs.append(tabSamples, tabUpload, tabSql);
+  const tabPivot = document.createElement("button");
+  tabPivot.type = "button";
+  tabPivot.className = "data-tab";
+  tabPivot.textContent = "Pivot";
+  const tabFormula = document.createElement("button");
+  tabFormula.type = "button";
+  tabFormula.className = "data-tab";
+  tabFormula.textContent = "Calculated field";
+  tabPivot.addEventListener("click", () => { closeDataPopover(); toggleWranglingPopover({ anchor, type, meta, dashboard, initialTab: "pivot", getParameters, onQuery }); });
+  tabFormula.addEventListener("click", () => { closeDataPopover(); toggleWranglingPopover({ anchor, type, meta, dashboard, initialTab: "formula", getParameters, onQuery }); });
+  tabs.append(tabSamples, tabUpload, tabSql, tabPivot, tabFormula);
 
   const panelSamples = document.createElement("div");
   panelSamples.className = "data-panel";

@@ -152,6 +152,12 @@ export function sanitizeValue(v, typeName) {
 
 /** Materialize one duckdb-wasm result into {columns, rows} of plain objects. */
 export function materializeResult(result) {
+  const { columns, rows } = materializeRows(result);
+  return { columns, rows };
+}
+
+/** Materialize a result while retaining DuckDB type metadata for visual controls. */
+export function materializeRows(result) {
   if (result.numRows > LIMITS.queryRows) throw new Error(`Query result limit is ${LIMITS.queryRows.toLocaleString()} rows. Add LIMIT or aggregate in SQL.`);
   const fields = result.schema.fields.map((f) => ({
     name: f.name,
@@ -167,7 +173,8 @@ export function materializeResult(result) {
     }
     return out;
   });
-  return { columns, rows };
+  const types = Object.fromEntries(fields.map(field => [field.name, field.typeName]));
+  return { columns, rows, types };
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 // Serializes synchronization and execution, including calls arriving mid-sync.
-export function createQueryCoordinator({ revision, collect, sync, execute }) {
+export function createQueryCoordinator({ revision, collect, sync, execute, executeDetailed }) {
   let tail = Promise.resolve(), synced = -1;
   const enqueue = task => {
     const result = tail.then(task);
@@ -21,7 +21,14 @@ export function createQueryCoordinator({ revision, collect, sync, execute }) {
       const result = await execute(sql);
       if (captured !== revision()) throw new Error('Datasets changed during query execution. Run again for current data.');
       return { ...result, revision: captured };
-    })
+    }),
+    runDetailed: executeDetailed ? sql => enqueue(async () => {
+      await ensure();
+      const captured = revision();
+      const result = await executeDetailed(sql);
+      if (captured !== revision()) throw new Error('Datasets changed during query execution. Run again for current data.');
+      return { ...result, revision: captured };
+    }) : undefined
   };
 }
 

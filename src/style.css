@@ -466,6 +466,31 @@ body.present .tile-toolbar { display: none; }
 
 .data-drop:hover { border-color: var(--periwinkle); }
 
+.data-import-source-button {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--slate-200);
+  border-radius: 5px;
+  padding: 7px 9px;
+  background: var(--white);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.data-import-source-button:disabled { opacity: .6; cursor: wait; }
+.data-panel > input[type="url"], .data-panel > textarea[aria-label="Paste tabular data"] {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--slate-200);
+  border-radius: 5px;
+  padding: 8px;
+  font: inherit;
+}
+.data-panel > textarea[aria-label="Paste tabular data"] { min-height: 76px; resize: vertical; }
+.data-import-status { margin-top: 5px; font-size: 11px; color: var(--slate-600); }
+
 .data-filename {
   margin-top: 8px;
   font-size: 12px;

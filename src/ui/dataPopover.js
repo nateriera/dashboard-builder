@@ -1,3 +1,4 @@
+import { toggleWranglingPopover } from "./dataWranglingPopover.js";
 import { focusDialog } from "./focus.js";
 import { anchorPopover } from "./anchoredPopover.js";
 import { createPreviewGate } from "../data/queryCoordinator.js";
@@ -14,6 +15,8 @@ import {
   normalizeRows
 } from "../tiles/registry.js";
 import { readUpload } from "../data/readUpload.js";
+import { fetchCsvText, parsePastedTable } from "../data/importSource.js";
+import { parseFile } from "../data/parse.js";
 import { saveDataset, persistDataset, uploadId, isUploadRef } from "../data/store.js";
 import { saveQuery, getQuery } from "../data/queries.js";
 import { substituteParameters } from "../data/parameters.js";
@@ -100,7 +103,17 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   tabSql.type = "button";
   tabSql.className = "data-tab";
   tabSql.textContent = "SQL";
-  tabs.append(tabSamples, tabUpload, tabSql);
+  const tabPivot = document.createElement("button");
+  tabPivot.type = "button";
+  tabPivot.className = "data-tab";
+  tabPivot.textContent = "Pivot";
+  const tabFormula = document.createElement("button");
+  tabFormula.type = "button";
+  tabFormula.className = "data-tab";
+  tabFormula.textContent = "Calculated field";
+  tabPivot.addEventListener("click", () => { closeDataPopover(); toggleWranglingPopover({ anchor, type, meta, dashboard, initialTab: "pivot", getParameters, onQuery }); });
+  tabFormula.addEventListener("click", () => { closeDataPopover(); toggleWranglingPopover({ anchor, type, meta, dashboard, initialTab: "formula", getParameters, onQuery }); });
+  tabs.append(tabSamples, tabUpload, tabSql, tabPivot, tabFormula);
 
   const panelSamples = document.createElement("div");
   panelSamples.className = "data-panel";
@@ -202,7 +215,25 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   applyBtn.disabled = true;
   actions.appendChild(applyBtn);
 
-  panelUpload.append(dropLabel, fileNameEl, errorEl, mapWrap, previewWrap, actions);
+  const sourceUrl = document.createElement("input");
+  sourceUrl.type = "url";
+  sourceUrl.placeholder = "https://example.com/data.csv";
+  sourceUrl.setAttribute("aria-label", "Public CSV URL");
+  const urlButton = document.createElement("button");
+  urlButton.type = "button";
+  urlButton.className = "data-import-source-button";
+  urlButton.textContent = "Load CSV URL";
+  const pasteArea = document.createElement("textarea");
+  pasteArea.placeholder = "Paste spreadsheet cells here (tab-separated)";
+  pasteArea.setAttribute("aria-label", "Paste tabular data");
+  const pasteButton = document.createElement("button");
+  pasteButton.type = "button";
+  pasteButton.className = "data-import-source-button";
+  pasteButton.textContent = "Preview pasted data";
+  const sourceStatus = document.createElement("div");
+  sourceStatus.className = "data-import-status";
+  sourceStatus.setAttribute("role", "status");
+  panelUpload.append(dropLabel, sourceUrl, urlButton, pasteArea, pasteButton, sourceStatus, fileNameEl, errorEl, mapWrap, previewWrap, actions);
 
   function showError(msg) {
     errorEl.textContent = msg;
@@ -303,6 +334,47 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     applyBtn.disabled = false;
   }
 
+  function acceptParsed(name, { columns, rows }) {
+    state.fileName = name;
+    state.columns = columns;
+    state.rawRows = rows;
+    state.mapping = guessMapping(entry, columns);
+    fileNameEl.textContent = `${name} — ${rows.length.toLocaleString()} rows, ${columns.length} columns`;
+    fileNameEl.hidden = false;
+    errorEl.hidden = true;
+    buildMappingUI();
+    updatePreview();
+  }
+
+  urlButton.addEventListener("click", async () => {
+    urlButton.disabled = true;
+    sourceStatus.textContent = "Fetching public CSV…";
+    errorEl.hidden = true;
+    try {
+      const text = await fetchCsvText(sourceUrl.value);
+      if (!pop.isConnected) return;
+      acceptParsed("URL CSV", parseFile("data.csv", text));
+      sourceStatus.textContent = "CSV loaded. Review the preview, then apply it to this tile.";
+    } catch (err) {
+      sourceStatus.textContent = "";
+      showError(err.message);
+    } finally { urlButton.disabled = false; }
+  });
+
+  pasteButton.addEventListener("click", async () => {
+    pasteButton.disabled = true;
+    sourceStatus.textContent = "Validating pasted table…";
+    errorEl.hidden = true;
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      acceptParsed("Pasted table", parsePastedTable(pasteArea.value));
+      sourceStatus.textContent = "Pasted table ready. Review the preview, then apply it to this tile.";
+    } catch (err) {
+      sourceStatus.textContent = "";
+      showError(err.message);
+    } finally { pasteButton.disabled = false; }
+  });
+
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
     if (!file) return;
@@ -310,14 +382,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     try {
       const { columns, rows } = await readUpload(file,pop);
       if (!pop.isConnected) return;
-      state.fileName = file.name;
-      state.columns = columns;
-      state.rawRows = rows;
-      state.mapping = guessMapping(entry, columns);
-      fileNameEl.textContent = `${file.name} — ${rows.length.toLocaleString()} rows, ${columns.length} columns`;
-      fileNameEl.hidden = false;
-      buildMappingUI();
-      updatePreview();
+      acceptParsed(file.name, { columns, rows });
     } catch (err) {
       state.fileName = null;
       state.columns = null;

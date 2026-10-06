@@ -26,7 +26,7 @@ import { normalizeRows } from "../tiles/normalize.js";
 import { substituteParameters } from "./parameters.js";
 import {
   buildTableStatements,
-  materializeResult,
+  materializeRows,
   rowColumns,
   sampleTableName,
   uploadTableName
@@ -89,11 +89,19 @@ const coordinator = createQueryCoordinator({
     if (!/^(SELECT|WITH)\b/i.test(trimmed)) throw new Error('Only SELECT/WITH queries are supported.');
     const { conn } = await getDB();
     const result = await conn.query('SELECT * FROM (' + trimmed + ') AS dashboard_result LIMIT ' + (LIMITS.queryRows + 1));
-    return materializeResult(result);
+    return materializeRows(result);
+  },
+  executeDetailed: async sql => {
+    const trimmed = sql.trim().replace(/;\s*$/, '');
+    if (!/^(SELECT|WITH)\b/i.test(trimmed)) throw new Error('Only SELECT/WITH queries are supported.');
+    const { conn } = await getDB();
+    const result = await conn.query('SELECT * FROM (' + trimmed + ') AS dashboard_result LIMIT ' + (LIMITS.queryRows + 1));
+    return materializeRows(result);
   }
 });
 export function ensureTables() { return coordinator.ensure(); }
 export function runQuery(sql) { return coordinator.run(sql); }
+export function runQueryDetailed(sql) { return coordinator.runDetailed(sql); }
 
 /** Tables shown in the SQL tab: exact names, so queries need no guessing. */
 export function listTables() {

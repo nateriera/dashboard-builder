@@ -7,6 +7,9 @@ import { focusDialog } from "./focus.js";
 
 import { DATASET_LABELS } from "../tiles/registry.js";
 import { readUpload } from "../data/readUpload.js";
+import { fetchCsvText, parsePastedTable } from "../data/importSource.js";
+import { parseFile } from "../data/parse.js";
+import { profileRows } from "../data/profile.js";
 import { listDatasets } from "../data/store.js";
 
 let releaseFocus = null;
@@ -136,6 +139,26 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
   err.hidden = true;
   body.appendChild(err);
 
+  const sourceUrl = document.createElement("input");
+  sourceUrl.type = "url";
+  sourceUrl.placeholder = "https://example.com/data.csv";
+  sourceUrl.setAttribute("aria-label", "Public CSV URL");
+  const urlButton = document.createElement("button");
+  urlButton.type = "button";
+  urlButton.className = "data-import-source-button";
+  urlButton.textContent = "Load CSV URL";
+  const pasteArea = document.createElement("textarea");
+  pasteArea.placeholder = "Paste spreadsheet cells here (tab-separated)";
+  pasteArea.setAttribute("aria-label", "Paste tabular data");
+  const pasteButton = document.createElement("button");
+  pasteButton.type = "button";
+  pasteButton.className = "data-import-source-button";
+  pasteButton.textContent = "Import pasted data";
+  const sourceStatus = document.createElement("div");
+  sourceStatus.className = "data-import-status";
+  sourceStatus.setAttribute("role", "status");
+  body.append(sourceUrl, urlButton, pasteArea, pasteButton, sourceStatus);
+
   async function handleFile(file) {
     err.hidden = true;
     dropText.textContent = `Reading ${file.name}…`;
@@ -154,6 +177,38 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
 
   fileInput.addEventListener("change", () => {
     if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  urlButton.addEventListener("click", async () => {
+    urlButton.disabled = true;
+    err.hidden = true;
+    sourceStatus.textContent = "Fetching public CSV…";
+    try {
+      const text = await fetchCsvText(sourceUrl.value);
+      if (!pop.isConnected) return;
+      const { columns, rows } = parseFile("data.csv", text);
+      const profile = profileRows(columns, rows);
+      onUpload({ name: "URL CSV", columns, rows, profile });
+      closeDashboardPopover();
+    } catch (e) {
+      err.textContent = e?.message || String(e);
+      err.hidden = false;
+      sourceStatus.textContent = "";
+    } finally { urlButton.disabled = false; }
+  });
+
+  pasteButton.addEventListener("click", () => {
+    err.hidden = true;
+    sourceStatus.textContent = "Validating pasted table…";
+    try {
+      const { columns, rows } = parsePastedTable(pasteArea.value);
+      onUpload({ name: "Pasted table", columns, rows });
+      closeDashboardPopover();
+    } catch (e) {
+      err.textContent = e?.message || String(e);
+      err.hidden = false;
+      sourceStatus.textContent = "";
+    }
   });
   dropLabel.addEventListener("dragover", (e) => {
     e.preventDefault();

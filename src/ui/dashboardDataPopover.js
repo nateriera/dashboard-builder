@@ -9,6 +9,7 @@ import { DATASET_LABELS } from "../tiles/registry.js";
 import { readUpload } from "../data/readUpload.js";
 import { fetchCsvText, parsePastedTable } from "../data/importSource.js";
 import { parseFile } from "../data/parse.js";
+import { profileRows } from "../data/profile.js";
 import { listDatasets } from "../data/store.js";
 
 let releaseFocus = null;
@@ -185,7 +186,8 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     try {
       const text = await fetchCsvText(sourceUrl.value);
       if (!pop.isConnected) return;
-      const { columns, rows, profile } = parseFile("data.csv", text);
+      const { columns, rows } = parseFile("data.csv", text);
+      const profile = profileRows(columns, rows);
       onUpload({ name: "URL CSV", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {

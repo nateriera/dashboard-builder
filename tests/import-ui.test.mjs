@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
+
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://localhost/' });
 globalThis.document = dom.window.document;
 globalThis.window = dom.window;
@@ -41,4 +42,22 @@ test('dashboard data popover imports pasted tabular content as its default datas
   assert.deepEqual(imported.columns, ['Region', 'Amount']);
   assert.deepEqual(imported.rows, [{ Region: 'West', Amount: '15' }]);
   closeDashboardPopover();
+});
+
+test('dashboard data popover supplies a profile when importing a CSV URL', async () => {
+  const anchor = document.createElement('button');
+  document.body.append(anchor);
+  let imported;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('Region,Amount\nWest,15', { headers: { 'content-type': 'text/csv' } });
+  try {
+    toggleDashboardPopover({ anchor, current: { kind: 'samples' }, sampleKeys: [], onSelect() {}, onUpload(value) { imported = value; } });
+    document.querySelector('[aria-label="Public CSV URL"]').value = 'https://example.com/data.csv';
+    document.querySelectorAll('.data-import-source-button')[0].click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(imported.profile.fields.map((field) => field.kind), ['category', 'number']);
+  } finally {
+    globalThis.fetch = originalFetch;
+    closeDashboardPopover();
+  }
 });

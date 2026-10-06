@@ -91,7 +91,9 @@ function renderExport(payload) {
 
   const paint = () => {
     for (const { t, entry, chartEl } of rendered) {
-      if (t.rows) {
+      if (t.emptyMessage) {
+        paintEmpty(chartEl,t.emptyMessage);
+      } else if (t.rows) {
         try {
           entry.render(chartEl, {
             data: t.rows,
@@ -121,6 +123,12 @@ function renderExport(payload) {
     clearTimeout(timer);
     timer = setTimeout(paint, 150);
   });
+}
+
+function paintEmpty(chartEl,message) {
+  chartEl.replaceChildren();
+  const box=document.createElement("div");box.className="export-tile-empty";box.setAttribute("role","status");box.textContent=message;
+  chartEl.appendChild(box);
 }
 
 function paintError(chartEl, title, msg) {

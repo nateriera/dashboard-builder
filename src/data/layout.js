@@ -2,6 +2,8 @@ import { ROW_HEIGHT } from '../tiles/geometry.js';
 import { TILE_TYPES, DATASETS } from '../tiles/registry.js';
 import { THEMES } from '../themes/themes.js';
 import { LIMITS, assertRows } from './limits.js';
+import { validateFilters } from './filters.js';
+import { validateParameters } from './parameters.js';
 
 const own = (o,k) => Object.hasOwn(o,k);
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -100,6 +102,10 @@ export function validateLayout(input) {
       else if (k === 'body' && e.noData) tileOptions.body = text(v,'annotation',10000);
       else if (k === 'mode' && ['stacked','grouped'].includes(v) && ['stackedBar','stackedColumn'].includes(t.type)) tileOptions.mode = v;
       else if (k === 'binCount' && Number.isInteger(v) && v >= 5 && v <= 100 && t.type === 'histogram') tileOptions.binCount = v;
+      else if (k === 'sort' && ['desc','asc','data'].includes(v) && ['bar','column','dot'].includes(t.type)) tileOptions.sort = v;
+      else if (k === 'topN' && Number.isInteger(v) && v >= 1 && v <= 100 && ['bar','column','dot','stackedBar','stackedColumn'].includes(t.type)) tileOptions.topN = v;
+      else if (k === 'referenceValue' && typeof v === 'number' && Number.isFinite(v) && ['bar','column','dot','line','area','scatter','histogram','boxplot'].includes(t.type)) tileOptions.referenceValue = v;
+      else if (k === 'referenceLabel' && ['bar','column','dot','line','area','scatter','histogram','boxplot'].includes(t.type)) tileOptions.referenceLabel = text(v,'reference label',120);
       else fail(`Unsupported chart option: ${k}`);
     }
     return { id, type: t.type, title: text(t.title ?? e.defaultTitle,'title'), source: text(t.source ?? 'Sample data','source'), dataset, binding, tileOptions, sizing, ...geometry };
@@ -117,7 +123,9 @@ export function validateLayout(input) {
       }
     }
   }
-  return { app: 'dashboard-builder', version: 3, rowHeight: ROW_HEIGHT, theme, defaultDataset, tiles, datasets, queries };
+  const filters = validateFilters(data.filters);
+  const parameters = validateParameters(data.parameters);
+  return { app: 'dashboard-builder', version: 3, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, tiles, datasets, queries };
 }
 
 export function assertNoCollisions(candidate, getDataset, getQuery) {

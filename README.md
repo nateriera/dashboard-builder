@@ -16,6 +16,11 @@
 - CSV/JSON upload processed locally — your data never leaves the browser — plus built-in sample datasets
 - Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
+- Dashboard filters apply categorical values or numeric ranges to tiles that contain the chosen source column
+- Click a bar or donut slice to cross-filter other matching tiles; the source tile stays unchanged
+- Named SQL parameters support local what-if analysis with `{{name}}` placeholders
+- Optional per-tile reference lines, with labels, mark targets and thresholds
+- Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
 - 4 themes, 6 starter templates, save/load dashboards as JSON
 - Export to a single self-contained HTML file — email it or host it anywhere, no server needed
 - Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
@@ -44,6 +49,7 @@ Choose **Templates** in the composer to try these or the other three starters.
 - [Map a CSV to a chart and repair a missing upload](docs/csv-mapping-walkthrough.md)
 - [Run a categorical SQL aggregation](docs/sql-aggregation-recipe.md)
 - [Choose between JSON backup and HTML sharing](docs/json-backup-html-sharing.md)
+- [Filter a dashboard and use SQL parameters](docs/filters-and-parameters.md)
 
 ## Start from an upload
 

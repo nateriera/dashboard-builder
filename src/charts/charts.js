@@ -125,11 +125,72 @@ function trendLine(data, x, y) {
   ];
 }
 
+function crossfilterAriaLabel(value) {
+  return `Category: ${String(value ?? "")}`;
+}
+
+function crossfilterHref(value) {
+  return `#db-crossfilter:${encodeURIComponent(JSON.stringify([value]))}`;
+}
+
+function axisMaximum(rows, field) {
+  let maximum = null;
+  for (const row of rows) {
+    const value = row[field];
+    if (value == null) continue;
+    const comparable = value instanceof Date ? value.getTime() : value;
+    const current = maximum instanceof Date ? maximum.getTime() : maximum;
+    if (maximum === null || comparable > current) maximum = value;
+  }
+  return maximum;
+}
+
+function domainWithReference(values, referenceValue, baseDomain = null, includeZero = false) {
+  if (referenceValue === null || referenceValue === undefined || referenceValue === "" || !Number.isFinite(Number(referenceValue))) return baseDomain ?? undefined;
+  const reference = Number(referenceValue);
+  const numbers = [...(baseDomain || []), ...values].filter(value => typeof value === "number" && Number.isFinite(value));
+  const [baseMin, baseMax] = numericExtent(numbers, includeZero);
+  if (reference >= baseMin && reference <= baseMax) return baseDomain ?? undefined;
+  let lo = Math.min(baseMin, reference), hi = Math.max(baseMax, reference);
+  if (includeZero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+  const padding = (hi - lo) * 0.04 || Math.max(1, Math.abs(reference) * 0.04);
+  return [lo - padding, hi + padding];
+}
+
+function histogramBinCounts(rows, field, bins) {
+  const values = rows.map(row => row[field]).filter(value => typeof value === "number" && Number.isFinite(value));
+  if (!values.length) return [0];
+  const [lo, hi] = numericExtent(values);
+  const count = Math.max(1, Math.round(Number(bins) || 1));
+  if (lo === hi) return [values.length];
+  const width = (hi - lo) / count;
+  const counts = Array(count).fill(0);
+  for (const value of values) counts[Math.min(count - 1, Math.floor((value - lo) / width))]++;
+  return counts;
+}
+
+/** Theme-aware reference line and optional label at the value-axis endpoint. */
+export function referenceMarks(axis, value, label, theme, anchor = {}) {
+  if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return [];
+  const t = theme.chart;
+  const numeric = Number(value);
+  const marks = [axis === "x"
+    ? Plot.ruleX([numeric], { stroke: t.ink, strokeOpacity: 0.68, strokeDasharray: "5,4", strokeWidth: 1.5, ariaLabel: "Reference line" })
+    : Plot.ruleY([numeric], { stroke: t.ink, strokeOpacity: 0.68, strokeDasharray: "5,4", strokeWidth: 1.5, ariaLabel: "Reference line" })];
+  if (typeof label === "string" && label.trim() && anchor.x != null && anchor.y != null) {
+    marks.push(Plot.text([{ x: anchor.x, y: anchor.y, label: label.trim() }], {
+      x: "x", y: "y", text: "label", textAnchor: "end", dx: -5, dy: -5,
+      fill: t.ink, stroke: t.card, strokeWidth: 3, paintOrder: "stroke", fontSize: 11
+    }));
+  }
+  return marks;
+}
+
 // ── Horizontal bar chart (rankings, comparisons) ─────────────────────────────
 // data: rows; x: numeric field; y: category field.
 // options: sort ("desc"|"asc"|null), fill (color or field), highlight (predicate),
 //   valueFormat, tip (default true), width, xLabel, theme.
-export function barChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, xLabel = null, xDomain = null, width = 640, height, theme = getTheme() } = {}) {
+export function barChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, xLabel = null, xDomain = null, width = 640, height, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
   const t = theme.chart;
   const baseFill = fill ?? t.primary;
   const rows = sort
@@ -139,6 +200,7 @@ export function barChart(data, { x, y, sort = "desc", fill = null, highlight = n
     Plot.barX(rows, {
       x, y,
       fill: highlight ? (d) => (highlight(d) ? t.highlight : baseFill) : baseFill,
+      ...(crossfilterField ? { ariaLabel: d => crossfilterAriaLabel(d[crossfilterField]), href: d => crossfilterHref(d[crossfilterField]) } : {}),
       tip
     }),
     Plot.text(rows, {
@@ -150,30 +212,35 @@ export function barChart(data, { x, y, sort = "desc", fill = null, highlight = n
       fontSize: 12,
       fill: t.mutedStrong
     }),
-    Plot.ruleX([0], { stroke: t.border })
+    Plot.ruleX([0], { stroke: t.border }),
+    ...referenceMarks("x", referenceValue, referenceLabel, theme, { x: Number(referenceValue), y: rows[0]?.[y] })
   ];
   return themedPlot(theme, {
     width,
     height,
     marginLeft: Math.min(120, Math.max(48, width * 0.22)),
     marginRight: Math.min(72, Math.max(36, width * 0.12)),
-    x: { label: xLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: xDomain ?? undefined },
+    x: { label: xLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: domainWithReference(rows.map(row => row[x]), referenceValue, xDomain, true) },
     y: { label: null, domain: rows.map((d) => d[y]) },
     marks
   });
 }
 
 // ── Vertical column chart (categorical or time buckets) ──────────────────────
-export function columnChart(data, { x, y, fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, yLabel = null, yDomain = null, width = 640, height, theme = getTheme() } = {}) {
+export function columnChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, yLabel = null, yDomain = null, width = 640, height, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
   const t = theme.chart;
   const baseFill = fill ?? t.primary;
+  const rows = sort
+    ? data.slice().sort((a, b) => (sort === "desc" ? b[y] - a[y] : a[y] - b[y]))
+    : data;
   const marks = [
-    Plot.barY(data, {
+    Plot.barY(rows, {
       x, y,
       fill: highlight ? (d) => (highlight(d) ? t.highlight : baseFill) : baseFill,
+      ...(crossfilterField ? { ariaLabel: d => crossfilterAriaLabel(d[crossfilterField]), href: d => crossfilterHref(d[crossfilterField]) } : {}),
       tip
     }),
-    Plot.text(data, {
+    Plot.text(rows, {
       x, y,
       text: (d) => valueFormat(d[y]),
       dy: -8,
@@ -182,21 +249,22 @@ export function columnChart(data, { x, y, fill = null, highlight = null, valueFo
       fontSize: 12,
       fill: t.mutedStrong
     }),
-    Plot.ruleY([0], { stroke: t.border })
+    Plot.ruleY([0], { stroke: t.border }),
+    ...referenceMarks("y", referenceValue, referenceLabel, theme, { x: rows.at(-1)?.[x], y: Number(referenceValue) })
   ];
   return themedPlot(theme, {
     width,
     height,
     marginBottom: 48,
-    x: { label: null, tickRotate: data.length > 8 ? -30 : 0 },
-    y: { label: yLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: yDomain ?? undefined },
+    x: { label: null, domain: rows.map(d => d[x]), tickRotate: rows.length > 8 ? -30 : 0 },
+    y: { label: yLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: domainWithReference(rows.map(row => row[y]), referenceValue, yDomain, true) },
     marks
   });
 }
 
 // ── Line chart (time series; one or many series via `stroke`) ───────────────
 // data: rows; x: date/number field; y: numeric field; stroke: optional series field.
-export function lineChart(data, { x, y, stroke = null, width = 680, height, xLabel = null, yLabel = null, yFormat = fmtInt.format.bind(fmtInt), xDomain = null, yDomain = null, tip = true, theme = getTheme() } = {}) {
+export function lineChart(data, { x, y, stroke = null, width = 680, height, xLabel = null, yLabel = null, yFormat = fmtInt.format.bind(fmtInt), xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
   const t = theme.chart;
   const base = { x, y, tip, strokeWidth: 2 };
   const xType = data[0] && data[0][x] instanceof Date ? "time" : typeof (data[0] && data[0][x]) === "string" ? "point" : "linear";
@@ -210,11 +278,12 @@ export function lineChart(data, { x, y, stroke = null, width = 680, height, xLab
         Plot.dot(data, { x, y, stroke: t.primary, r: 2.5, tip: false }),
         Plot.dot(data, Plot.selectLast({ x, y, fill: t.highlight, stroke: t.primary, r: 4 }))
       ];
+  marks.push(...referenceMarks("y", referenceValue, referenceLabel, theme, { x: axisMaximum(data, x), y: Number(referenceValue) }));
   return themedPlot(theme, {
     width,
     height,
     x: { label: xLabel, type: xType, domain: xDomain ?? undefined },
-    y: { label: yLabel, tickFormat: yFormat, domain: yDomain ?? undefined },
+    y: { label: yLabel, tickFormat: yFormat, domain: domainWithReference(data.map(row => row[y]), referenceValue, yDomain) },
     color: stroke ? { range: t.categorical, legend: true } : undefined,
     marks
   });
@@ -222,7 +291,7 @@ export function lineChart(data, { x, y, stroke = null, width = 680, height, xLab
 
 // ── Scatter chart (relationships; optional trend line, size, color) ─────────
 // fill: a hex color, or a field name for a color channel.
-export function scatterChart(data, { x, y, r = null, fill = null, trend = false, width = 640, height, xLabel = null, yLabel = null, xDomain = null, yDomain = null, tip = true, theme = getTheme() } = {}) {
+export function scatterChart(data, { x, y, r = null, fill = null, trend = false, width = 640, height, xLabel = null, yLabel = null, xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
   const t = theme.chart;
   const fillIsChannel =
     typeof fill === "string" && !fill.startsWith("#") && data[0] && fill in data[0];
@@ -240,17 +309,18 @@ export function scatterChart(data, { x, y, r = null, fill = null, trend = false,
     const line = trendLine(data, x, y);
     if (line) marks.push(Plot.line(line, { x: "x", y: "y", stroke: t.highlight, strokeWidth: 2.5 }));
   }
+  marks.push(...referenceMarks("y", referenceValue, referenceLabel, theme, { x: axisMaximum(data, x), y: Number(referenceValue) }));
   return themedPlot(theme, {
     width,
     height,
     x: { label: xLabel, nice: true, domain: xDomain ?? undefined },
-    y: { label: yLabel, nice: true, domain: yDomain ?? undefined },
+    y: { label: yLabel, nice: true, domain: domainWithReference(data.map(row => row[y]), referenceValue, yDomain) },
     marks
   });
 }
 
 // ── Dot plot / lollipop (clean alternative to bars for many categories) ──────
-export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabel = null, xDomain = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, theme = getTheme() } = {}) {
+export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabel = null, xDomain = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
   const t = theme.chart;
   const rows = sort
     ? data.slice().sort((a, b) => (sort === "desc" ? b[x] - a[x] : a[x] - b[x]))
@@ -261,11 +331,11 @@ export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabe
     height,
     marginLeft: Math.min(120, Math.max(48, width * 0.22)),
     marginRight: Math.min(64, Math.max(32, width * 0.12)),
-    x: { label: xLabel, tickFormat: (d) => tf(d), domain: xDomain ?? undefined },
+    x: { label: xLabel, tickFormat: (d) => tf(d), domain: domainWithReference(rows.map(row => row[x]), referenceValue, xDomain, true) },
     y: { label: null, domain: rows.map((d) => d[y]) },
     marks: [
       Plot.ruleX(rows, { x1: 0, x2: x, y, stroke: t.mutedLight }),
-      Plot.dot(rows, { x, y, fill: t.primary, r: 5, tip: true }),
+      Plot.dot(rows, { x, y, fill: t.primary, r: 5, tip: true, ...(crossfilterField ? { ariaLabel: d => crossfilterAriaLabel(d[crossfilterField]), href: d => crossfilterHref(d[crossfilterField]) } : {}) }),
       Plot.text(rows, {
         x, y,
         text: (d) => valueFormat(d[x]),
@@ -274,13 +344,14 @@ export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabe
         fontFamily: t.fonts.mono,
         fontSize: 12,
         fill: t.mutedStrong
-      })
+      }),
+      ...referenceMarks("x", referenceValue, referenceLabel, theme, { x: Number(referenceValue), y: rows[0]?.[y] })
     ]
   });
 }
 
 // ── Stacked and grouped category comparisons ────────────────────────────────
-export function stackedBarChart(data, { mode = "stacked", width = 640, height, xLabel = null, theme = getTheme() } = {}) {
+export function stackedBarChart(data, { mode = "stacked", width = 640, height, xLabel = null, theme = getTheme(), crossfilterField = null } = {}) {
   const t = theme.chart;
   const series = [...new Set(data.map(d => d.series))];
   const color = { domain: series, range: t.categorical, legend: true };
@@ -292,14 +363,14 @@ export function stackedBarChart(data, { mode = "stacked", width = 640, height, x
       return { ...d, _band: band };
     });
     domain = [...labelByBand.keys()];
-    marks = [Plot.barX(rows, {x:"value", y:"_band", fill:"series", tip:true})];
+    marks = [Plot.barX(rows, {x:"value", y:"_band", fill:"series", tip:true, ...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})})];
     return themedPlot(theme, {width,height,marginLeft:Math.min(140,Math.max(60,width*.24)),x:{label:xLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},y:{label:null,domain,tickFormat:k=>labelByBand.get(k)},color,marks});
   }
-  marks = [Plot.barX(data, Plot.stackX({z:"series"},{x:"value",y:"label",fill:"series",tip:true}))];
+  marks = [Plot.barX(data, Plot.stackX({z:"series"},{x:"value",y:"label",fill:"series",tip:true,...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})}))];
   return themedPlot(theme, {width,height,marginLeft:Math.min(140,Math.max(60,width*.24)),x:{label:xLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},y:{label:null},color,marks});
 }
 
-export function stackedColumnChart(data, { mode = "stacked", width = 640, height, yLabel = null, theme = getTheme() } = {}) {
+export function stackedColumnChart(data, { mode = "stacked", width = 640, height, yLabel = null, theme = getTheme(), crossfilterField = null } = {}) {
   const t = theme.chart;
   const series = [...new Set(data.map(d => d.series))];
   const color = { domain: series, range: t.categorical, legend: true };
@@ -309,27 +380,30 @@ export function stackedColumnChart(data, { mode = "stacked", width = 640, height
       const band = JSON.stringify([d.label, d.series]); labelByBand.set(band, d.label);
       return { ...d, _band: band };
     });
-    return themedPlot(theme, {width,height,marginBottom:56,x:{label:null,domain:[...labelByBand.keys()],tickFormat:k=>labelByBand.get(k),tickRotate:data.length>12?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(rows,{x:"_band",y:"value",fill:"series",tip:true}),Plot.ruleY([0],{stroke:t.border})]});
+    return themedPlot(theme, {width,height,marginBottom:56,x:{label:null,domain:[...labelByBand.keys()],tickFormat:k=>labelByBand.get(k),tickRotate:data.length>12?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(rows,{x:"_band",y:"value",fill:"series",tip:true,...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})}),Plot.ruleY([0],{stroke:t.border})]});
   }
-  return themedPlot(theme, {width,height,marginBottom:48,x:{label:null,tickRotate:data.length>8?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(data,Plot.stackY({z:"series"},{x:"label",y:"value",fill:"series",tip:true})),Plot.ruleY([0],{stroke:t.border})]});
+  return themedPlot(theme, {width,height,marginBottom:48,x:{label:null,tickRotate:data.length>8?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(data,Plot.stackY({z:"series"},{x:"label",y:"value",fill:"series",tip:true,...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})})),Plot.ruleY([0],{stroke:t.border})]});
 }
 
-export function histogramChart(data, { value = "value", bins = 20, width = 640, height, xLabel = null, theme = getTheme() } = {}) {
-  return themedPlot(theme,{width,height,marginLeft:56,x:{label:xLabel??null},y:{label:"Count",grid:true,tickFormat:fmtInt.format.bind(fmtInt)},marks:[Plot.rectY(data,Plot.binX({y:"count"},{x:value,thresholds:bins,tip:true})),Plot.ruleY([0],{stroke:theme.chart.border})]});
+export function histogramChart(data, { value = "value", bins = 20, width = 640, height, xLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
+  const counts = histogramBinCounts(data, value, bins);
+  return themedPlot(theme,{width,height,marginLeft:56,x:{label:xLabel??null},y:{label:"Count",grid:true,tickFormat:fmtInt.format.bind(fmtInt),domain:domainWithReference(counts,referenceValue,null,true)},marks:[Plot.rectY(data,Plot.binX({y:"count"},{x:value,thresholds:bins,tip:true})),Plot.ruleY([0],{stroke:theme.chart.border}),...referenceMarks("y",referenceValue,referenceLabel,theme,{x:axisMaximum(data,value),y:Number(referenceValue)})]});
 }
 
-export function boxplotChart(data, { label = "label", value = "value", width = 640, height, yLabel = null, theme = getTheme() } = {}) {
+export function boxplotChart(data, { label = "label", value = "value", width = 640, height, yLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
   const t=theme.chart;
-  return themedPlot(theme,{width,height,marginBottom:48,x:{label:null,tickRotate:data.length>12?-30:0},y:{label:yLabel,grid:true,tickFormat:fmtInt.format.bind(fmtInt)},marks:[Plot.boxY(data,{x:label,y:value,fill:t.primary,tip:true}),Plot.ruleY([0],{stroke:t.border})]});
+  const categories=[...new Set(data.map(row=>row[label]))];
+  return themedPlot(theme,{width,height,marginBottom:48,x:{label:null,tickRotate:categories.length>12?-30:0},y:{label:yLabel,grid:true,tickFormat:fmtInt.format.bind(fmtInt),domain:domainWithReference(data.map(row=>row[value]),referenceValue)},marks:[Plot.boxY(data,{x:label,y:value,fill:t.primary,tip:true}),Plot.ruleY([0],{stroke:t.border}),...referenceMarks("y",referenceValue,referenceLabel,theme,{x:categories.at(-1),y:Number(referenceValue)})]});
 }
 
-export function areaChart(data, { x = "date", y = "value", series = null, width = 680, height, xLabel = null, yLabel = null, theme = getTheme() } = {}) {
+export function areaChart(data, { x = "date", y = "value", series = null, width = 680, height, xLabel = null, yLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
   const t=theme.chart;
   const xType=data[0]?.[x] instanceof Date?"time":typeof data[0]?.[x]==="string"?"point":"linear";
   const marks=series?
     [Plot.areaY(data,{x,y1:0,y2:y,z:series,fill:series,fillOpacity:.18,tip:true}),Plot.lineY(data,{x,y,z:series,stroke:series,strokeWidth:1.5})]:
     [Plot.areaY(data,{x,y1:0,y2:y,fill:t.primary,fillOpacity:.45,tip:true}),Plot.lineY(data,{x,y,stroke:t.primary,strokeWidth:2})];
-  return themedPlot(theme,{width,height,x:{label:xLabel??null,type:xType},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt),grid:true},color:series?{range:t.categorical,legend:true}:undefined,marks});
+  marks.push(...referenceMarks("y",referenceValue,referenceLabel,theme,{x:axisMaximum(data,x),y:Number(referenceValue)}));
+  return themedPlot(theme,{width,height,x:{label:xLabel??null,type:xType},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt),grid:true,domain:domainWithReference(data.map(row=>row[y]),referenceValue,null,true)},color:series?{range:t.categorical,legend:true}:undefined,marks});
 }
 
 export function heatmapChart(data, { x = "x", y = "y", value = "value", width = 640, height, xLabel = null, yLabel = null, theme = getTheme() } = {}) {
@@ -495,11 +569,14 @@ export function smallMultiples(data, {
 // data: rows; value: numeric field; label: category field.
 // Note: Observable Plot has no arc/pie mark, so this renders raw SVG via
 // d3-shape pie+arc generators and htl — same theme, no Plot dependency.
-export function donutChart(data, { value, label, width = 420, height = width + 80, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme() } = {}) {
+export function donutChart(data, { value, label, width = 420, height = width + 80, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme(), crossfilterField = null } = {}) {
   const t = theme.chart;
   const compactLegend = width < 280;
   width = Math.max(80, Math.min(width, height - 80, 400));
+  const sourceLabels = [...new Set(data.map(d => String(d[label] ?? "Unlabeled")))];
   data = donutParts(data, label, value);
+  const partLabels = new Set(data.map(d => String(d[label])));
+  const otherLabels = sourceLabels.filter(name => !partLabels.has(name));
   const total = data.reduce((s, d) => s + d[value], 0);
   const slices = d3pie().value((d) => d[value]).sort(null)(data);
   const arcGen = d3arc().innerRadius(innerRadius).outerRadius(outerRadius);
@@ -512,7 +589,12 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
   return html`<div class="db-donut">
     ${svg`<svg width="${width}" height="${width}" viewBox="0 0 ${size} ${size}" role="img">
       <g transform="translate(${c} ${c})">
-        ${slices.map((s, i) => svg`<path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path>`)}
+        ${slices.map((s, i) => {
+          const sliceLabel = String(s.data[label]);
+          const values = crossfilterField && !sourceLabels.includes(sliceLabel) ? otherLabels : [s.data[label]];
+          const encoded = crossfilterField ? encodeURIComponent(JSON.stringify(values)) : "";
+          return svg`<path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2" data-crossfilter-values="${encoded}"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path>`;
+        })}
         <text text-anchor="middle" dy="${-4 * textScale}" font-family="${t.fonts.mono}" font-weight="500" font-size="${totalFont}" fill="${t.ink}">${valueFormat(total)}</text>
         <text text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
       </g>

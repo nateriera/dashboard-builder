@@ -16,6 +16,7 @@ import {
 import { readUpload } from "../data/readUpload.js";
 import { saveDataset, persistDataset, uploadId, isUploadRef } from "../data/store.js";
 import { saveQuery, getQuery } from "../data/queries.js";
+import { substituteParameters } from "../data/parameters.js";
 import {
   starterQuery,
   sampleTableName,
@@ -53,16 +54,16 @@ function onDocKeyDown(e) {
   if (e.key === "Escape") closeDataPopover();
 }
 
-export function toggleDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, onQuery, onDashboard }) {
+export function toggleDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, onQuery, onDashboard, getParameters = () => [] }) {
   if (popEl && popAnchor === anchor) {
     closeDataPopover();
     return;
   }
   closeDataPopover();
-  openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, onQuery, onDashboard });
+  openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, onQuery, onDashboard, getParameters });
 }
 
-function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, onQuery, onDashboard }) {
+function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, onQuery, onDashboard, getParameters }) {
   const entry = TILE_TYPES[type];
   if (!entry) return;
 
@@ -632,7 +633,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     sqlError.hidden = true;
     sqlStatus.textContent = "Running…";
     try {
-      const { columns, rows } = await sqlModule.runQuery(request.sql);
+      const parameters=structuredClone(getParameters());
+      const resolvedSql=substituteParameters(request.sql,parameters);
+      const { columns, rows } = await sqlModule.runQuery(resolvedSql);
       if (!pop.isConnected || !previewGate.accept(request, sqlInput.value)) { sqlStatus.textContent = "Edited or data changed — Run again"; return; }
       qstate.sql = request.sql;
       qstate.columns = columns;

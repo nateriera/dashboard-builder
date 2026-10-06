@@ -71,6 +71,13 @@ export const DATASET_LABELS = {
   treemap: "Program hierarchy — 4 groups (12)"
 };
 
+const sortControls = [{ type: "select", key: "sort", label: "Sort", default: "desc", options: [["desc", "Descending"], ["asc", "Ascending"], ["data", "Data order"]] }];
+const topNControls = [{ type: "number", key: "topN", label: "Show top N categories", min: 1, max: 100, step: 1, default: "", allowEmpty: true }];
+const referenceControls = [
+  { type: "number", key: "referenceValue", label: "Reference value", step: "any", default: "", allowEmpty: true },
+  { type: "textarea", key: "referenceLabel", label: "Reference label", default: "", maxLength: 120, rows: 1 }
+];
+
 // Pure normalization helpers live in ./normalize.js (no DOM/kit imports, so
 // they're unit-testable in node); re-exported here for tile authors.
 import { guessMapping, normalizeRows, promoteDate } from "./normalize.js";
@@ -107,10 +114,12 @@ export const TILE_TYPES = {
     defaultDataset: "categorical",
     defaultSize: { w: 6, h: 5 },
     defaultTitle: "Requests by category",
+    controls: [...sortControls, ...topNControls, ...referenceControls],
+    crossfilterField: "label",
     render(el, { data, options }) {
       mount(
         el,
-        (width, height) => barChart(data, { x: "value", y: "label", width, height, xLabel: options.tileOptions?.xLabel || null }),
+        (width, height) => barChart(data, { x: "value", y: "label", sort: options.tileOptions?.sort === "data" ? null : options.tileOptions?.sort ?? "desc", width, height, xLabel: options.tileOptions?.xLabel || null, referenceValue: options.tileOptions?.referenceValue, referenceLabel: options.tileOptions?.referenceLabel, crossfilterField: options.crossfilterField }),
         options
       );
     }
@@ -127,10 +136,12 @@ export const TILE_TYPES = {
     defaultDataset: "categorical",
     defaultSize: { w: 6, h: 5 },
     defaultTitle: "Requests by category",
+    controls: [...sortControls, ...topNControls, ...referenceControls],
+    crossfilterField: "label",
     render(el, { data, options }) {
       mount(
         el,
-        (width, height) => columnChart(data, { x: "label", y: "value", width, height, yLabel: options.tileOptions?.yLabel || null }),
+        (width, height) => columnChart(data, { x: "label", y: "value", sort: options.tileOptions?.sort === "data" ? null : options.tileOptions?.sort ?? "desc", width, height, yLabel: options.tileOptions?.yLabel || null, referenceValue: options.tileOptions?.referenceValue, referenceLabel: options.tileOptions?.referenceLabel, crossfilterField: options.crossfilterField }),
         options
       );
     }
@@ -148,13 +159,14 @@ export const TILE_TYPES = {
     defaultDataset: "timeseries",
     defaultSize: { w: 6, h: 5 },
     defaultTitle: "Monthly requests",
+    controls: referenceControls,
     render(el, { data, options }) {
       // Promote "YYYY-MM" strings to Date so Plot uses a time axis.
       const rows = data.map((d) => ({ ...d, date: promoteDate(d.date) }));
       mount(
         el,
         (width, height) =>
-          lineChart(rows, { x: "date", y: "value", stroke: "series", width, height, yLabel: options.tileOptions?.yLabel || null }),
+          lineChart(rows, { x: "date", y: "value", stroke: "series", width, height, yLabel: options.tileOptions?.yLabel || null, referenceValue: options.tileOptions?.referenceValue, referenceLabel: options.tileOptions?.referenceLabel }),
         options
       );
     }
@@ -172,7 +184,7 @@ export const TILE_TYPES = {
     defaultDataset: "scatter",
     defaultSize: { w: 6, h: 5 },
     defaultTitle: "Rent burden vs. homelessness rate",
-    controls: [{ key: "trend", label: "Trend line", type: "checkbox", default: true }],
+    controls: [{ key: "trend", label: "Trend line", type: "checkbox", default: true }, ...referenceControls],
     render(el, { data, options }) {
       const trend = options.tileOptions?.trend ?? true;
       mount(
@@ -185,7 +197,9 @@ export const TILE_TYPES = {
             trend,
             width, height,
             xLabel: options.tileOptions?.xLabel || null,
-            yLabel: options.tileOptions?.yLabel || null
+            yLabel: options.tileOptions?.yLabel || null,
+            referenceValue: options.tileOptions?.referenceValue,
+            referenceLabel: options.tileOptions?.referenceLabel
           }),
         options
       );
@@ -203,10 +217,12 @@ export const TILE_TYPES = {
     defaultDataset: "categorical",
     defaultSize: { w: 6, h: 5 },
     defaultTitle: "Requests by category",
+    controls: [...sortControls, ...topNControls, ...referenceControls],
+    crossfilterField: "label",
     render(el, { data, options }) {
       mount(
         el,
-        (width, height) => dotChart(data, { x: "value", y: "label", width, height, xLabel: options.tileOptions?.xLabel || null }),
+        (width, height) => dotChart(data, { x: "value", y: "label", sort: options.tileOptions?.sort === "data" ? null : options.tileOptions?.sort ?? "desc", width, height, xLabel: options.tileOptions?.xLabel || null, referenceValue: options.tileOptions?.referenceValue, referenceLabel: options.tileOptions?.referenceLabel, crossfilterField: options.crossfilterField }),
         options
       );
     }
@@ -223,6 +239,7 @@ export const TILE_TYPES = {
     defaultDataset: "categorical",
     defaultSize: { w: 4, h: 6 },
     defaultTitle: "Share of requests",
+    crossfilterField: "label",
     render(el, { data, options }) {
       mount(
         el,
@@ -231,7 +248,8 @@ export const TILE_TYPES = {
           donutChart(data, {
             value: "value",
             label: "label",
-            width: Math.min(width, 400), height
+            width: Math.min(width, 400), height,
+            crossfilterField: options.crossfilterField
           }),
         options
       );
@@ -353,35 +371,39 @@ export const TILE_TYPES = {
     label: "Stacked bar", description: "Compare series across categories", fields:[
       {key:"label",label:"Category column"},{key:"value",label:"Value column",numeric:true},{key:"series",label:"Series column"}
     ], datasets:["stacked"], defaultDataset:"stacked", defaultSize:{w:6,h:7}, defaultTitle:"Segment mix by category",
-    controls:[{type:"select",key:"mode",label:"Mode",default:"stacked",options:[["stacked","Stacked"],["grouped","Grouped"]]}],
-    render(el,{data,options}) { mount(el,(width,height)=>stackedBarChart(data,{mode:options.tileOptions?.mode||"stacked",width,height,xLabel:options.tileOptions?.xLabel||null}),options); }
+    controls:[{type:"select",key:"mode",label:"Mode",default:"stacked",options:[["stacked","Stacked"],["grouped","Grouped"]]},...topNControls],
+    crossfilterField:"label",
+    render(el,{data,options}) { mount(el,(width,height)=>stackedBarChart(data,{mode:options.tileOptions?.mode||"stacked",width,height,xLabel:options.tileOptions?.xLabel||null,crossfilterField:options.crossfilterField}),options); }
   },
 
   stackedColumn: {
     label: "Stacked column", description: "Vertical series by category", fields:[
       {key:"label",label:"Category column"},{key:"value",label:"Value column",numeric:true},{key:"series",label:"Series column"}
     ], datasets:["stacked"], defaultDataset:"stacked", defaultSize:{w:6,h:7}, defaultTitle:"Category totals by segment",
-    controls:[{type:"select",key:"mode",label:"Mode",default:"stacked",options:[["stacked","Stacked"],["grouped","Grouped"]]}],
-    render(el,{data,options}) { mount(el,(width,height)=>stackedColumnChart(data,{mode:options.tileOptions?.mode||"stacked",width,height,yLabel:options.tileOptions?.yLabel||null}),options); }
+    controls:[{type:"select",key:"mode",label:"Mode",default:"stacked",options:[["stacked","Stacked"],["grouped","Grouped"]]},...topNControls],
+    crossfilterField:"label",
+    render(el,{data,options}) { mount(el,(width,height)=>stackedColumnChart(data,{mode:options.tileOptions?.mode||"stacked",width,height,yLabel:options.tileOptions?.yLabel||null,crossfilterField:options.crossfilterField}),options); }
   },
 
   histogram: {
     label: "Histogram", description: "Distribution of numeric values", fields:[{key:"value",label:"Numeric value",numeric:true}],
     datasets:["scatter"], defaultDataset:"scatter", defaultSize:{w:6,h:7}, defaultTitle:"Value distribution",
-    controls:[{type:"number",key:"binCount",label:"Bins",default:20,min:5,max:100,step:1}],
-    render(el,{data,options}) { const rows=data.map(d=>({...d,value:d.value??d.y??d.x})); mount(el,(width,height)=>histogramChart(rows,{value:"value",bins:Math.min(100,Math.max(5,Math.round(+options.tileOptions?.binCount||20))),width,height,xLabel:options.tileOptions?.xLabel||null}),options); }
+    controls:[{type:"number",key:"binCount",label:"Bins",default:20,min:5,max:100,step:1},...referenceControls],
+    render(el,{data,options}) { const rows=data.map(d=>({...d,value:d.value??d.y??d.x})); mount(el,(width,height)=>histogramChart(rows,{value:"value",bins:Math.min(100,Math.max(5,Math.round(+options.tileOptions?.binCount||20))),width,height,xLabel:options.tileOptions?.xLabel||null,referenceValue:options.tileOptions?.referenceValue,referenceLabel:options.tileOptions?.referenceLabel}),options); }
   },
 
   boxplot: {
     label: "Box plot", description: "Compare category distributions", fields:[{key:"label",label:"Category column"},{key:"value",label:"Numeric value",numeric:true}],
     datasets:["boxdata"], defaultDataset:"boxdata", defaultSize:{w:6,h:7}, defaultTitle:"Distribution by group",
-    render(el,{data,options}) { mount(el,(width,height)=>boxplotChart(data,{width,height,yLabel:options.tileOptions?.yLabel||null}),options); }
+    controls:referenceControls,
+    render(el,{data,options}) { mount(el,(width,height)=>boxplotChart(data,{width,height,yLabel:options.tileOptions?.yLabel||null,referenceValue:options.tileOptions?.referenceValue,referenceLabel:options.tileOptions?.referenceLabel}),options); }
   },
 
   area: {
     label: "Area chart", description: "Filled time series", fields:[{key:"date",label:"Date column"},{key:"value",label:"Numeric value",numeric:true},{key:"series",label:"Series column",optional:true}],
     datasets:["timeseries"], defaultDataset:"timeseries", defaultSize:{w:8,h:7}, defaultTitle:"Volume over time",
-    render(el,{data,options}) { const rows=data.map(d=>({...d,date:promoteDate(d.date)})); mount(el,(width,height)=>areaChart(rows,{series:rows.some(d=>d.series!=null)?"series":null,width,height,xLabel:options.tileOptions?.xLabel||null,yLabel:options.tileOptions?.yLabel||null}),{...options,legendSpace:options.legendSpace??32}); }
+    controls:referenceControls,
+    render(el,{data,options}) { const rows=data.map(d=>({...d,date:promoteDate(d.date)})); mount(el,(width,height)=>areaChart(rows,{series:rows.some(d=>d.series!=null)?"series":null,width,height,xLabel:options.tileOptions?.xLabel||null,yLabel:options.tileOptions?.yLabel||null,referenceValue:options.tileOptions?.referenceValue,referenceLabel:options.tileOptions?.referenceLabel}),{...options,legendSpace:options.legendSpace??32}); }
   },
 
   heatmap: {

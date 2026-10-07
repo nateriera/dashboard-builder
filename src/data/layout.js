@@ -124,6 +124,8 @@ export function validateLayout(input) {
     }
   }
   const filters = validateFilters(data.filters);
+  const tileIds = new Set(tiles.map(tile => tile.id));
+  if (filters.some(filter => filter.targets?.some(target => !tileIds.has(target.tileId)))) fail('Filter connection references a missing tile.');
   const parameters = validateParameters(data.parameters);
   return { app: 'dashboard-builder', version: 3, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, tiles, datasets, queries };
 }

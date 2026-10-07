@@ -34,8 +34,9 @@ export function toggleFiltersPopover(options) {
   openFiltersPopover(options);
 }
 
-function openFiltersPopover({ anchor: nextAnchor, filters, parameters, fields, tileTitle, onFiltersChange, onParametersChange }) {
+function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [], tileTitle, onFiltersChange, onParametersChange }) {
   anchor=nextAnchor;
+  const filterTiles=tiles;
   let currentFilters=validateFilters(filters);
   let currentParameters=validateParameters(parameters);
   let activeTab="filters";
@@ -71,6 +72,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, fields, t
   };
   const filterDescription=filter=>{
     if(filter.op==='between') return `${filter.field} between ${filter.values[0]} and ${filter.values[1]}`;
+    if(filter.op==='date-between') return `${filter.field} from ${filter.values[0]} to ${filter.values[1]}`;
     const values=filter.values.map(value=>value===null?'Blank':String(value));
     const valueText=values.length>2?`${values[0]} + ${values.length-1} more`:values.join(', ');
     const op=filter.op==='is-not'?'is not':'is';
@@ -84,8 +86,9 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, fields, t
     filtersTab.setAttribute("aria-selected","true");parametersTab.setAttribute("aria-selected","false");
     panel.id="dashboard-filters-panel";panel.className="data-panel dashboard-filters-panel";
     panel.replaceChildren();
-    const note=element("p","filters-help","Tiles without a filter field are left unchanged. Date fields are excluded in this phase.");
+    const note=element("p","filters-help","Choose which charts a filter controls and map each chart to the matching field. Date ranges use calendar dates.");
     panel.append(note);
+    if(!filterTiles.length)panel.append(element('p','filters-help','Add a data-backed chart before creating a dashboard filter.'));
     const list=element("div","dashboard-filter-list");
     for(const filter of currentFilters){
       const chip=element("div",filter.source==='crossfilter'?'dashboard-filter-chip crossfilter-chip':'dashboard-filter-chip');
@@ -94,9 +97,27 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, fields, t
       const remove=element("button","filter-remove","×");remove.type="button";remove.title=`Remove ${filter.field} filter`;remove.setAttribute("aria-label",`Remove ${filter.field} filter`);
       remove.addEventListener("click",()=>{emitFilters(currentFilters.filter(item=>item.id!==filter.id));renderFiltersPanel();});
       chip.append(caption,remove);list.append(chip);
+      if(filter.source!=='crossfilter'){
+        const connectionBox=element("details","filter-connections");
+        const summary=element("summary","",filter.targets ? `${filter.targets.length} chart connection${filter.targets.length===1?'':'s'}` : 'Same-name fields across charts');
+        connectionBox.append(summary);
+        const controls=element("div","filter-connection-list");
+        const type=filter.op==='between'?'number':filter.op==='date-between'?'date':'category';
+        const existing=filter.targets || filterTiles.flatMap(tile=>tile.fields.some(field=>field.field===filter.field&&field.type===type)?[{tileId:tile.id,field:filter.field}]:[]);
+        let pendingTargets=existing;
+        renderConnectionEditors(controls,type,existing,targets=>{pendingTargets=targets;});
+        const saveConnections=element('button','filter-apply','Save connections');saveConnections.type='button';
+        saveConnections.addEventListener('click',()=>{
+          if(!pendingTargets.length){const warning=element('p','filters-form-error','Connect this filter to at least one chart.');controls.querySelector('.filters-form-error')?.remove();controls.append(warning);return;}
+          try{emitFilters(currentFilters.map(item=>item.id===filter.id?{...item,targets:pendingTargets}:item));renderFiltersPanel();}
+          catch(err){const warning=element('p','filters-form-error',err.message);controls.append(warning);}
+        });
+        controls.append(saveConnections);
+        connectionBox.append(controls);list.append(connectionBox);
+      }
     }
     panel.append(list);
-    const add=element("button","filter-add","Add filter");add.type="button";add.addEventListener("click",()=>{addFilterOpen=!addFilterOpen;renderFiltersPanel();});
+    const add=element("button","filter-add","Add filter");add.type="button";add.disabled=!filterTiles.length;add.addEventListener("click",()=>{addFilterOpen=!addFilterOpen;renderFiltersPanel();});
     panel.append(add);
     if(addFilterOpen) panel.append(buildFilterForm());
   }
@@ -104,31 +125,43 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, fields, t
   function buildFilterForm() {
     const form=element("div","filter-form");
     const legend=element("strong","","New filter");form.append(legend);
-    const fieldLabel=element("label","filter-field-label","Field");
-    const fieldSelect=element("select","filter-field-select");fieldSelect.setAttribute("aria-label","Filter field");
-    const placeholder=element("option","","Choose a field");placeholder.value="";placeholder.disabled=true;placeholder.selected=true;fieldSelect.append(placeholder);
-    for(const option of fields){const item=element("option","",`${option.field} · ${option.type==='number'?'Number':'Category'}`);item.value=option.field;fieldSelect.append(item);}
+    const sourceTileLabel=element('label','filter-field-label','Source chart');
+    const sourceTileSelect=element('select','filter-field-select');sourceTileSelect.setAttribute('aria-label','Filter source chart');
+    const sourcePlaceholder=element('option','','Choose a chart');sourcePlaceholder.value='';sourcePlaceholder.disabled=true;sourcePlaceholder.selected=true;sourceTileSelect.append(sourcePlaceholder);
+    for(const tile of filterTiles){const option=element('option','',tile.title);option.value=tile.id;sourceTileSelect.append(option);}
+    sourceTileLabel.append(sourceTileSelect);form.append(sourceTileLabel);
+    const fieldLabel=element("label","filter-field-label","Source field");
+    const fieldSelect=element("select","filter-field-select");fieldSelect.setAttribute("aria-label","Filter field");fieldSelect.disabled=true;
+    const fieldPlaceholder=element("option","","Choose a field");fieldPlaceholder.value="";fieldPlaceholder.disabled=true;fieldPlaceholder.selected=true;fieldSelect.append(fieldPlaceholder);
     fieldLabel.append(fieldSelect);form.append(fieldLabel);
     const controls=element("div","filter-value-controls");form.append(controls);
+    const targetWrap=element('div','filter-targets');form.append(targetWrap);
     const error=element("p","filters-form-error");error.hidden=true;form.append(error);
     const actions=element("div","filter-form-actions");
     const cancel=element("button","filter-cancel","Cancel");cancel.type="button";cancel.addEventListener("click",()=>{addFilterOpen=false;renderFiltersPanel();});
     const apply=element("button","filter-apply","Apply filter");apply.type="button";apply.disabled=true;
     actions.append(cancel,apply);form.append(actions);
-    let selectedField=null,selectedOperator="is",selectedValues=[];
+    let selectedTile=null,selectedField=null,selectedOperator="is",selectedValues=[],selectedTargets=[],targetsTouched=false;
 
     const showError=message=>{error.textContent=message;error.hidden=!message;};
     const renderControls=()=>{
       controls.replaceChildren();
-      selectedField=fields.find(option=>option.field===fieldSelect.value)||null;
-      selectedValues=[];apply.disabled=true;
+      const tile=filterTiles.find(option=>option.id===sourceTileSelect.value)||null;
+      if(tile!==selectedTile){
+        selectedTile=tile;fieldSelect.replaceChildren();
+        const placeholder=element('option','','Choose a field');placeholder.value='';placeholder.disabled=true;placeholder.selected=true;fieldSelect.append(placeholder);
+        for(const field of tile?.fields||[]){const option=element('option','',`${field.field} · ${field.type==='date'?'Date':field.type==='number'?'Number':'Category'}`);option.value=field.field;fieldSelect.append(option);}
+        fieldSelect.disabled=!tile;selectedField=null;selectedValues=[];selectedTargets=[];targetWrap.replaceChildren();apply.disabled=true;return;
+      }
+      selectedField=selectedTile?.fields.find(option=>option.field===fieldSelect.value)||null;
+      selectedValues=[];selectedTargets=[];targetWrap.replaceChildren();apply.disabled=true;
       if(!selectedField)return;
-      if(selectedField.type==='number'){
+      if(selectedField.type==='number'||selectedField.type==='date'){
         const range=element("div","filter-number-range");
-        const min=element("input","filter-min");min.type="number";min.step="any";min.placeholder="Minimum";min.setAttribute("aria-label","Minimum");
-        const max=element("input","filter-max");max.type="number";max.step="any";max.placeholder="Maximum";max.setAttribute("aria-label","Maximum");
+        const min=element("input","filter-min");min.type=selectedField.type==='date'?'date':'number';if(min.type==='number')min.step="any";min.setAttribute("aria-label",selectedField.type==='date'?'Start date':'Minimum');
+        const max=element("input","filter-max");max.type=selectedField.type==='date'?'date':'number';if(max.type==='number')max.step="any";max.setAttribute("aria-label",selectedField.type==='date'?'End date':'Maximum');
         range.append(min,max);controls.append(range);
-        const update=()=>{selectedValues=[min.value,max.value];apply.disabled=min.value===''||max.value===''||!Number.isFinite(Number(min.value))||!Number.isFinite(Number(max.value))||Number(min.value)>Number(max.value);};
+        const update=()=>{selectedValues=[min.value,max.value];updateApplyState();};
         min.addEventListener("input",update);max.addEventListener("input",update);
       }else{
         const operator=element("select","filter-operator");operator.setAttribute("aria-label","Filter match");
@@ -140,7 +173,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, fields, t
           checkbox.addEventListener("change",()=>{
             const next=new Set(selectedValues);
             if(checkbox.checked)next.add(index);else next.delete(index);
-            selectedValues=[...next].map(i=>selectedField.values[i]);apply.disabled=selectedValues.length===0;
+            selectedValues=[...next].map(i=>selectedField.values[i]);updateApplyState();
           });
           label.append(checkbox,document.createTextNode(value===null?'Blank':String(value)));values.append(label);
         }
@@ -148,20 +181,64 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, fields, t
         if(selectedField.truncated)controls.append(element("p","filters-overflow","200+ values — narrow with another filter before selecting."));
         if(!selectedField.values.length)controls.append(element("p","filters-help","This field has no filterable values."));
       }
+      selectedTargets=defaultTargets(selectedTile.id,selectedField);
+      targetsTouched=false;
+      renderConnectionEditors(targetWrap,selectedField.type,selectedTargets,(targets)=>{selectedTargets=targets;targetsTouched=true;updateApplyState();});
+      updateApplyState();
     };
+    function defaultTargets(_sourceTileId,sourceField){
+      return filterTiles.flatMap(tile=>tile.fields.some(field=>field.field===sourceField.field&&field.type===sourceField.type)?[{tileId:tile.id,field:sourceField.field}]:[]);
+    }
+    function updateApplyState(){
+      const type=selectedField?.type;
+      const ordered=type==='number'?Number(selectedValues[0])<=Number(selectedValues[1]):selectedValues[0]<=selectedValues[1];
+      const validValues=type==='category'?selectedValues.length>0:selectedValues.length===2&&selectedValues.every(value=>value!=='')&&(type!=='number'||selectedValues.every(value=>Number.isFinite(Number(value))))&&ordered;
+      apply.disabled=!selectedField||!validValues||!selectedTargets.length;
+    }
+    sourceTileSelect.addEventListener('change',()=>{selectedTile=null;fieldSelect.value='';renderControls();});
     fieldSelect.addEventListener("change",renderControls);
+    if(filterTiles.length){sourceTileSelect.value=filterTiles[0].id;renderControls();}
     apply.addEventListener("click",()=>{
       if(!selectedField)return;
       let filter;
+      if(!selectedTargets.length){showError('Connect this filter to at least one chart.');return;}
+      const requiresExplicitTargets=targetsTouched||filterTiles.some(tile=>tile.fields.some(field=>field.field===selectedField.field&&field.type!==selectedField.type));
+      const targetOptions=requiresExplicitTargets?{targets:selectedTargets}:{};
       if(selectedField.type==='number'){
         const [min,max]=selectedValues.map(Number);
         if(!Number.isFinite(min)||!Number.isFinite(max)||min>max){showError("Enter a valid minimum and maximum.");return;}
-        filter={id:newId('filter'),field:selectedField.field,op:'between',values:[min,max]};
-      }else filter={id:newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues};
+        filter={id:newId('filter'),field:selectedField.field,op:'between',values:[min,max],...targetOptions};
+      }else if(selectedField.type==='date'){
+        filter={id:newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...targetOptions};
+      }else filter={id:newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues,...targetOptions};
       try{emitFilters([...currentFilters,filter]);addFilterOpen=false;renderFiltersPanel();}
       catch(err){showError(err.message);}
     });
     return form;
+  }
+
+  function renderConnectionEditors(container,type,initial,onChange){
+    container.replaceChildren();
+    if(container.classList.contains('filter-targets'))container.append(element('strong','','Connect to charts'));
+    const selected=new Map(initial.map(target=>[target.tileId,target.field]));
+    for(const tile of filterTiles){
+      const row=element('label','filter-connection-row',tile.title);
+      const select=element('select','filter-connection-select');select.setAttribute('aria-label',`Field for ${tile.title}`);
+      const skip=element('option','','Do not filter');skip.value='';select.append(skip);
+      for(const field of tile.fields.filter(item=>item.type===type)){
+        const option=element('option','',field.field);option.value=field.field;select.append(option);
+      }
+      const selectedField=selected.get(tile.id);
+      if(selectedField&&!tile.fields.some(field=>field.field===selectedField&&field.type===type)){
+        const missing=element('option','',`${selectedField} (unavailable or incompatible)`);missing.value=selectedField;select.append(missing);
+      }
+      select.value=selectedField||'';
+      select.addEventListener('change',()=>{
+        if(select.value)selected.set(tile.id,select.value);else selected.delete(tile.id);
+        onChange([...selected].map(([tileId,field])=>({tileId,field})));
+      });
+      row.append(select);container.append(row);
+    }
   }
 
   function renderParametersPanel() {

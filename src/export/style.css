@@ -61,6 +61,33 @@ body {
   margin: 4px 0 0;
 }
 
+.export-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 14px;
+  margin: 0 0 20px;
+  padding: 14px;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.export-filters h2 { flex-basis: 100%; font: 400 16px var(--font-display); margin: 0; }
+.export-filter { display: grid; gap: 4px; color: var(--slate-600); font-size: 12px; }
+.export-filter input, .export-filter select, .export-filters button {
+  min-height: 34px;
+  border: 1px solid var(--slate-300);
+  border-radius: 5px;
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  padding: 5px 8px;
+}
+.export-filter select { min-width: 160px; min-height: 76px; }
+.export-filters button { cursor: pointer; }
+.export-filter input:focus-visible, .export-filter select:focus-visible, .export-filters button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+
 /* Row height includes the gutters, matching GridStack's physical geometry. */
 .export-grid {
   display: grid;
@@ -123,5 +150,6 @@ body {
   .export-tile { margin: 0 0 24px; display: block; break-inside: avoid; break-after: page; }
   .export-tile:last-child { break-after: auto; }
   .export-tile .tile-chart { overflow: visible; }
+  .export-filters { display: none; }
   .chart-data:not([open]) { display: none; }
 }

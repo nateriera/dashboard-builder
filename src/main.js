@@ -49,6 +49,7 @@ import { openTemplateGallery } from "./ui/templateGallery.js";
 import { openGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
 import { toggleFiltersPopover } from "./ui/filtersPopover.js";
+import { chartData } from "./ui/chartData.js";
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -158,6 +159,7 @@ function resolveUploadRows(dataset) {
 // Mirrors renderTile/renderQueryTile's data logic; returns {rows} or {error}
 // without touching the DOM or mutating tile metadata.
 async function resolveExportRows(meta, entry) {
+  const withRawRows = rows => ({ ...prepareTileRows(meta, rows), rawRows: rows });
   if (entry.noData) return { rows: [] };
   if (isQueryRef(meta.dataset)) {
     const qid = queryId(meta.dataset);
@@ -166,7 +168,7 @@ async function resolveExportRows(meta, entry) {
     try {
       const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
       const rows = getCachedRows(qid, q, entry, parameters) || (await runTileQuery(qid, q, entry, parameters));
-      return prepareTileRows(meta, rows);
+      return withRawRows(rows);
     } catch (err) {
       return { error: `Query failed: ${err && err.message ? err.message : err}` };
     }
@@ -174,15 +176,15 @@ async function resolveExportRows(meta, entry) {
   if (meta.dataset == null) {
     const rows = resolveDashboardRows(entry);
     return rows
-      ? prepareTileRows(meta, rows)
+      ? withRawRows(rows)
       : { error: `Dashboard data (“${dashboardDefaultName()}”) can't be used for this chart type.` };
   }
   if (isUploadRef(meta.dataset)) {
     const ds = getDataset(uploadId(meta.dataset));
-    return ds ? prepareTileRows(meta, resolveUploadRows(ds)) : { error: "Uploaded dataset is missing." };
+    return ds ? withRawRows(resolveUploadRows(ds)) : { error: "Uploaded dataset is missing." };
   }
   const rows = DATASETS[meta.dataset];
-  return rows ? prepareTileRows(meta, rows) : { error: "Sample dataset is missing." };
+  return rows ? withRawRows(rows) : { error: "Sample dataset is missing." };
 }
 
 // ── Tile DOM ─────────────────────────────────────────────────────────────
@@ -291,6 +293,33 @@ function buildTileContent(type, meta) {
   const fitButton = document.createElement('button'); fitButton.type = 'button'; fitButton.textContent = 'Fit content';
   fitButton.addEventListener('click', () => { meta.sizing = 'auto'; renderTileById(meta.id); scheduleAutosave(); });
   settingsBody.append(fitButton);
+
+  const chartTypeLabel = document.createElement('label'); chartTypeLabel.className = 'tile-control'; chartTypeLabel.textContent = 'Chart type';
+  chartTypeLabel.hidden = !!entry.noData;
+  const chartTypeSelect = document.createElement('select'); chartTypeSelect.setAttribute('aria-label', 'Chart type');
+  const populateChartTypes = (selected = meta.type) => {
+    const compatible = compatibleChartTypes(meta);
+    chartTypeSelect.replaceChildren();
+    for (const type of compatible) {
+      const option = document.createElement('option'); option.value = type; option.textContent = TILE_TYPES[type].label; chartTypeSelect.append(option);
+    }
+    chartTypeSelect.value = compatible.includes(selected) ? selected : meta.type;
+  };
+  populateChartTypes();
+  chartTypeSelect.addEventListener('focus', () => populateChartTypes(chartTypeSelect.value));
+  chartTypeSelect.addEventListener('change', () => {
+    const nextType = chartTypeSelect.value;
+    if (!compatibleChartTypes(meta).includes(nextType)) { chartTypeSelect.value = meta.type; return; }
+    const widget = tile.closest('.grid-stack-item');
+    const host = widget?.querySelector('.grid-stack-item-content');
+    if (!widget || !host) return;
+    meta.type = nextType;
+    meta.tileOptions = {};
+    host.replaceChildren(buildTileContent(nextType, meta));
+    renderTile(widget);
+    scheduleAutosave();
+  });
+  chartTypeLabel.append(chartTypeSelect); settingsBody.append(chartTypeLabel);
 
   // Per-type extra controls declared by the registry (e.g. scatter trend toggle).
   for (const ctrl of entry.controls || []) {
@@ -450,6 +479,19 @@ function paintUnavailable(el, title, message) {
   box.append(head,msg,repair); el.append(box);
 }
 
+function compatibleChartTypes(meta) {
+  const rows = meta.filterRows || resolveTileData(meta, TILE_TYPES[meta.type]);
+  if (!Array.isArray(rows) || !rows.length) return [meta.type];
+  return Object.entries(TILE_TYPES).filter(([, entry]) => {
+    if (entry.noData || !entry.fields?.length) return false;
+    return entry.fields.filter(field => !field.optional).every(field => rows.some(row => {
+      if (!Object.hasOwn(row, field.key)) return false;
+      const value = row[field.key];
+      return !field.numeric || typeof value === 'number' && Number.isFinite(value);
+    }));
+  }).map(([type]) => type);
+}
+
 function paintFilteredEmpty(el) {
   el.replaceChildren();
   const box=document.createElement('div');box.className='tile-empty';box.setAttribute('role','status');
@@ -471,17 +513,55 @@ function crossfilterValuesFromTarget(target) {
 }
 
 function wireCrossfilter(chartEl, meta, entry) {
+  const refreshSelection=()=>{
+    const active=filters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===meta.id&&filter.field===entry.crossfilterField);
+    const marks=new Set([...chartEl.querySelectorAll('[data-crossfilter-values],a')].map(mark=>mark.closest('a')||mark));
+    for(const mark of marks){
+      const values=crossfilterValuesFromTarget(mark);
+      if(!values?.length)continue;
+      const selected=!!active&&values.some(value=>active.values.some(item=>Object.is(item,value)));
+      if(active)mark.setAttribute('data-crossfilter-selected',String(selected));
+      else mark.removeAttribute('data-crossfilter-selected');
+      mark.setAttribute('aria-description','Activate to filter other charts. Hold Control or Command while selecting to add or remove values.');
+    }
+  };
   chartEl.onclick=(event)=>{
     if (!entry.crossfilterField) return;
     const values=crossfilterValuesFromTarget(event.target);
     if (!values?.length) return;
     event.preventDefault();
     const current=filters.find(filter=>filter.source==='crossfilter');
-    const same=current?.sourceTile===meta.id && current.field===entry.crossfilterField && JSON.stringify(current.values)===JSON.stringify(values);
+    const sameSource=current?.sourceTile===meta.id&&current.field===entry.crossfilterField;
+    let nextValues=values;
+    if((event.ctrlKey||event.metaKey)&&sameSource){
+      const selected=new Map(current.values.map(value=>[JSON.stringify([typeof value,value]),value]));
+      const keys=values.map(value=>JSON.stringify([typeof value,value]));
+      if(keys.every(key=>selected.has(key)))for(const key of keys)selected.delete(key);
+      else for(const [index,key] of keys.entries())selected.set(key,values[index]);
+      nextValues=[...selected.values()];
+    }else if(sameSource&&values.length===current.values.length&&values.every(value=>current.values.some(item=>Object.is(item,value)))){
+      nextValues=[];
+    }
     const next=filters.filter(filter=>filter.source!=='crossfilter');
-    if (!same) next.push({id:`cross-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,field:entry.crossfilterField,op:'is',values,source:'crossfilter',sourceTile:meta.id});
+    if (nextValues.length) next.push({id:`cross-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,field:entry.crossfilterField,op:'is',values:nextValues,source:'crossfilter',sourceTile:meta.id});
+    for(const tile of tileMeta.values())tile.drillValues=null;
+    meta.drillValues=nextValues.length?values:null;
     setFilters(next);
   };
+  refreshSelection();
+  if(meta.drillValues?.length)renderDrillRows(chartEl,meta,entry.crossfilterField,meta.drillValues);
+}
+
+function renderDrillRows(chartEl,meta,field,values){
+  if(!Array.isArray(meta.filterRows)||!field)return;
+  const base=applyFilters(meta.filterRows,filters,{sourceTile:meta.id}).rows;
+  const rows=base.filter(row=>values.some(value=>Object.is(row[field],value)));
+  if(!rows.length)return;
+  const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))].map(key=>({key}));
+  const details=chartData(rows,columns,`${meta.title} — selected mark`);
+  details.classList.add('chart-drillthrough');
+  details.open=true;
+  chartEl.append(details);
 }
 
 function renderTile(el) {
@@ -529,6 +609,7 @@ function renderTile(el) {
     paintUnavailable(chartEl, 'Data unavailable', 'The saved reference ' + meta.dataset + ' is missing. Choose Data to repair the binding.');
     return;
   }
+  meta.filterRows = data;
   const prepared=prepareTileRows(meta,data);
   if (prepared.empty) { paintFilteredEmpty(chartEl); return; }
   entry.render(chartEl, {
@@ -554,6 +635,7 @@ async function renderQueryTile(el, meta, entry, chartEl) {
     tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present"), crossfilterField: entry.crossfilterField
   });
   const paintRows = rows => {
+    meta.filterRows = rows;
     const prepared=prepareTileRows(meta,rows);
     if (prepared.empty) { paintFilteredEmpty(chartEl); return; }
     entry.render(chartEl,{data:prepared.rows,options:options()});
@@ -766,7 +848,12 @@ grid.on("change", () => scheduleAutosave());
 grid.on("removed", (_event, items) => {
   for (const n of items) tileMeta.delete(n.id);
   const removed=new Set(items.map(item=>item.id));
-  const next=filters.filter(filter=>filter.source!=='crossfilter'||!removed.has(filter.sourceTile));
+  const next=filters.flatMap(filter=>{
+    if (filter.source==='crossfilter') return removed.has(filter.sourceTile) ? [] : [filter];
+    if (!filter.targets) return [filter];
+    const targets=filter.targets.filter(target=>!removed.has(target.tileId));
+    return targets.length ? [{...filter,targets}] : [];
+  });
   if (!bulkLoading && next.length!==filters.length) setFilters(next);
   else scheduleAutosave();
 });
@@ -830,16 +917,21 @@ const btnData = document.getElementById("btn-data");
 const btnFilters = document.getElementById("btn-filters");
 const btnTemplates = document.getElementById("btn-templates");
 const btnTheme = document.getElementById("btn-theme");
-function dashboardFilterRows() {
-  if (dashboardDefault.kind === 'samples') return Object.values(DATASETS).flat();
-  if (!isUploadRef(dashboardDefault.ref)) return DATASETS[dashboardDefault.ref] || [];
-  const dataset=getDataset(uploadId(dashboardDefault.ref));
-  return dataset?.raw?.rows || dataset?.rows || [];
-}
-function dashboardFilterFields() {
-  const rows=dashboardFilterRows();
-  const keys=[...new Set(rows.flatMap(row=>Object.keys(row)))];
-  return keys.map(field=>({field,type:filterFieldType(rows,field),...distinctValues(rows,field)})).filter(option=>option.type!=='date');
+function dashboardFilterTiles() {
+  return [...tileMeta.values()].flatMap(meta => {
+    const entry=TILE_TYPES[meta.type];
+    if (!entry || entry.noData) return [];
+    let rows=meta.filterRows;
+    if (!rows) {
+      try { rows=resolveTileData(meta,entry); } catch { rows=null; }
+    }
+    if (!Array.isArray(rows) || !rows.length) return [];
+    const fields=[...new Set(rows.flatMap(row=>Object.keys(row)))].map(field=>{
+      const type=filterFieldType(rows,field);
+      return {field,type,...(type==='category' ? distinctValues(rows,field) : {})};
+    });
+    return [{id:meta.id,title:meta.title,fields}];
+  });
 }
 function setFilters(next) {
   filters=validateFilters(next);
@@ -858,7 +950,7 @@ if (btnFilters) {
       anchor:btnFilters,
       filters,
       parameters,
-      fields:dashboardFilterFields(),
+      tiles:dashboardFilterTiles(),
       tileTitle:id=>tileMeta.get(id)?.title || id,
       onFiltersChange:setFilters,
       onParametersChange:setParameters
@@ -1102,7 +1194,9 @@ async function exportHtml() {
       if (!meta || !entry) continue;
       const resolved = await resolveExportRows(meta, entry);
       tiles.push({
+        id: meta.id,
         type: meta.type,
+        crossfilterField: entry.crossfilterField || null,
         title: meta.title,
         source: meta.source,
         x: node.x,
@@ -1110,9 +1204,9 @@ async function exportHtml() {
         w: node.w,
         h: node.h,
         tileOptions: meta.tileOptions || {},
-        rows: resolved.empty ? null : resolved.rows || null,
+        rows: resolved.error ? null : resolved.rawRows || resolved.rows || null,
         error: resolved.error || null,
-        emptyMessage: resolved.empty ? "No rows match the active filters." : null
+        emptyMessage: null
       });
     }
 
@@ -1121,9 +1215,10 @@ async function exportHtml() {
       version: 3,
     rowHeight: ROW_HEIGHT,
       kind: "dashboard-export",
-      title: "Dashboard",
+      title: serializeLayout().title || "Dashboard",
       exportedAt: new Date().toISOString(),
       theme: getThemeId(),
+      filters: filters.map(filter => ({ ...filter, values: [...filter.values], targets: filter.targets?.map(target => ({ ...target })) })),
       tiles
     };
     // Escape < so a data value can never break out of the JSON script tag.

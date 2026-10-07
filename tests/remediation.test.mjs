@@ -251,6 +251,26 @@ test('Phase 2: categorical and numeric dashboard filters preserve absent-field t
   assert.equal(filterFieldType([{date:'2025-01-01'},{date:'2025-02-01'}],'date'),'date');
 });
 
+test('Desktop parity: date ranges use inclusive calendar dates and explicit tile field mappings', () => {
+  const dateRows=[
+    {created:'2025-01-01T23:30:00-08:00',state:'open'},
+    {created:'2025-01-02 23:59:59',state:'closed'},
+    {created:'2025-01-03',state:'open'}
+  ];
+  const dateFilter={id:'date-filter',field:'created',op:'date-between',values:['2025-01-01','2025-01-02']};
+  assert.deepEqual(applyFilters(dateRows,[dateFilter]).rows,dateRows.slice(0,2));
+  assert.throws(()=>validateFilters([{...dateFilter,values:['2025-02-30','2025-03-01']}]),/date/i);
+  assert.equal(filterFieldType([{created:'2025-02-30'},{created:'2025-03-01'}],'created'),'category');
+
+  const mapped={id:'status-filter',field:'state',op:'is',values:['open'],targets:[{tileId:'tasks',field:'status'}]};
+  const taskRows=[{status:'open'},{status:'closed'}];
+  assert.deepEqual(applyFilters(taskRows,[mapped],{sourceTile:'tasks'}).rows,[taskRows[0]]);
+  const unrelated=applyFilters([{state:'open'}],[mapped],{sourceTile:'other'});
+  assert.equal(unrelated.applied,false);
+  assert.deepEqual(unrelated.rows,[{state:'open'}]);
+  assert.throws(()=>validateFilters([{...mapped,targets:[...mapped.targets,...mapped.targets]}]),/connection/i);
+});
+
 test('Phase 2: filter validation and distinct-value caps are bounded', () => {
   assert.throws(()=>validateFilters([{id:'bad',field:'x',op:'between',values:[0]}]),/filter/i);
   assert.throws(()=>validateFilters([{id:'bad',field:'__proto__',op:'is',values:['x']}]),/filter/i);
@@ -318,4 +338,13 @@ test('Phase 2: filters and parameters persist through layout validation and JSON
   assert.equal(restored.tiles[0].tileOptions.topN,3);
   assert.deepEqual(validateLayout({...input,filters:undefined,parameters:undefined}).filters,[]);
   assert.throws(()=>validateLayout({...input,filters:[{id:'f',field:'label',op:'unknown',values:[]}]}),/filter/i);
+});
+
+test('Desktop parity: date filters and target connections survive layout validation', () => {
+  const input={app:'dashboard-builder',version:3,rowHeight:24,theme:'paper',defaultDataset:{kind:'samples'},
+    filters:[{id:'date-filter',field:'created',op:'date-between',values:['2025-01-01','2025-01-31'],targets:[{tileId:'bar1',field:'date'}]}],
+    tiles:[{id:'bar1',type:'bar',dataset:'categorical',binding:{mode:'explicit',ref:'categorical'},tileOptions:{},x:0,y:0,w:6,h:15}]};
+  const restored=validateLayout(JSON.parse(JSON.stringify(validateLayout(input))));
+  assert.deepEqual(restored.filters,input.filters);
+  assert.throws(()=>validateLayout({...input,filters:[{...input.filters[0],targets:[{tileId:'missing',field:'date'}]}]}),/missing tile/i);
 });

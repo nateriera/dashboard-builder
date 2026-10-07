@@ -593,7 +593,9 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
           const sliceLabel = String(s.data[label]);
           const values = crossfilterField && !sourceLabels.includes(sliceLabel) ? otherLabels : [s.data[label]];
           const encoded = crossfilterField ? encodeURIComponent(JSON.stringify(values)) : "";
-          return svg`<path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2" data-crossfilter-values="${encoded}"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path>`;
+          return crossfilterField
+            ? svg`<a href="#db-crossfilter:${encoded}" aria-label="${crossfilterAriaLabel(sliceLabel)}"><path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2" data-crossfilter-values="${encoded}"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path></a>`
+            : svg`<path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path>`;
         })}
         <text text-anchor="middle" dy="${-4 * textScale}" font-family="${t.fonts.mono}" font-weight="500" font-size="${totalFont}" fill="${t.ink}">${valueFormat(total)}</text>
         <text text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
@@ -641,6 +643,9 @@ export const chartStyles = html`<style>
 .chart-data button { margin: 4px 8px; }
 .chart-transform-note { color: var(--slate-600); font-size: 12px; }
 .tile-chart .chart-transform-note { margin: 8px 0; }
+.tile-chart svg a[data-crossfilter-selected="true"] { filter: drop-shadow(0 0 3px var(--periwinkle)); }
+.tile-chart svg a[data-crossfilter-selected="false"],
+.tile-chart svg path[data-crossfilter-selected="false"] { opacity: .38; }
 .db-data-table { min-width: 0; }
 .db-data-table-scroll { max-width: 100%; max-height: min(60vh, 560px); overflow: auto; }
 .db-data-table-grid { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12px; }

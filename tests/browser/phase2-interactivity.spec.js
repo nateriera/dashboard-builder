@@ -64,7 +64,7 @@ test('Phase 2 filters apply by source field, persist, export resolved rows, and 
   await addCategoryFilter(page, 'label', 'Housing');
   await expect(bar.locator('.chart-data summary')).toContainText('(1 rows)');
   await expect(scatter.locator('.chart-data summary')).toContainText('(24 rows)');
-  await expect(popover).toContainText('Tiles without a filter field are left unchanged');
+  await expect(popover).toContainText('Choose which charts a filter controls');
   await fs.mkdir('docs/screenshots/phase2', { recursive: true });
   await popover.screenshot({ path: 'docs/screenshots/phase2/filters.png' });
 
@@ -85,12 +85,28 @@ test('Phase 2 filters apply by source field, persist, export resolved rows, and 
   const htmlDownload = page.waitForEvent('download');
   await page.locator('#btn-export-html').click();
   const htmlFile = await htmlDownload;
-  const payload = exportPayload(await fs.readFile(await htmlFile.path(), 'utf8'));
-  expect(payload.tiles.find(item => item.title === 'Housing Requests').rows).toEqual([{ label: 'Housing', value: 12840 }]);
+  const htmlText = await fs.readFile(await htmlFile.path(), 'utf8');
+  const payload = exportPayload(htmlText);
+  expect(payload.filters).toEqual([{ id: expect.any(String), field: 'label', op: 'is', values: ['Housing'] }]);
+  expect(payload.tiles.find(item => item.title === 'Housing Requests').rows).toHaveLength(8);
+  const offline = await page.context().newPage();
+  await offline.route('**/dashboard-offline.html', route => route.fulfill({ status: 200, contentType: 'text/html', body: htmlText }));
+  await offline.goto('/dashboard-offline.html');
+  await expect(offline.locator('.export-filters')).toBeVisible();
+  const offlineFilter = offline.getByLabel('label values');
+  await offlineFilter.selectOption([JSON.stringify('Food'), JSON.stringify('Health')]);
+  await expect.poll(() => offlineFilter.evaluate(select => [...select.selectedOptions].map(option => option.value)))
+    .toEqual(expect.arrayContaining([JSON.stringify('Food'), JSON.stringify('Health')]));
+  const offlineData = offline.locator('.export-tile').first().locator('.chart-data');
+  await expect(offlineData.locator('summary')).toContainText('(2 rows)');
+  await offlineData.locator('summary').click();
+  await expect(offlineData.locator('tbody')).toContainText('Food');
+  await offline.close();
 
   await openFilters(page);
   await page.getByRole('button', { name: 'Remove label filter' }).click();
   await page.locator('.dashboard-filters-popover').getByRole('button', { name: 'Add filter' }).click();
+  await page.locator('.dashboard-filters-popover').getByLabel('Filter source chart').selectOption('housing-requests');
   await page.locator('.dashboard-filters-popover').getByLabel('Filter field').selectOption('value');
   await page.getByLabel('Minimum').fill('99999999');
   await page.getByLabel('Maximum').fill('100000000');
@@ -109,9 +125,10 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
   const sourceBar = page.locator('.grid-stack-item[gs-id="source-bar"]');
   const otherBar = page.locator('.grid-stack-item[gs-id="other-bar"]');
   const donut = page.locator('.grid-stack-item[gs-id="category-donut"]');
-  await expect(sourceBar.locator('.chart-data summary')).toContainText('(8 rows)');
+  await expect(sourceBar.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(8 rows)');
   await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
-  await expect(sourceBar.locator('.chart-data summary')).toContainText('(8 rows)');
+  await expect(sourceBar.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(8 rows)');
+  await expect(sourceBar.locator('.chart-drillthrough summary')).toContainText('(1 rows)');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
 
   const popover = await openFilters(page);
@@ -124,7 +141,7 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
   await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
 
   await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click();
-  await expect(donut.locator('.chart-data summary')).toContainText('(8 rows)');
+  await expect(donut.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(8 rows)');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
   const donutFilter = await openFilters(page);
   await expect(donutFilter.locator('[data-crossfilter-chip="true"]')).toContainText('label is Housing');
@@ -142,6 +159,29 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
   await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click();
   await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
+});
+
+test('Desktop parity: date range controls filter a tile and chart type switching preserves its data binding', async ({ page }) => {
+  await ready(page);
+  await importJSON(page, envelope([tile('monthly-trend', 'line', 'timeseries', 0)]));
+  const chart = page.locator('.grid-stack-item[gs-id="monthly-trend"]');
+  const popover = await openFilters(page);
+  await popover.getByRole('button', { name: 'Add filter' }).click();
+  await popover.getByLabel('Filter source chart').selectOption('monthly-trend');
+  await popover.getByLabel('Filter field').selectOption('date');
+  await page.getByLabel('Start date').fill('2026-01-01');
+  await page.getByLabel('End date').fill('2026-02-28');
+  await popover.getByRole('button', { name: 'Apply filter' }).click();
+  await expect(chart.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(4 rows)');
+  await page.locator('#btn-filters').click();
+
+  await chart.locator('.tile-settings summary').click();
+  await chart.getByLabel('Chart type').selectOption('area');
+  await expect(chart.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(4 rows)');
+  await page.locator('#btn-save').click();
+  await expect(page.locator('#status')).toContainText('Saved');
+  await page.reload();
+  await expect(page.locator('.grid-stack-item[gs-id="monthly-trend"] .chart-data summary')).toContainText('(4 rows)');
 });
 
 test('Phase 2 SQL parameters define, substitute, re-run, export, and report missing names', async ({ page }) => {

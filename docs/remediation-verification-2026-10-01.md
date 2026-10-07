@@ -28,7 +28,7 @@ and transactional storage tests. Chrome tested: **154.0.8037.58**, Windows.
 | Baseline render sweep | 36/36 passed before changes | This report; baseline stdout inspected during implementation |
 | Final registry render sweep | 36/36 passed, including choropleth through registry | [unit-results.txt](verification/unit-results.txt) |
 | Focused integrity/recovery suite | 12/12 passed | [unit-results.txt](verification/unit-results.txt), [test source](../tests/remediation.test.mjs) |
-| Real Chrome acceptance | 10/10 passed; zero skipped or flaky | [browser-results.json](verification/browser-results.json), [test source](../tests/browser/remediation.spec.js) |
+| Real Chrome acceptance | 10/10 passed; zero skipped or flaky | [test source](../tests/browser/remediation.spec.js); reproduce with `npx playwright test` |
 | Production viewer + composer build | Passed | [build-results.txt](verification/build-results.txt) |
 | Offline exported HTML print | One A4 page generated from query-backed export with networking disabled | [offline-export-print.pdf](verification/offline-export-print.pdf) |
 | Supported smaller desktop viewport | Header actions remain accessible at 1024×768 | [composer screenshot](verification/composer-1024.png) |

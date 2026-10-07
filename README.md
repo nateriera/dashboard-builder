@@ -4,7 +4,7 @@
 
 **[Open the live demo](https://nateriera.github.io/dashboard-builder/)**
 
-![Dashboard Builder: drag, resize, SQL Apply, and HTML export](docs/screenshots/demo.gif)
+![Dashboard Builder: brush a time series to filter a second chart, then export a standalone HTML dashboard](docs/screenshots/demo.gif)
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deploy demo](https://github.com/nateriera/dashboard-builder/actions/workflows/pages.yml/badge.svg)](https://github.com/nateriera/dashboard-builder/actions)

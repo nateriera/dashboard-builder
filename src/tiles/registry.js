@@ -185,6 +185,8 @@ export const TILE_TYPES = {
     defaultSize: { w: 6, h: 5 },
     defaultTitle: "Rent burden vs. homelessness rate",
     controls: [{ key: "trend", label: "Trend line", type: "checkbox", default: true }, ...referenceControls],
+    crossfilterField: "group",
+    crossfilterFields: ["group"],
     render(el, { data, options }) {
       const trend = options.tileOptions?.trend ?? true;
       mount(
@@ -199,7 +201,8 @@ export const TILE_TYPES = {
             xLabel: options.tileOptions?.xLabel || null,
             yLabel: options.tileOptions?.yLabel || null,
             referenceValue: options.tileOptions?.referenceValue,
-            referenceLabel: options.tileOptions?.referenceLabel
+            referenceLabel: options.tileOptions?.referenceLabel,
+            crossfilterField: options.crossfilterField
           }),
         options
       );

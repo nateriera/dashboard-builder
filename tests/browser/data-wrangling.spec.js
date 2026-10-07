@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs/promises';
 
 async function ready(page) {
   await page.goto('/');
@@ -38,9 +39,22 @@ test('desktop parity: reusable wrangling recipes save and restore pivot steps', 
   await pop.getByLabel('Pivot recipe name').fill('Category totals');
   await pop.getByRole('button',{name:'Save recipe'}).click();
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dashbuilder.wrangling-recipes.v1')||'[]').length)).toBe(1);
+  const recipeDownload=page.waitForEvent('download');
+  await pop.getByRole('button',{name:'Export recipes'}).click();
+  const recipeFile=await recipeDownload;
+  const portable=JSON.parse(await fs.readFile(await recipeFile.path(),'utf8'));
+  portable.recipes[0].groups[0].column='Category';
+  portable.recipes[0].aggregations[0].column='Count';
+  const recipeBuffer=Buffer.from(JSON.stringify(portable));
+  await page.evaluate(()=>localStorage.removeItem('dashbuilder.wrangling-recipes.v1'));
+  await pop.getByLabel('Pivot recipe file').setInputFiles({name:'portable-recipes.json',mimeType:'application/json',buffer:recipeBuffer});
+  await expect(pop.getByLabel('Pivot recipe',{exact:true})).toContainText('Category totals');
   await pop.locator('[aria-label="Grouping 1 column"]').selectOption('value');
   await pop.locator('[aria-label="Pivot recipe"]').selectOption({label:'Category totals'});
   await pop.getByRole('button',{name:'Load recipe'}).click();
+  await pop.getByLabel('Map recipe column Category').selectOption('label');
+  await pop.getByLabel('Map recipe column Count').selectOption('value');
+  await pop.getByRole('button',{name:'Apply column mapping'}).click();
   await expect(pop.locator('[aria-label="Grouping 1 column"]')).toHaveValue('label');
   await expect(pop.locator('[aria-label="Aggregation 1 source column"]')).toHaveValue('value');
   await pop.getByRole('button',{name:'Preview pivot'}).click();
@@ -58,6 +72,9 @@ test('calculated-field entry opens formula panel, validates formula and applies 
   await expect(pop.locator('.data-tab.active')).toHaveText('Calculated field');
   await pop.getByLabel('Calculated field name').fill('Doubled value');
   await pop.getByLabel('Calculated field formula').fill('"value" * 2');
+  await pop.getByLabel('Formula recipe name').fill('Doubled value recipe');
+  await pop.getByRole('button',{name:'Save recipe'}).click();
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dashbuilder.wrangling-recipes.v1')||'[]')[0]?.columns)).toEqual(['value']);
   await pop.getByRole('button', { name: 'Preview formula' }).click();
   await expect(pop.locator('.data-preview-note').last()).toContainText('derived query');
   await expect(pop.locator('.data-preview thead').last()).toContainText('Doubled value');

@@ -74,6 +74,10 @@ function renderExport(payload) {
   clear.type = "button";
   clear.textContent = "Reset filters";
   controls.appendChild(clear);
+  const crossfilterList=document.createElement('div');
+  crossfilterList.className='export-crossfilters';
+  crossfilterList.setAttribute('aria-label','Chart selections');
+  controls.appendChild(crossfilterList);
   let filters = (payload.filters || []).map(filter => ({ ...filter, values: [...filter.values] }));
   const editableFilters = filters.filter(filter => filter.source !== "crossfilter");
   const defaults = editableFilters.map(filter => [...filter.values]);
@@ -146,7 +150,8 @@ function renderExport(payload) {
     }
     controls.appendChild(label);
   }
-  if (editableFilters.length) root.appendChild(controls);
+  const hasInteractiveCharts=payload.tiles.some(tile=>tile.crossfilterField||(['line','area'].includes(tile.type)&&tile.rows?.some(row=>row.date)));
+  if (editableFilters.length||hasInteractiveCharts) root.appendChild(controls);
 
   if (payload.tiles.length === 0) {
     const p = document.createElement("p");
@@ -162,6 +167,7 @@ function renderExport(payload) {
   root.appendChild(grid);
 
   const rendered = [];
+  const brushStates = new WeakMap();
   for (const t of payload.tiles) {
     const entry = TILE_TYPES[t.type];
     if (!entry) continue;
@@ -178,6 +184,18 @@ function renderExport(payload) {
   }
 
   const paint = () => {
+    crossfilterList.replaceChildren();
+    const activeCrossfilters=filters.filter(filter=>filter.source==='crossfilter');
+    crossfilterList.hidden=!activeCrossfilters.length;
+    for(const filter of activeCrossfilters){
+      const source=payload.tiles.find(tile=>tile.id===filter.sourceTile),button=document.createElement('button');
+      button.type='button';button.className='export-crossfilter-chip';
+      const label=filter.op==='date-between'?`${filter.field} · ${filter.values[0]}–${filter.values[1]}`:`${filter.field} is ${filter.values.map(value=>value==null?'(blank)':String(value)).join(', ')}`;
+      button.textContent=`${source?.title||'Chart'}: ${label} ×`;
+      button.setAttribute('aria-label',`Clear ${source?.title||'chart'} selection`);
+      button.addEventListener('click',()=>{filters=filters.filter(item=>item!==filter);inspection=null;paint();});
+      crossfilterList.appendChild(button);
+    }
     for (const { t, entry, chartEl } of rendered) {
       if (t.emptyMessage) {
         paintEmpty(chartEl,t.emptyMessage);
@@ -200,8 +218,10 @@ function renderExport(payload) {
               crossfilterField: t.crossfilterField || null
             }
           });
+          wireOfflineTimeBrush(chartEl, t, entry, filtered.rows, filters);
           const active = filters.find(filter => filter.source === "crossfilter" && filter.sourceTile === t.id);
-          const incoming=mode==='highlight'?filters.filter(filter=>filter.source==='crossfilter'&&filter.sourceTile!==t.id&&filter.field===entry.crossfilterField):[];
+          const mappings=t.tileOptions?.crossfilterFieldMappings||{};
+          const incoming=mode==='highlight'?filters.filter(filter=>filter.source==='crossfilter'&&filter.sourceTile!==t.id&&(mappings[filter.field]??(filter.field===entry.crossfilterField?entry.crossfilterField:null))===entry.crossfilterField):[];
           for (const mark of chartEl.querySelectorAll("a")) {
             const href = crossfilterHref(mark);
             if (!href.startsWith("#db-crossfilter:")) continue;
@@ -228,6 +248,7 @@ function renderExport(payload) {
   };
 
   for (const { t, chartEl } of rendered) {
+    wireOfflineBrushEvents(chartEl, t, () => filters, nextFilters => { filters = nextFilters; paint(); });
     chartEl.addEventListener("click", event => {
       const link = event.target.closest?.("a");
       if (!link || !crossfilterHref(link).startsWith("#db-crossfilter:") || !t.crossfilterField) return;
@@ -258,6 +279,87 @@ function renderExport(payload) {
     });
   }
 
+  function wireOfflineBrushEvents(chartEl, tile, getFilters, updateFilters) {
+    if (!['line','area'].includes(tile.type) || !tile.rows?.some(row => row.date)) return;
+    if (chartEl.dataset.timeBrushBound) return;
+    chartEl.dataset.timeBrushBound = 'true';
+    const plotX = (svg, clientX) => {
+      const bounds = svg.getBoundingClientRect(), view = svg.viewBox.baseVal;
+      return view.x + (clientX - bounds.left) * view.width / bounds.width;
+    };
+    const brushRect = (svg) => {
+      let rect = svg.querySelector(':scope > rect.db-time-brush');
+      if (!rect) {
+        rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        rect.setAttribute('class','db-time-brush'); rect.setAttribute('aria-hidden','true'); svg.append(rect);
+      }
+      return rect;
+    };
+    const state = brushStates.get(chartEl) || { tile, rows: [], drag: null };
+    brushStates.set(chartEl,state);
+    chartEl.addEventListener('pointerdown',event=>{
+      const svg=event.target.closest?.('svg[role="img"]');
+      if(event.button!==0||!svg)return;
+      const circles=[...svg.querySelectorAll('g[aria-label="dot"] circle')];
+      const points=circles.slice(0,state.rows.length).flatMap((circle,index)=>{
+        const x=Number(circle.getAttribute('cx')),time=new Date(state.rows[index]?.date).getTime();
+        return Number.isFinite(x)&&Number.isFinite(time)?[{x,time}]:[];
+      }).sort((a,b)=>a.x-b.x).filter((point,index,all)=>index===0||point.x!==all[index-1].x);
+      if(points.length<2)return;
+      const x=plotX(svg,event.clientX);
+      if(x<points[0].x||x>points.at(-1).x)return;
+      state.drag={svg,points,startX:x,currentX:x,pointerId:event.pointerId};
+      svg.setPointerCapture?.(event.pointerId);
+      const rect=brushRect(svg),view=svg.viewBox.baseVal;
+      rect.setAttribute('x',String(x));rect.setAttribute('y',String(view.y));rect.setAttribute('width','0');rect.setAttribute('height',String(view.height));
+      event.preventDefault();
+    },true);
+    chartEl.addEventListener('pointermove',event=>{
+      const drag=state.drag;if(!drag||drag.pointerId!==event.pointerId)return;
+      drag.currentX=plotX(drag.svg,event.clientX);
+      const view=drag.svg.viewBox.baseVal,left=Math.max(drag.points[0].x,Math.min(drag.startX,drag.currentX)),right=Math.min(drag.points.at(-1).x,Math.max(drag.startX,drag.currentX)),rect=brushRect(drag.svg);
+      rect.setAttribute('x',String(left));rect.setAttribute('y',String(view.y));rect.setAttribute('width',String(Math.max(0,right-left)));rect.setAttribute('height',String(view.height));
+    },true);
+    chartEl.addEventListener('pointerup',event=>{
+      const drag=state.drag;if(!drag||drag.pointerId!==event.pointerId)return;state.drag=null;
+      if(Math.abs(drag.currentX-drag.startX)<12){drag.svg.querySelector(':scope > rect.db-time-brush')?.remove();return;}
+      const atX=x=>{
+        const points=drag.points;if(x<=points[0].x)return points[0].time;if(x>=points.at(-1).x)return points.at(-1).time;
+        const index=points.findIndex(point=>point.x>=x),a=points[index-1],b=points[index];return a.time+(b.time-a.time)*(x-a.x)/(b.x-a.x);
+      };
+      const values=[atX(Math.min(drag.startX,drag.currentX)),atX(Math.max(drag.startX,drag.currentX))].map(time=>new Date(time).toISOString().slice(0,10));
+      const activeFilters=getFilters();
+      const current=activeFilters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===tile.id&&filter.op==='date-between'&&filter.field==='date');
+      const next=activeFilters.filter(filter=>filter!==current);
+      next.push({id:current?.id||`cross-export-date-${Date.now().toString(36)}`,field:'date',op:'date-between',values,source:'crossfilter',sourceTile:tile.id});
+      updateFilters(next);
+    },true);
+    chartEl.addEventListener('pointercancel',event=>{
+      if(state.drag?.pointerId===event.pointerId){state.drag.svg.querySelector(':scope > rect.db-time-brush')?.remove();state.drag=null;}
+    },true);
+  }
+
+  function wireOfflineTimeBrush(chartEl,t,entry,rows,activeFilters){
+    if(!['line','area'].includes(t.type)||!entry.fields?.some(field=>field.key==='date'))return;
+    const state=brushStates.get(chartEl);if(!state)return;
+    state.tile=t;state.rows=rows;
+    const svg=chartEl.querySelector('svg[role="img"][viewBox]');
+    const active=activeFilters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===t.id&&filter.field==='date'&&filter.op==='date-between');
+    if(!svg||!active){svg?.querySelector(':scope > rect.db-time-brush')?.remove();return;}
+    const circles=[...svg.querySelectorAll('g[aria-label="dot"] circle')],points=circles.slice(0,rows.length).flatMap((circle,index)=>{
+      const x=Number(circle.getAttribute('cx')),time=new Date(rows[index]?.date).getTime();return Number.isFinite(x)&&Number.isFinite(time)?[{x,time}]:[];
+    }).sort((a,b)=>a.x-b.x).filter((point,index,all)=>index===0||point.x!==all[index-1].x);
+    if(points.length<2)return;
+    const xAt=time=>{
+      const byTime=[...points].sort((a,b)=>a.time-b.time);
+      if(time<=byTime[0].time)return byTime[0].x;if(time>=byTime.at(-1).time)return byTime.at(-1).x;
+      const index=byTime.findIndex(point=>point.time>=time),a=byTime[index-1],b=byTime[index];return a.x+(b.x-a.x)*(time-a.time)/(b.time-a.time);
+    };
+    const a=xAt(new Date(`${active.values[0]}T00:00:00Z`).getTime()),b=xAt(new Date(`${active.values[1]}T23:59:59Z`).getTime()),view=svg.viewBox.baseVal;
+    const rect=svg.querySelector(':scope > rect.db-time-brush')||document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('class','db-time-brush');rect.setAttribute('aria-hidden','true');rect.setAttribute('x',String(Math.min(a,b)));rect.setAttribute('y',String(view.y));rect.setAttribute('width',String(Math.abs(b-a)));rect.setAttribute('height',String(view.height));if(!rect.isConnected)svg.append(rect);
+  }
+
   let paintTimer = null;
   function schedulePaint() {
     clearTimeout(paintTimer);
@@ -265,6 +367,8 @@ function renderExport(payload) {
   }
   clear.addEventListener("click", () => {
     editableFilters.forEach((filter, index) => { filter.values = [...defaults[index]]; });
+    filters = filters.filter(filter => filter.source !== 'crossfilter');
+    inspection = null;
     for (const binding of filterBindings) {
       if (binding.select) {
         [...binding.select.options].forEach(option => { option.selected = binding.filter.values.some(value => Object.is(value, JSON.parse(option.value))); });

@@ -385,3 +385,9 @@ test('Desktop parity: saved wrangling recipes validate, persist locally, and rej
   assert.equal(wranglingRecipes.removeWranglingRecipe('recipe-test'),true);
   assert.deepEqual(wranglingRecipes.listWranglingRecipes(),[]);
 });
+
+test('Desktop parity: target field mappings for cross-filter highlighting persist and validate', () => {
+  const layout={app:'dashboard-builder',version:3,rowHeight:24,tiles:[{id:'scatter1',type:'scatter',dataset:'scatter',binding:{mode:'explicit',ref:'scatter'},tileOptions:{crossfilterMode:'highlight',crossfilterFieldMappings:{label:'group'}},x:0,y:0,w:6,h:15}]};
+  assert.deepEqual(validateLayout(layout).tiles[0].tileOptions.crossfilterFieldMappings,{label:'group'});
+  assert.throws(()=>validateLayout({...layout,tiles:[{...layout.tiles[0],tileOptions:{crossfilterFieldMappings:{label:'value'}}}]}),/cross-filter field mapping/i);
+});

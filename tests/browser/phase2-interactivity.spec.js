@@ -196,6 +196,37 @@ test('Desktop parity: target charts can filter, highlight, or ignore incoming se
   await expect(target.locator('.tile-chart svg [data-crossfilter-selected]')).toHaveCount(0);
 });
 
+test('Desktop parity: explicit field mapping highlights differently named chart fields', async ({page})=>{
+  await ready(page);
+  const data=envelope([
+    {...tile('source','bar','upload:source',0),binding:{mode:'explicit',ref:'upload:source'}},
+    {...tile('target','scatter','upload:target',16),binding:{mode:'explicit',ref:'upload:target'}}
+  ]);
+  data.datasets={
+    source:{name:'Categories',columns:['label','value'],fieldKeys:['label','value'],mapping:{label:'label',value:'value'},rows:[{label:'Housing',value:3},{label:'Employment',value:2}]},
+    target:{name:'Grouped points',columns:['x','y','group'],fieldKeys:['x','y','group'],mapping:{x:'x',y:'y',group:'group'},rows:[{x:1,y:2,group:'Housing'},{x:2,y:3,group:'Employment'}]}
+  };
+  await importJSON(page,data);
+  const source=page.locator('.grid-stack-item[gs-id="source"]'),target=page.locator('.grid-stack-item[gs-id="target"]');
+  await target.locator('.tile-settings summary').click();
+  await target.getByLabel('Incoming cross-filter behavior').selectOption('highlight');
+  await target.getByLabel('Highlight mapping from label').selectOption('group');
+  await source.locator('.tile-chart svg [aria-label^="Category: Housing"]').click();
+  await expect(target.locator('.tile-chart svg a[data-crossfilter-selected="true"]')).toHaveCount(1);
+  await expect(target.locator('.tile-chart svg a[data-crossfilter-selected="false"]')).toHaveCount(1);
+  await source.locator('.tile-chart svg [aria-label^="Category: Housing"]').click();
+  const download=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const html=await fs.readFile(await (await download).path(),'utf8');
+  const offline=await page.context().newPage();
+  await offline.route('**/mapped-fields.html',route=>route.fulfill({status:200,contentType:'text/html',body:html}));
+  await offline.goto('/mapped-fields.html');
+  const offlineSource=offline.locator('.export-tile').first(),offlineTarget=offline.locator('.export-tile').last();
+  await offlineSource.locator('.tile-chart svg [aria-label^="Category: Housing"]').click();
+  await expect(offlineTarget.locator('.tile-chart svg a[data-crossfilter-selected="true"]')).toHaveCount(1);
+  await expect(offlineTarget.locator('.tile-chart svg a[data-crossfilter-selected="false"]')).toHaveCount(1);
+  await offline.close();
+});
+
 test('Desktop parity: mark clicks can filter charts or inspect records independently', async ({ page }) => {
   await ready(page);
   await importJSON(page,envelope([tile('source','bar','categorical',0),tile('target','bar','categorical',16)]));
@@ -206,6 +237,10 @@ test('Desktop parity: mark clicks can filter charts or inspect records independe
   await source.locator('.tile-settings summary').click();
   await source.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
   await expect(source.locator('.chart-drillthrough summary')).toContainText('(1 rows)');
+  await source.locator('.chart-drillthrough [aria-label="Search records in Source — selected mark"]').fill('Housing');
+  await expect(source.locator('.chart-drillthrough tbody')).toContainText('Housing');
+  await source.locator('.chart-drillthrough [aria-label="Sort by value"]').click();
+  await expect(source.locator('.chart-drillthrough [aria-label="Rows per page"]')).toHaveValue('100');
   await expect(target.locator('.chart-data summary')).toContainText('(8 rows)');
   await source.locator('.tile-settings summary').click();
   await source.getByLabel('Mark click action').selectOption('filter-only');
@@ -270,6 +305,31 @@ test('Desktop parity: time-series brushing applies a date range to other charts'
   await expect(target.locator('.chart-data summary')).not.toContainText('(0 rows)');
   const filters=await openFilters(page);
   await expect(filters.locator('[data-crossfilter-chip="true"]')).toContainText('Brush Source');
+});
+
+test('Desktop parity: offline viewer supports time-series brushing and reset', async ({page})=>{
+  await ready(page);
+  await importJSON(page,envelope([tile('offline-brush-source','line','timeseries',0),tile('offline-brush-target','line','timeseries',16)]));
+  const download=page.waitForEvent('download');
+  await page.locator('#btn-export-html').click();
+  const html=await fs.readFile(await (await download).path(),'utf8');
+  const offline=await page.context().newPage();
+  await offline.route('**/offline-brush.html',route=>route.fulfill({status:200,contentType:'text/html',body:html}));
+  await offline.goto('/offline-brush.html');
+  const source=offline.locator('.export-tile').first(),target=offline.locator('.export-tile').last();
+  await expect(target.locator('.chart-data summary')).toContainText('(24 rows)');
+  const svg=source.locator('.tile-chart svg[viewBox]');const box=await svg.boundingBox();
+  await offline.mouse.move(box.x+box.width*.3,box.y+box.height*.45);await offline.mouse.down();
+  await offline.mouse.move(box.x+box.width*.7,box.y+box.height*.45,{steps:6});await offline.mouse.up();
+  await expect(target.locator('.chart-data summary')).not.toContainText('(24 rows)');
+  await expect(target.locator('.chart-data summary')).not.toContainText('(0 rows)');
+  await expect(source.locator('.tile-chart svg[viewBox] .db-time-brush')).toHaveCount(1);
+  await expect(offline.locator('.export-crossfilter-chip')).toContainText('Offline Brush Source: date');
+  await offline.getByRole('button',{name:'Reset filters'}).click();
+  await expect(target.locator('.chart-data summary')).toContainText('(24 rows)');
+  await expect(source.locator('.tile-chart svg[viewBox] .db-time-brush')).toHaveCount(0);
+  await expect(offline.locator('.export-crossfilter-chip')).toHaveCount(0);
+  await offline.close();
 });
 
 test('Phase 2 SQL parameters define, substitute, re-run, export, and report missing names', async ({ page }) => {
@@ -386,7 +446,7 @@ test('Phase 2 sort then top-N keeps the selected categories and whole stacked gr
   expect(ascending).toEqual(['Other', 'Legal aid', 'Childcare']);
 
   await bar.locator('details.tile-settings > summary').click();
-  await bar.getByLabel('Sort').selectOption('desc');
+  await bar.getByLabel('Sort',{exact:true}).selectOption('desc');
   const topN = bar.getByLabel('Show top N categories');
   await topN.fill('2');
   await topN.press('Tab');

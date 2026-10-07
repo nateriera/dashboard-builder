@@ -550,7 +550,13 @@ body.present .tile-toolbar { display: none; }
 .wrangle-recipes strong, .wrangle-recipes span[role="status"] { grid-column: 1 / -1; }
 .wrangle-recipes span[role="status"] { min-height: 1em; color: var(--slate-500); font-size: 12px; }
 .wrangle-recipes input, .wrangle-recipes select { min-width: 0; }
+.wrangle-recipes .recipe-column-mapping { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 8px; padding: 10px; border: 1px solid var(--slate-200); border-radius: 8px; }
+.recipe-column-mapping strong { grid-column: 1 / -1; }
+.recipe-column-mapping label { display: grid; gap: 4px; color: var(--slate-600); font-size: 12px; }
 @media (max-width: 620px) { .wrangle-recipes { grid-template-columns: 1fr 1fr; } }
+.chart-data-tools { display: flex; gap: 8px; margin: 8px 0; }
+.chart-data-tools input { min-width: 160px; flex: 1; }
+.chart-data th button { border: 0; padding: 3px 5px; background: transparent; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
 
 .data-preview-note {
   font-size: 11px;

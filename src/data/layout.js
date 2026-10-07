@@ -101,6 +101,12 @@ export function validateLayout(input) {
       else if (['trend','diverging','includeZero'].includes(k) && typeof v === 'boolean') tileOptions[k] = v;
       else if (k === 'crossfilterMode' && ['filter','highlight','none'].includes(v) && e.crossfilterField) tileOptions[k] = v;
       else if (k === 'clickAction' && ['filter-and-inspect','filter-only','inspect-only'].includes(v) && e.crossfilterField) tileOptions[k] = v;
+      else if(k==='crossfilterFieldMappings'&&object(v)&&e.crossfilterFields?.length){
+        const allowedSources=new Set(Object.values(TILE_TYPES).map(tile=>tile.crossfilterField).filter(Boolean)),allowedTargets=new Set(e.crossfilterFields),mappings={};
+        if(Object.keys(v).length>10)fail('Too many cross-filter field mappings.');
+        for(const [source,target] of Object.entries(v)){if(!allowedSources.has(source)||!allowedTargets.has(target))fail('Invalid cross-filter field mapping.');mappings[source]=target;}
+        tileOptions[k]=mappings;
+      }
       else if (k === 'body' && e.noData) tileOptions.body = text(v,'annotation',10000);
       else if (k === 'mode' && ['stacked','grouped'].includes(v) && ['stackedBar','stackedColumn'].includes(t.type)) tileOptions.mode = v;
       else if (k === 'binCount' && Number.isInteger(v) && v >= 5 && v <= 100 && t.type === 'histogram') tileOptions.binCount = v;

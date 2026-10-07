@@ -1,7 +1,7 @@
 import { aggregationOptions, buildCalculatedFieldApplySql, buildCalculatedFieldSql, buildPivotSql, quoteIdentifier } from "../data/wrangling.js";
 import { datasetVersion, listDatasets, subscribeDatasetChanges } from "../data/store.js";
 import { saveQuery, getQuery } from "../data/queries.js";
-import { listWranglingRecipes, removeWranglingRecipe, saveWranglingRecipe } from "../data/wranglingRecipes.js";
+import { formulaReferencedColumns, importWranglingRecipes, listWranglingRecipes, mapWranglingRecipeColumns, parsePortableWranglingRecipes, recipeFormulaIdentifiers, removeWranglingRecipe, saveWranglingRecipe, serializePortableWranglingRecipes } from "../data/wranglingRecipes.js";
 import { isUploadRef, uploadId } from "../data/store.js";
 import { isQueryRef, queryId, sampleTableName, uploadTableName } from "../data/sql.js";
 import { substituteParameters } from "../data/parameters.js";
@@ -104,15 +104,21 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
     const removeRecipe=el('button','Delete recipe');removeRecipe.type='button';removeRecipe.disabled=!recipes.length;
     const name=el('input');name.type='text';name.maxLength=80;name.placeholder='Recipe name';name.setAttribute('aria-label',`${kind==='pivot'?'Pivot':'Formula'} recipe name`);
     const save=el('button','Save recipe');save.type='button';
+    const exportButton=el('button','Export recipes');exportButton.type='button';exportButton.disabled=!recipes.length;
+    const importButton=el('button','Import recipes');importButton.type='button';
+    const importFile=el('input');importFile.type='file';importFile.accept='.json,application/json';importFile.hidden=true;importFile.setAttribute('aria-label',`${kind==='pivot'?'Pivot':'Formula'} recipe file`);
     const status=el('span','');status.setAttribute('role','status');
     load.addEventListener('click',()=>{
       const recipe=recipes.find(item=>item.id===select.value);if(!recipe)return;
-      if(kind==='pivot'){
-        const missing=[...recipe.groups.map(group=>group.column),...recipe.aggregations.map(item=>item.column)].filter(column=>!state.columns.includes(column));
-        if(missing.length){status.textContent=`This data is missing: ${[...new Set(missing)].join(', ')}.`;return;}
-        state.groups=structuredClone(recipe.groups);state.aggs=structuredClone(recipe.aggregations);
-      }else{state.formula=recipe.formula;state.name=recipe.outputName;}
-      invalidate();render();
+      const used=kind==='pivot'?[...new Set([...recipe.groups.map(group=>group.column),...recipe.aggregations.map(item=>item.column)])]:(recipe.columns?.length?recipe.columns:recipeFormulaIdentifiers(recipe.formula));
+      if(used.every(column=>state.columns.includes(column))){applyRecipe(recipe,{});return;}
+      const mappingBox=el('div',null,'recipe-column-mapping');mappingBox.append(el('strong','Map recipe columns to this dataset'));
+      const selectors=new Map();
+      for(const column of used){const label=el('label',`Saved “${column}”`);const field=el('select');field.setAttribute('aria-label',`Map recipe column ${column}`);for(const current of state.columns){const option=el('option',current);option.value=current;field.append(option);}if(state.columns.includes(column))field.value=column;else field.value='';label.append(field);mappingBox.append(label);selectors.set(column,field);}
+      const apply=el('button','Apply column mapping');apply.type='button';apply.addEventListener('click',()=>{
+        try{const mapping=Object.fromEntries([...selectors].map(([source,field])=>[source,field.value]));mapWranglingRecipeColumns(recipe,mapping,state.columns);applyRecipe(recipe,mapping);}
+        catch(error){status.textContent=error.message;}
+      });mappingBox.append(apply);box.append(mappingBox);status.textContent='Choose the matching columns, then apply the recipe.';
     });
     removeRecipe.addEventListener('click',()=>{
       if(!select.value)return;
@@ -122,11 +128,28 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
       try{
         const recipe=kind==='pivot'
           ?{id:recipeId(),name:name.value,kind,groups:state.groups,aggregations:state.aggs}
-          :{id:recipeId(),name:name.value,kind,formula:state.formula,outputName:state.name};
+          :{id:recipeId(),name:name.value,kind,formula:state.formula,outputName:state.name,columns:formulaReferencedColumns(state.formula,state.columns)};
         saveWranglingRecipe(recipe);render();
       }catch(error){status.textContent=error.message;}
     });
-    box.append(select,load,removeRecipe,name,save,status);panel.append(box);
+    exportButton.addEventListener('click',()=>{
+      try{const json=serializePortableWranglingRecipes(recipes),url=URL.createObjectURL(new Blob([json],{type:'application/json'})),link=el('a');link.href=url;link.download=`dashboard-builder-${kind}-recipes.json`;link.click();URL.revokeObjectURL(url);status.textContent=`Exported ${recipes.length} ${kind} recipe${recipes.length===1?'':'s'}.`;}
+      catch(error){status.textContent=error.message;}
+    });
+    importButton.addEventListener('click',()=>importFile.click());
+    importFile.addEventListener('change',async()=>{
+      const file=importFile.files?.[0];if(!file)return;
+      try{const imported=parsePortableWranglingRecipes(await file.text());const result=importWranglingRecipes(imported);status.textContent=`Imported ${imported.length} recipe${imported.length===1?'':'s'} (${result.length} in library).`;render();}
+      catch(error){status.textContent=error.message;}
+      finally{importFile.value='';}
+    });
+    box.append(select,load,removeRecipe,name,save,exportButton,importButton,importFile,status);panel.append(box);
+    function applyRecipe(recipe,mapping){
+      const mapped=mapWranglingRecipeColumns(recipe,mapping,state.columns);
+      if(kind==='pivot'){state.groups=structuredClone(mapped.groups);state.aggs=structuredClone(mapped.aggregations);}
+      else{state.formula=mapped.formula;state.name=mapped.outputName;}
+      invalidate();render();
+    }
   }
   function columnSelect(label, selected) { const select = el("select"); select.setAttribute("aria-label", label); for (const name of state.columns) { const option = el("option", `${name} (${state.types[name] || "type unknown"})`); option.value = name; select.appendChild(option); } select.value = selected; return select; }
   function remove(label, index, array) { const button = el("button", "Remove"); button.type = "button"; button.setAttribute("aria-label", label); button.addEventListener("click", () => { array.splice(index, 1); invalidate(); }); return button; }

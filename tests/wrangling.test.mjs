@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregationOptions, buildCalculatedFieldApplySql, buildCalculatedFieldSql, buildPivotSql, dateBinExpression, quoteIdentifier } from '../src/data/wrangling.js';
+import { mapWranglingRecipeColumns, parsePortableWranglingRecipes, serializePortableWranglingRecipes } from '../src/data/wranglingRecipes.js';
 
 const table = 'upload_sales';
 
@@ -41,4 +42,32 @@ test('calculated field SQL quotes the source and validates the output name', () 
 
 test('identifier quoting doubles embedded quotes', () => {
   assert.equal(quoteIdentifier('a"b'), '"a""b"');
+});
+
+test('portable pivot recipes round-trip and map saved columns to a different schema', () => {
+  const recipe={id:'recipe-pivot',name:'Regional totals',kind:'pivot',groups:[{column:'Area',bin:null}],aggregations:[{column:'Amount',operation:'SUM',name:'Total'}]};
+  const encoded=serializePortableWranglingRecipes([recipe]);
+  const [imported]=parsePortableWranglingRecipes(encoded);
+  const mapped=mapWranglingRecipeColumns(imported,{Area:'Region',Amount:'Revenue'},['Region','Revenue']);
+  assert.deepEqual(mapped.groups,[{column:'Region',bin:null}]);
+  assert.deepEqual(mapped.aggregations,[{column:'Revenue',operation:'SUM',name:'Total'}]);
+});
+
+test('portable calculated-field recipes remap quoted identifiers without changing literals', () => {
+  const recipe={id:'recipe-formula',name:'Extended price',kind:'formula',formula:'"Unit price" * "Units" + 1',outputName:'Extended',columns:['Unit price','Units']};
+  const [imported]=parsePortableWranglingRecipes(serializePortableWranglingRecipes([recipe]));
+  const mapped=mapWranglingRecipeColumns(imported,{'Unit price':'Price','Units':'Quantity'},['Price','Quantity']);
+  assert.equal(mapped.formula,'"Price" * "Quantity" + 1');
+});
+
+test('portable calculated-field recipes remap bare simple identifiers too', () => {
+  const recipe={id:'recipe-formula',name:'Extended price',kind:'formula',formula:'price * quantity + 1',outputName:'Extended',columns:['price','quantity']};
+  const mapped=mapWranglingRecipeColumns(recipe,{price:'cost',quantity:'units'},['cost','units']);
+  assert.equal(mapped.formula,'"cost" * "units" + 1');
+});
+
+test('portable wrangling recipes reject malformed envelopes and incomplete mappings', () => {
+  assert.throws(()=>parsePortableWranglingRecipes('{"version":9}'),/format|version/i);
+  const recipe={id:'recipe-pivot',name:'Regional totals',kind:'pivot',groups:[{column:'Area',bin:null}],aggregations:[]};
+  assert.throws(()=>mapWranglingRecipeColumns(recipe,{Area:'Missing'},['Region']),/available columns/i);
 });

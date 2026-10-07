@@ -291,7 +291,7 @@ export function lineChart(data, { x, y, stroke = null, width = 680, height, xLab
 
 // ── Scatter chart (relationships; optional trend line, size, color) ─────────
 // fill: a hex color, or a field name for a color channel.
-export function scatterChart(data, { x, y, r = null, fill = null, trend = false, width = 640, height, xLabel = null, yLabel = null, xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
+export function scatterChart(data, { x, y, r = null, fill = null, trend = false, width = 640, height, xLabel = null, yLabel = null, xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
   const t = theme.chart;
   const fillIsChannel =
     typeof fill === "string" && !fill.startsWith("#") && data[0] && fill in data[0];
@@ -302,7 +302,8 @@ export function scatterChart(data, { x, y, r = null, fill = null, trend = false,
       fillOpacity: 0.75,
       tip,
       ...(r ? { r } : {}),
-      ...(fillIsChannel ? { fill } : { fill: fill ?? t.primary })
+      ...(fillIsChannel ? { fill } : { fill: fill ?? t.primary }),
+      ...(crossfilterField ? { ariaLabel: d => crossfilterAriaLabel(d[crossfilterField]), href: d => d[crossfilterField] == null ? null : crossfilterHref(d[crossfilterField]) } : {})
     })
   ];
   if (trend) {

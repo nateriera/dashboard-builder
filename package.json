@@ -37,7 +37,7 @@
     "dev": "vite --configLoader runner",
     "preview": "vite preview",
     "build:export-template": "vite build --config vite.export.config.js --configLoader runner",
-    "test": "node --no-warnings --loader ./tests/json-loader.mjs tests/render-sweep.mjs && node --no-warnings --loader ./tests/json-loader.mjs --test tests/remediation.test.mjs tests/import-source.test.mjs tests/import-ui.test.mjs",
+    "test": "node --no-warnings --loader ./tests/json-loader.mjs tests/render-sweep.mjs && node --no-warnings --loader ./tests/json-loader.mjs --test tests/remediation.test.mjs tests/import-source.test.mjs tests/import-ui.test.mjs tests/wrangling.test.mjs tests/chart-data.test.mjs",
     "predev": "npm run build:export-template",
     "test:browser": "playwright test",
     "shots": "npm run build && node scripts/screenshots.mjs"

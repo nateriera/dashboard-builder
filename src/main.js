@@ -383,6 +383,19 @@ function buildTileContent(type, meta) {
     action.value=meta.tileOptions.clickAction||'filter-and-inspect';
     action.addEventListener('change',()=>{meta.tileOptions.clickAction=action.value;meta.drillValues=null;renderTileById(meta.id);scheduleAutosave();});
     actionLabel.append(action);settingsBody.append(actionLabel);
+    if(entry.crossfilterFields?.length){
+      const sources=[...new Set(Object.values(TILE_TYPES).map(tile=>tile.crossfilterField).filter(Boolean))];
+      for(const sourceField of sources){
+        const mappingLabel=document.createElement('label');mappingLabel.className='tile-control';mappingLabel.textContent=`Highlight incoming “${sourceField}” by`;
+        const mapping=document.createElement('select');mapping.setAttribute('aria-label',`Highlight mapping from ${sourceField}`);
+        const ignore=document.createElement('option');ignore.value='';ignore.textContent='Ignore this field';mapping.append(ignore);
+        for(const targetField of entry.crossfilterFields){const option=document.createElement('option');option.value=targetField;option.textContent=`${targetField} field`;mapping.append(option);}
+        const mappings=meta.tileOptions.crossfilterFieldMappings||{};
+        mapping.value=mappings[sourceField]??(sourceField===entry.crossfilterField?entry.crossfilterField:'');
+        mapping.addEventListener('change',()=>{const next={...(meta.tileOptions.crossfilterFieldMappings||{})};if(mapping.value)next[sourceField]=mapping.value;else delete next[sourceField];if(Object.keys(next).length)meta.tileOptions.crossfilterFieldMappings=next;else delete meta.tileOptions.crossfilterFieldMappings;renderTileById(meta.id);scheduleAutosave();});
+        mappingLabel.append(mapping);settingsBody.append(mappingLabel);
+      }
+    }
   }
   if (entry.fields.some(f => f.numeric)) {
     for (const key of ['xLabel','yLabel']) {
@@ -592,7 +605,8 @@ function wireCrossfilter(chartEl, meta, entry) {
   const refreshSelection=()=>{
     const active=filters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===meta.id&&filter.field===entry.crossfilterField);
     const mode=meta.tileOptions?.crossfilterMode||'filter';
-    const incoming=mode==='highlight'?filters.filter(filter=>filter.source==='crossfilter'&&filter.sourceTile!==meta.id&&filter.field===entry.crossfilterField):[];
+    const mappings=meta.tileOptions?.crossfilterFieldMappings||{};
+    const incoming=mode==='highlight'?filters.filter(filter=>filter.source==='crossfilter'&&filter.sourceTile!==meta.id&&(mappings[filter.field]??(filter.field===entry.crossfilterField?entry.crossfilterField:null))===entry.crossfilterField):[];
     const marks=new Set([...chartEl.querySelectorAll('[data-crossfilter-values],a')].map(mark=>mark.closest('a')||mark));
     for(const mark of marks){
       const values=crossfilterValuesFromTarget(mark);

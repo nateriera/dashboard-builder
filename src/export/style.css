@@ -86,6 +86,12 @@ body {
 }
 .export-filter select { min-width: 160px; min-height: 76px; }
 .export-filters button { cursor: pointer; }
+.export-crossfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; }
+.export-crossfilters[hidden] { display: none; }
+.export-crossfilters button { min-height: 30px; border-color: var(--slate-300); background: var(--slate-50); color: var(--slate-700); }
+.chart-data-tools { display: flex; gap: 8px; margin: 8px 0; }
+.chart-data-tools input { min-width: 160px; flex: 1; }
+.chart-data th button { border: 0; padding: 3px 5px; background: transparent; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
 .export-filter input:focus-visible, .export-filter select:focus-visible, .export-filters button:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
 
 /* Row height includes the gutters, matching GridStack's physical geometry. */

@@ -33,7 +33,7 @@ async function drag(page, tile, dx, dy, release = true) {
 test('fresh placement, compact headings and measured chart frames at all editor widths', async ({page}, info) => {
   await ready(page);
   const layout = await saved(page);
-  expect(layout.version).toBe(3); expect(layout.rowHeight).toBe(24);
+  expect(layout.version).toBe(4); expect(layout.rowHeight).toBe(24);
   expect(layout.tiles.map(t=>[t.x,t.y,t.w,t.h])).toEqual([[0,0,12,13],[0,13,6,16],[6,13,6,16],[0,29,4,20],[4,29,8,20]]);
   expect(await page.locator('.tile .db-chart-title').count()).toBe(0);
   for (const width of [1440,1160,1024]) {

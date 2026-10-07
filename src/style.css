@@ -76,6 +76,7 @@ body {
 }
 
 .header-actions button,
+.header-actions select,
 #btn-exit-present {
   font-family: var(--font-body);
   font-size: 13px;
@@ -89,9 +90,11 @@ body {
 }
 
 .header-actions button:hover,
+.header-actions select:hover,
 #btn-exit-present:hover {
   background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
+.view-picker-label { font-size: 12px; color: var(--slate-600); margin-left: 4px; }
 
 .header-actions button.danger { color: var(--danger); }
 
@@ -213,6 +216,10 @@ body.present .first-run-hint { display: none; }
   overflow-y: auto;
   padding: 12px;
 }
+#page-tabs { display:flex; align-items:center; gap:6px; margin:0 0 12px; border-bottom:1px solid var(--slate-200); }
+#page-tabs button { font:inherit; color:var(--slate-600); background:transparent; border:0; border-bottom:2px solid transparent; padding:7px 12px; cursor:pointer; }
+#page-tabs button.active, #page-tabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--periwinkle); font-weight:600; }
+#page-tabs #btn-add-page { font-size:18px; padding:3px 10px; border:1px solid var(--slate-300); border-radius:6px; }
 
 /* GridStack tiles: the item content is the themed card. */
 .grid-stack-item-content {

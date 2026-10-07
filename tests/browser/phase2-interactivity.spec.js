@@ -115,6 +115,115 @@ test('Phase 2 filters apply by source field, persist, export resolved rows, and 
   await expect(bar.locator('.tile-error')).toHaveCount(0);
 });
 
+test('Desktop parity: saved views capture and restore filters across reloads', async ({ page }) => {
+  await ready(page);
+  await importJSON(page, envelope([tile('view-chart', 'bar', 'categorical', 0)]));
+  page.once('dialog', dialog => dialog.accept('All cases'));
+  await page.locator('#btn-save-view').click();
+  await page.locator('#btn-filters').click();
+  await addCategoryFilter(page, 'label', 'Housing');
+  await page.locator('#btn-filters').click();
+  page.once('dialog', dialog => dialog.accept('Housing view'));
+  await page.locator('#btn-save-view').click();
+  await expect(page.locator('#saved-view-picker')).toHaveValue(/view-/);
+
+  await page.locator('#btn-filters').click();
+  await page.getByRole('button', { name: 'Remove label filter' }).click();
+  await page.locator('#btn-filters').click();
+  await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(8 rows)');
+  await page.locator('#btn-apply-view').click();
+  await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(1 rows)');
+  await page.locator('#btn-save').click();
+  await page.reload();
+  await expect(page.locator('#saved-view-picker')).toContainText('Housing view');
+  await page.locator('#saved-view-picker').selectOption({ label: 'Housing view' });
+  await page.locator('#btn-apply-view').click();
+  await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(1 rows)');
+  const htmlDownload=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const htmlFile=await htmlDownload, html=await fs.readFile(await htmlFile.path(),'utf8'), payload=exportPayload(html);
+  expect(payload.savedViews.map(view=>view.name)).toEqual(['All cases','Housing view']);
+  const offline=await page.context().newPage();await offline.setContent(html);
+  await offline.locator('.export-saved-views select').selectOption({label:'All cases'});
+  await offline.getByRole('button',{name:'Apply view'}).click();
+  await expect(offline.locator('.export-grid:visible .chart-data summary')).toContainText('(8 rows)');
+  await offline.locator('.export-saved-views select').selectOption({label:'Housing view'});
+  await offline.getByRole('button',{name:'Apply view'}).click();
+  await expect(offline.locator('.export-grid:visible .chart-data summary')).toContainText('(1 rows)');
+});
+
+test('Desktop parity: pages retain separate tile layouts and page-scoped filters in the offline export', async ({ page, context }) => {
+  await ready(page);
+  await importJSON(page, envelope([tile('overview-chart', 'bar', 'categorical', 0)]));
+  page.once('dialog', dialog => dialog.accept('Detail'));
+  await page.getByRole('button', { name: 'Add dashboard page' }).click();
+  await page.getByRole('tab', { name: 'Detail' }).click();
+  await expect(page.locator('.grid-stack-item')).toHaveCount(0);
+  await page.locator('.palette-item[data-tile-type="bar"]').click();
+  await expect(page.locator('.grid-stack-item')).toHaveCount(1);
+  const detailTileId = await page.locator('.grid-stack-item').getAttribute('gs-id');
+
+  const filters = await openFilters(page);
+  await filters.getByRole('button', { name: 'Add filter' }).click();
+  await filters.getByLabel('Filter source chart').selectOption(detailTileId);
+  await filters.getByLabel('Filter field').selectOption('label');
+  await filters.getByLabel('Filter scope').selectOption('page');
+  await filters.getByLabel('Filter page').selectOption({ label: 'Detail' });
+  await filters.getByRole('checkbox', { name: 'Housing', exact: true }).check();
+  await filters.getByRole('button', { name: 'Apply filter' }).click();
+  await filters.getByRole('button', { name: 'Close filters and parameters' }).click();
+  await expect(page.locator(`.grid-stack-item[gs-id="${detailTileId}"] .chart-data summary`)).toContainText('(1 rows)');
+  await page.getByRole('tab', { name: 'Page 1' }).click();
+  await expect(page.locator('.grid-stack-item[gs-id="overview-chart"] .chart-data summary')).toContainText('(8 rows)');
+  await page.getByRole('tab', { name: 'Detail' }).click();
+
+  await page.locator('#btn-save').click();
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Detail' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.grid-stack-item .chart-data summary')).toContainText('(1 rows)');
+  const jsonDownload = page.waitForEvent('download');
+  await page.locator('#btn-export').click();
+  const backup = JSON.parse(await fs.readFile(await (await jsonDownload).path(), 'utf8'));
+  expect(backup.version).toBe(4);
+  expect(backup.pages.map(item => item.name)).toEqual(['Page 1', 'Detail']);
+  expect(backup.tiles.map(item => item.pageId)).toEqual([backup.pages[0].id, backup.pages[1].id]);
+
+  const htmlDownload = page.waitForEvent('download');
+  await page.locator('#btn-export-html').click();
+  const htmlFile = await htmlDownload;
+  const exported = await context.newPage();
+  await exported.setContent(await fs.readFile(await htmlFile.path(), 'utf8'));
+  await expect(exported.locator('.export-page-tabs')).toBeVisible();
+  await expect(exported.locator('.export-grid:visible .export-tile')).toHaveCount(1);
+  await exported.getByRole('tab', { name: 'Page 1' }).click();
+  await expect(exported.locator('.export-grid:visible .export-tile')).toHaveCount(1);
+});
+
+test('Desktop parity: configured mark destinations navigate with the selected value in editor and offline viewer', async ({ page, context }) => {
+  await ready(page);
+  const source=tile('source-page-chart','bar','categorical',0,{clickDestinationPageId:'detail'});
+  source.pageId='page-1';
+  const target=tile('detail-page-chart','bar','categorical',0);target.pageId='detail';
+  const data={...envelope([source,target]),version:4,pages:[{id:'page-1',name:'Overview'},{id:'detail',name:'Detail'}],currentPageId:'page-1'};
+  await importJSON(page,data);
+  await page.locator('.grid-stack-item[gs-id="source-page-chart"] .tile-chart svg [aria-label^="Category: "]').first().click();
+  await expect(page.getByRole('tab',{name:'Detail'})).toHaveAttribute('aria-selected','true');
+  await expect(page.locator('.grid-stack-item[gs-id="detail-page-chart"] .chart-data summary')).toContainText('(1 rows)');
+  await page.getByRole('tab',{name:'Overview'}).click();
+  await page.locator('.grid-stack-item[gs-id="source-page-chart"] .tile-chart svg [aria-label^="Category: "]').first().click();
+  await expect(page.locator('.grid-stack-item[gs-id="detail-page-chart"] .chart-data summary')).toContainText('(8 rows)');
+
+  const htmlDownload=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const file=await htmlDownload, exported=await context.newPage(), html=await fs.readFile(await file.path(),'utf8');
+  const payload=exportPayload(html);expect(payload.tiles.find(item=>item.id==='detail-page-chart').rows[0]).toHaveProperty('label');
+  await exported.setContent(html);
+  await expect(exported.locator('.export-page-tabs')).toBeVisible();
+  await exported.getByRole('tab',{name:'Overview'}).click();
+  await exported.locator('.export-grid:visible .export-tile svg [aria-label^="Category: "]').first().click();
+  await expect(exported.locator('.export-page-tabs button[aria-selected="true"]')).toHaveText('Detail');
+  await expect(exported.locator('.export-crossfilter-chip')).toHaveCount(1);
+  await expect(exported.locator('.export-grid:visible .chart-data summary')).toContainText('(1 rows)');
+});
+
 test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and toggle off', async ({ page }) => {
   await ready(page);
   await importJSON(page, envelope([

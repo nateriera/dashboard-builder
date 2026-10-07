@@ -98,6 +98,10 @@ const tileMeta = new Map(); // widget id -> {id, type, title, source, dataset, t
 let dashboardDefault = { kind: "samples" };
 let filters = [];
 let parameters = [];
+let savedViews = [];
+let pages = [{ id:'page-1', name:'Page 1' }];
+let currentPageId = 'page-1';
+let pageTileCache = new Map([['page-1', []]]);
 
 function dashboardDefaultName() {
   const dd = dashboardDefault;
@@ -383,6 +387,13 @@ function buildTileContent(type, meta) {
     action.value=meta.tileOptions.clickAction||'filter-and-inspect';
     action.addEventListener('change',()=>{meta.tileOptions.clickAction=action.value;meta.drillValues=null;renderTileById(meta.id);scheduleAutosave();});
     actionLabel.append(action);settingsBody.append(actionLabel);
+    const destinationLabel=document.createElement('label');destinationLabel.className='tile-control';destinationLabel.textContent='Drill-through destination';
+    const destination=document.createElement('select');destination.setAttribute('aria-label','Drill-through destination');
+    const none=document.createElement('option');none.value='';none.textContent='Stay on this page';destination.append(none);
+    for(const page of pages.filter(item=>item.id!==meta.pageId)){const option=document.createElement('option');option.value=page.id;option.textContent=`Go to ${page.name}`;destination.append(option);}
+    destination.value=meta.tileOptions.clickDestinationPageId||'';
+    destination.addEventListener('change',()=>{if(destination.value)meta.tileOptions.clickDestinationPageId=destination.value;else delete meta.tileOptions.clickDestinationPageId;meta.drillValues=null;scheduleAutosave();});
+    destinationLabel.append(destination);settingsBody.append(destinationLabel);
     if(entry.crossfilterFields?.length){
       const sources=[...new Set(Object.values(TILE_TYPES).map(tile=>tile.crossfilterField).filter(Boolean))];
       for(const sourceField of sources){
@@ -418,7 +429,7 @@ function buildTileContent(type, meta) {
 }
 
 // Add a tile of `type` to the grid. Omit x/y for auto-placement.
-function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, sizing = "manual", fit = false } = {}) {
+function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, sizing = "manual", fit = false, pageId = currentPageId } = {}) {
   const entry = TILE_TYPES[type];
   if (!entry) return null;
 
@@ -432,6 +443,7 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, si
     // per-tile overrides. Undefined (very old layouts) also follows.
     dataset: dataset === undefined ? null : dataset,
     sizing: fit ? "auto" : sizing,
+    pageId,
     tileOptions: { ...(tileOptions || {}) }
   };
   tileMeta.set(widgetId, meta);
@@ -478,7 +490,7 @@ function filtersForTile(meta) {
 }
 
 function prepareTileRows(meta, rows) {
-  const filtered = applyFilters(rows, filtersForTile(meta), { sourceTile: meta.id });
+  const filtered = applyFilters(rows, filtersForTile(meta), { sourceTile: meta.id, pageId:meta.pageId });
   if (filtered.applied && filtered.rows.length === 0) return { rows: [], empty: true, filtered: true };
   const sortable = ['bar','column','dot','stackedBar','stackedColumn'].includes(meta.type);
   const topN = sortable ? meta.tileOptions?.topN ?? null : null;
@@ -638,6 +650,10 @@ function wireCrossfilter(chartEl, meta, entry) {
     if (nextValues.length) next.push({id:current?.id||`cross-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,field:entry.crossfilterField,op:'is',values:nextValues,source:'crossfilter',sourceTile:meta.id});
     for(const tile of tileMeta.values())tile.drillValues=null;
       const action=meta.tileOptions?.clickAction||'filter-and-inspect';
+      const destination=meta.tileOptions?.clickDestinationPageId;
+      if(destination&&pages.some(page=>page.id===destination)){
+        meta.drillValues=null;setFilters(next);switchDashboardPage(destination);return;
+      }
       meta.drillValues=action==='filter-only'?null:values;
       if(action==='inspect-only'){
         for(const tile of tileMeta.values()){
@@ -657,7 +673,7 @@ function wireCrossfilter(chartEl, meta, entry) {
 
 function renderDrillRows(chartEl,meta,field,values){
   if(!Array.isArray(meta.filterRows)||!field)return;
-  const base=applyFilters(meta.filterRows,filtersForTile(meta),{sourceTile:meta.id}).rows;
+  const base=applyFilters(meta.filterRows,filtersForTile(meta),{sourceTile:meta.id,pageId:meta.pageId}).rows;
   const rows=base.filter(row=>values.some(value=>Object.is(row[field],value)));
   if(!rows.length)return;
   const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))].map(key=>({key}));
@@ -815,32 +831,26 @@ function fitTileNow(el) {
 
 // ── Layout serialization ─────────────────────────────────────────────────
 function serializeLayout() {
+  const activeTiles = grid.save(false).map((n) => {
+    const meta = tileMeta.get(n.id) || {};
+    return { id:n.id, type:meta.type, title:meta.title, source:meta.source, dataset:meta.dataset,
+      binding:TILE_TYPES[meta.type]?.noData?{mode:'none'}:meta.dataset==null?{mode:'dashboard'}:{mode:'explicit',ref:meta.dataset},
+      sizing:meta.sizing, tileOptions:meta.tileOptions, pageId:currentPageId, x:n.x,y:n.y,w:n.w,h:n.h };
+  });
+  const tiles = pages.flatMap(page => page.id === currentPageId ? activeTiles : pageTileCache.get(page.id) || []);
   return {
     app: "dashboard-builder",
-    version: 3,
+    version: 4,
     rowHeight: ROW_HEIGHT,
     savedAt: new Date().toISOString(),
     defaultDataset: dashboardDefault,
     filters,
     parameters,
+    savedViews,
+    pages,
+    currentPageId,
     theme: getThemeId(),
-    tiles: grid.save(false).map((n) => {
-      const meta = tileMeta.get(n.id) || {};
-      return {
-        id: n.id,
-        type: meta.type,
-        title: meta.title,
-        source: meta.source,
-        dataset: meta.dataset,
-        binding: TILE_TYPES[meta.type]?.noData ? { mode: "none" } : meta.dataset == null ? { mode: "dashboard" } : { mode: "explicit", ref: meta.dataset },
-        sizing: meta.sizing,
-        tileOptions: meta.tileOptions,
-        x: n.x,
-        y: n.y,
-        w: n.w,
-        h: n.h
-      };
-    })
+    tiles
   };
 }
 
@@ -852,20 +862,48 @@ function loadLayout(data, { fit = false } = {}) {
   try {
     grid.removeAll();
     tileMeta.clear();
+    pages = data.pages || [{id:'page-1',name:'Page 1'}];
+    currentPageId = data.currentPageId || pages[0].id;
+    pageTileCache = new Map(pages.map(page => [page.id, data.tiles.filter(tile => tile.pageId === page.id)]));
     dashboardDefault = validateDashboardDefault(data.defaultDataset);
     filters = data.filters || [];
     parameters = data.parameters || [];
+    savedViews = data.savedViews || [];
+    refreshSavedViews();
     refreshDashboardButton();
     if (data.theme) {
       setTheme(data.theme);
       refreshThemeButton();
     }
-    for (const t of data.tiles) {
+    renderPageTabs();
+    for (const t of pageTileCache.get(currentPageId) || []) {
       addTile(t.type, { ...t, fit });
     }
   } finally {
     bulkLoading = false;
   }
+}
+
+function renderPageTabs() {
+  const nav=document.getElementById('page-tabs'); if(!nav)return;
+  nav.replaceChildren(); nav.setAttribute('role','tablist');
+  for(const page of pages){
+    const tab=document.createElement('button');tab.type='button';tab.setAttribute('role','tab');tab.textContent=page.name;
+    tab.setAttribute('aria-selected',String(page.id===currentPageId));tab.classList.toggle('active',page.id===currentPageId);
+    tab.addEventListener('click',()=>switchDashboardPage(page.id));nav.append(tab);
+  }
+  const add=document.createElement('button');add.type='button';add.id='btn-add-page';add.textContent='+';add.title='Add dashboard page';add.setAttribute('aria-label','Add dashboard page');
+  add.addEventListener('click',()=>{const name=window.prompt('Name this dashboard page:')?.trim();if(!name)return;if(name.length>80){setStatus('Page names are limited to 80 characters.');return;}
+    const page={id:`page-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`,name};pages=[...pages,page];pageTileCache.set(page.id,[]);switchDashboardPage(page.id);scheduleAutosave();});nav.append(add);
+}
+function switchDashboardPage(pageId) {
+  if(pageId===currentPageId||!pages.some(page=>page.id===pageId))return;
+  const activeTiles=grid.save(false).map(n=>{const meta=tileMeta.get(n.id)||{};return {id:n.id,type:meta.type,title:meta.title,source:meta.source,dataset:meta.dataset,
+    binding:TILE_TYPES[meta.type]?.noData?{mode:'none'}:meta.dataset==null?{mode:'dashboard'}:{mode:'explicit',ref:meta.dataset},sizing:meta.sizing,tileOptions:meta.tileOptions,pageId:currentPageId,x:n.x,y:n.y,w:n.w,h:n.h};});
+  pageTileCache.set(currentPageId,activeTiles);bulkLoading=true;
+  try{grid.removeAll();tileMeta.clear();currentPageId=pageId;for(const tile of pageTileCache.get(pageId)||[])addTile(tile.type,{...tile,pageId});renderPageTabs();}
+  finally{bulkLoading=false;}
+  renderAllTiles();scheduleAutosave();
 }
 
 // Apply a template: like loadLayout, but the template's explicit sample
@@ -1022,8 +1060,39 @@ const btnData = document.getElementById("btn-data");
 const btnFilters = document.getElementById("btn-filters");
 const btnTemplates = document.getElementById("btn-templates");
 const btnTheme = document.getElementById("btn-theme");
+const savedViewPicker = document.getElementById('saved-view-picker');
+function refreshSavedViews() {
+  if (!savedViewPicker) return;
+  const selected = savedViewPicker.value;
+  savedViewPicker.replaceChildren(new Option('Current view', ''));
+  for (const view of savedViews) savedViewPicker.append(new Option(view.name, view.id));
+  if (savedViews.some(view => view.id === selected)) savedViewPicker.value = selected;
+}
+document.getElementById('btn-save-view')?.addEventListener('click', () => {
+  const name = window.prompt('Name this saved view:')?.trim();
+  if (!name) return;
+  if (name.length > 80) { setStatus('Saved view names are limited to 80 characters.'); return; }
+  const existing = savedViews.find(view => view.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+  const view = { id: existing?.id || `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name,
+    theme: getThemeId(), currentPageId, filters: structuredClone(filters), parameters: structuredClone(parameters) };
+  savedViews = [...savedViews.filter(item => item.id !== view.id), view];
+  refreshSavedViews(); savedViewPicker.value = view.id; scheduleAutosave();
+  setStatus(`Saved view “${name}”.`);
+});
+document.getElementById('btn-apply-view')?.addEventListener('click', () => {
+  const view = savedViews.find(item => item.id === savedViewPicker?.value);
+  if (!view) { setStatus('Choose a saved view first.'); return; }
+  switchDashboardPage(view.currentPageId);
+  filters = validateFilters(structuredClone(view.filters));
+  parameters = validateParameters(structuredClone(view.parameters));
+  setTheme(view.theme); refreshThemeButton();
+  renderAllTiles(); refreshQueryTiles(); scheduleAutosave();
+  setStatus(`Applied saved view “${view.name}”.`);
+});
 function dashboardFilterTiles() {
-  return [...tileMeta.values()].flatMap(meta => {
+  const pageNames=new Map(pages.map(page=>[page.id,page.name]));
+  return serializeLayout().tiles.flatMap(tile => {
+    const meta=tileMeta.get(tile.id)||tile;
     const entry=TILE_TYPES[meta.type];
     if (!entry || entry.noData) return [];
     let rows=meta.filterRows;
@@ -1035,7 +1104,7 @@ function dashboardFilterTiles() {
       const type=filterFieldType(rows,field);
       return {field,type,...(type==='category' ? distinctValues(rows,field) : {})};
     });
-    return [{id:meta.id,title:meta.title,fields}];
+    return [{id:meta.id,title:meta.title,pageId:meta.pageId,pageName:pageNames.get(meta.pageId),fields}];
   });
 }
 function setFilters(next) {
@@ -1056,6 +1125,7 @@ if (btnFilters) {
       filters,
       parameters,
       tiles:dashboardFilterTiles(),
+      pages,
       tileTitle:id=>tileMeta.get(id)?.title || id,
       onFiltersChange:setFilters,
       onParametersChange:setParameters
@@ -1290,24 +1360,24 @@ async function exportHtml() {
       throw new Error("export template is stale (payload placeholder missing) — run “npm run build” once");
     }
 
+    const layout=serializeLayout();
     const tiles = [];
-    for (const el of gridEl.querySelectorAll(".grid-stack-item")) {
-      const node = el.gridstackNode;
-      if (!node) continue;
-      const meta = tileMeta.get(node.id);
-      const entry = meta && TILE_TYPES[meta.type];
+    for (const savedTile of layout.tiles) {
+      const meta = tileMeta.get(savedTile.id) || savedTile;
+      const entry = TILE_TYPES[meta.type];
       if (!meta || !entry) continue;
       const resolved = await resolveExportRows(meta, entry);
       tiles.push({
         id: meta.id,
         type: meta.type,
+        pageId:meta.pageId,
         crossfilterField: entry.crossfilterField || null,
         title: meta.title,
         source: meta.source,
-        x: node.x,
-        y: node.y,
-        w: node.w,
-        h: node.h,
+        x: savedTile.x,
+        y: savedTile.y,
+        w: savedTile.w,
+        h: savedTile.h,
         tileOptions: meta.tileOptions || {},
         rows: resolved.error ? null : resolved.rawRows || resolved.rows || null,
         error: resolved.error || null,
@@ -1317,8 +1387,11 @@ async function exportHtml() {
 
     const payload = {
       app: "dashboard-builder",
-      version: 3,
+      version: 4,
     rowHeight: ROW_HEIGHT,
+      pages:layout.pages,
+      currentPageId:layout.currentPageId,
+      savedViews:layout.savedViews,
       kind: "dashboard-export",
       title: serializeLayout().title || "Dashboard",
       exportedAt: new Date().toISOString(),

@@ -17,9 +17,11 @@
 - Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
 - Dashboard category, numeric, and date filters connect explicitly to chart fields, including relative date presets
+- Set filters at dashboard, page, or selected-chart scope across named report pages
+- Save named dashboard views that restore the active page, filters, parameters, and theme
 - Brush a time-series range or select category marks to create independent cross-filters from multiple charts
 - Choose whether each category chart filters rows, highlights matching marks, or ignores incoming cross-filters
-- Configure chart mark clicks to filter charts, inspect source records, or do both
+- Configure chart mark clicks to filter charts, inspect source records, or navigate to a drill-through page
 - Inspect source columns in each chart's paginated data table
 - Select a category to see its contributing source rows
 - Export a standalone HTML dashboard with working filters and chart cross-filtering
@@ -28,7 +30,7 @@
 - Optional per-tile reference lines, with labels, mark targets and thresholds
 - Save and reuse local data-wrangling recipes for pivots and calculated fields
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
-- 4 themes, 6 starter templates, save/load dashboards as JSON
+- 4 themes, 6 starter templates, save/load multi-page dashboards as JSON
 - Export to a single self-contained HTML file — email it or host it anywhere, no server needed
 - Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
 

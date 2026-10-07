@@ -34,7 +34,7 @@ export function toggleFiltersPopover(options) {
   openFiltersPopover(options);
 }
 
-function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [], tileTitle, onFiltersChange, onParametersChange }) {
+function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [], pages = [], tileTitle, onFiltersChange, onParametersChange }) {
   anchor=nextAnchor;
   const filterTiles=tiles;
   let currentFilters=validateFilters(filters);
@@ -98,7 +98,8 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
     for(const filter of currentFilters){
       const chip=element("div",filter.source==='crossfilter'?'dashboard-filter-chip crossfilter-chip':'dashboard-filter-chip');
       if(filter.source==='crossfilter') chip.setAttribute("data-crossfilter-chip","true");
-      const caption=element("span","",filterDescription(filter));
+      const scopeName=filter.source==='crossfilter'?'selection':filter.scope==='page'?'page':filter.scope==='charts'||filter.targets?'selected charts':'dashboard';
+      const caption=element("span","",`${filterDescription(filter)} · ${scopeName}`);
       const remove=element("button","filter-remove","×");remove.type="button";remove.title=`Remove ${filter.field} filter`;remove.setAttribute("aria-label",`Remove ${filter.field} filter`);
       remove.addEventListener("click",()=>{emitFilters(currentFilters.filter(item=>item.id!==filter.id));renderFiltersPanel();});
       chip.append(caption,remove);list.append(chip);
@@ -110,11 +111,26 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
         const type=filter.op==='between'?'number':filter.op==='date-between'?'date':'category';
         const existing=filter.targets || filterTiles.flatMap(tile=>tile.fields.some(field=>field.field===filter.field&&field.type===type)?[{tileId:tile.id,field:filter.field}]:[]);
         let pendingTargets=existing;
+        let pendingScope=filter.scope||(filter.targets?'charts':'dashboard');
+        let pendingPage=filter.pageId||filterTiles.find(tile=>tile.id===existing[0]?.tileId)?.pageId||pages[0]?.id||'';
+        const scopeLabel=element('label','filter-field-label','Scope');
+        const scopeSelect=element('select','filter-field-select');scopeSelect.setAttribute('aria-label',`Scope for ${filter.field} filter`);
+        for(const [value,label] of [['dashboard','Dashboard'],['page','Page'],['charts','Selected charts']]){const option=element('option','',label);option.value=value;scopeSelect.append(option);}
+        scopeSelect.value=pendingScope;
+        const pageSelect=element('select','filter-field-select');pageSelect.setAttribute('aria-label',`Page for ${filter.field} filter`);
+        for(const page of pages){const option=element('option','',page.name);option.value=page.id;pageSelect.append(option);}
+        pageSelect.value=pendingPage;pageSelect.hidden=pendingScope!=='page';
+        scopeLabel.append(scopeSelect,pageSelect);controls.append(scopeLabel);
         renderConnectionEditors(controls,type,existing,targets=>{pendingTargets=targets;});
+        const connections=controls.querySelector('.filter-connection-list');
+        function updateScopeControls(){pageSelect.hidden=pendingScope!=='page';if(connections)connections.hidden=pendingScope!=='charts';}
+        scopeSelect.addEventListener('change',()=>{pendingScope=scopeSelect.value;updateScopeControls();});
+        pageSelect.addEventListener('change',()=>{pendingPage=pageSelect.value;});
+        updateScopeControls();
         const saveConnections=element('button','filter-apply','Save connections');saveConnections.type='button';
         saveConnections.addEventListener('click',()=>{
-          if(!pendingTargets.length){const warning=element('p','filters-form-error','Connect this filter to at least one chart.');controls.querySelector('.filters-form-error')?.remove();controls.append(warning);return;}
-          try{emitFilters(currentFilters.map(item=>item.id===filter.id?{...item,targets:pendingTargets}:item));renderFiltersPanel();}
+          if(pendingScope==='charts'&&!pendingTargets.length){const warning=element('p','filters-form-error','Connect this filter to at least one chart.');controls.querySelector('.filters-form-error')?.remove();controls.append(warning);return;}
+          try{emitFilters(currentFilters.map(item=>{if(item.id!==filter.id)return item;const next={...item};delete next.targets;delete next.pageId;if(pendingScope==='page'){next.scope='page';next.pageId=pendingPage;}else if(pendingScope==='charts'){next.scope='charts';next.targets=pendingTargets;}else delete next.scope;return next;}));renderFiltersPanel();}
           catch(err){const warning=element('p','filters-form-error',err.message);controls.append(warning);}
         });
         controls.append(saveConnections);
@@ -140,7 +156,13 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
     const fieldPlaceholder=element("option","","Choose a field");fieldPlaceholder.value="";fieldPlaceholder.disabled=true;fieldPlaceholder.selected=true;fieldSelect.append(fieldPlaceholder);
     fieldLabel.append(fieldSelect);form.append(fieldLabel);
     const controls=element("div","filter-value-controls");form.append(controls);
-    const targetWrap=element('div','filter-targets');form.append(targetWrap);
+    const scopeLabel=element('label','filter-field-label','Filter scope');
+    const scopeSelect=element('select','filter-field-select');scopeSelect.setAttribute('aria-label','Filter scope');
+    for(const [value,label] of [['dashboard','Dashboard — matching fields on every page'],['page','Page — matching fields on one page'],['charts','Selected charts — choose connections']]){const option=element('option','',label);option.value=value;scopeSelect.append(option);}
+    const pageSelect=element('select','filter-field-select');pageSelect.setAttribute('aria-label','Filter page');pageSelect.hidden=true;
+    for(const page of pages){const option=element('option','',page.name);option.value=page.id;pageSelect.append(option);}
+    scopeLabel.append(scopeSelect,pageSelect);form.append(scopeLabel);
+    const targetWrap=element('div','filter-targets');targetWrap.hidden=true;form.append(targetWrap);
     const error=element("p","filters-form-error");error.hidden=true;form.append(error);
     const actions=element("div","filter-form-actions");
     const cancel=element("button","filter-cancel","Cancel");cancel.type="button";cancel.addEventListener("click",()=>{addFilterOpen=false;renderFiltersPanel();});
@@ -201,6 +223,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       selectedTargets=defaultTargets(selectedTile.id,selectedField);
       targetsTouched=false;
       renderConnectionEditors(targetWrap,selectedField.type,selectedTargets,(targets)=>{selectedTargets=targets;targetsTouched=true;updateApplyState();});
+      scopeSelect.value='dashboard';pageSelect.value=selectedTile.pageId||pages[0]?.id||'';pageSelect.hidden=true;targetWrap.hidden=true;
       updateApplyState();
     };
     function defaultTargets(_sourceTileId,sourceField){
@@ -210,24 +233,25 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       const type=selectedField?.type;
       const ordered=type==='number'?Number(selectedValues[0])<=Number(selectedValues[1]):selectedValues[0]<=selectedValues[1];
       const validValues=type==='category'?selectedValues.length>0:selectedValues.length===2&&selectedValues.every(value=>value!=='')&&(type!=='number'||selectedValues.every(value=>Number.isFinite(Number(value))))&&ordered;
-      apply.disabled=!selectedField||!validValues||!selectedTargets.length;
+      apply.disabled=!selectedField||!validValues||(scopeSelect.value==='charts'&&!selectedTargets.length);
     }
+    scopeSelect.addEventListener('change',()=>{pageSelect.hidden=scopeSelect.value!=='page';targetWrap.hidden=scopeSelect.value!=='charts';updateApplyState();});
+    pageSelect.addEventListener('change',updateApplyState);
     sourceTileSelect.addEventListener('change',()=>{selectedTile=null;fieldSelect.value='';renderControls();});
     fieldSelect.addEventListener("change",renderControls);
     if(filterTiles.length){sourceTileSelect.value=filterTiles[0].id;renderControls();}
     apply.addEventListener("click",()=>{
       if(!selectedField)return;
       let filter;
-      if(!selectedTargets.length){showError('Connect this filter to at least one chart.');return;}
-      const requiresExplicitTargets=targetsTouched||filterTiles.some(tile=>tile.fields.some(field=>field.field===selectedField.field&&field.type!==selectedField.type));
-      const targetOptions=requiresExplicitTargets?{targets:selectedTargets}:{};
+      if(scopeSelect.value==='charts'&&!selectedTargets.length){showError('Connect this filter to at least one chart.');return;}
+      const scopeOptions=scopeSelect.value==='page'?{scope:'page',pageId:pageSelect.value}:scopeSelect.value==='charts'?{scope:'charts',targets:selectedTargets}:{scope:'dashboard'};
       if(selectedField.type==='number'){
         const [min,max]=selectedValues.map(Number);
         if(!Number.isFinite(min)||!Number.isFinite(max)||min>max){showError("Enter a valid minimum and maximum.");return;}
-        filter={id:newId('filter'),field:selectedField.field,op:'between',values:[min,max],...targetOptions};
+        filter={id:newId('filter'),field:selectedField.field,op:'between',values:[min,max],...scopeOptions};
       }else if(selectedField.type==='date'){
-        filter={id:newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...(selectedRelativePreset?{relativePreset:selectedRelativePreset}:{}),...targetOptions};
-      }else filter={id:newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues,...targetOptions};
+        filter={id:newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...(selectedRelativePreset?{relativePreset:selectedRelativePreset}:{}),...scopeOptions};
+      }else filter={id:newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues,...scopeOptions};
       try{emitFilters([...currentFilters,filter]);addFilterOpen=false;renderFiltersPanel();}
       catch(err){showError(err.message);}
     });

@@ -64,6 +64,30 @@ function renderExport(payload) {
   }
   root.appendChild(head);
 
+  if(Array.isArray(payload.savedViews)&&payload.savedViews.length){
+    const views=document.createElement('section');views.className='export-saved-views';views.setAttribute('aria-label','Saved dashboard views');
+    const label=document.createElement('label');label.textContent='Saved view';
+    const select=document.createElement('select');select.setAttribute('aria-label','Saved dashboard view');
+    const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose a view';select.appendChild(placeholder);
+    for(const view of payload.savedViews){const option=document.createElement('option');option.value=view.id;option.textContent=view.name;select.appendChild(option);}
+    const apply=document.createElement('button');apply.type='button';apply.textContent='Apply view';
+    apply.addEventListener('click',()=>{const view=payload.savedViews.find(item=>item.id===select.value);if(!view)return;
+      payload.filters=JSON.parse(JSON.stringify(view.filters));payload.currentPageId=view.currentPageId;payload.theme=view.theme;previewTheme(view.theme);renderExport(payload);});
+    label.appendChild(select);views.append(label,apply);root.appendChild(views);
+  }
+
+  const pages=Array.isArray(payload.pages)&&payload.pages.length?payload.pages:[{id:'page-1',name:'Dashboard'}];
+  let activePageId=pages.some(page=>page.id===payload.currentPageId)?payload.currentPageId:pages[0].id;
+  const pageNav=document.createElement('nav');pageNav.className='export-page-tabs';pageNav.setAttribute('aria-label','Dashboard pages');
+  const pageGrids=new Map();
+  for(const page of pages){
+    const button=document.createElement('button');button.type='button';button.textContent=page.name;button.setAttribute('role','tab');
+    button.setAttribute('aria-selected',String(page.id===activePageId));
+    button.addEventListener('click',()=>{activePageId=page.id;for(const tab of pageNav.children)tab.setAttribute('aria-selected',String(tab===button));for(const [id,grid] of pageGrids)grid.hidden=id!==activePageId;});
+    pageNav.appendChild(button);
+  }
+  if(pages.length>1)root.appendChild(pageNav);
+
   const controls = document.createElement("section");
   controls.className = "export-filters";
   controls.setAttribute("aria-label", "Dashboard filters");
@@ -161,10 +185,10 @@ function renderExport(payload) {
     return;
   }
 
-  const grid = document.createElement("div");
-  grid.className = "export-grid";
-  grid.style.setProperty("--grid-row-height", `${payload.version >= 3 ? payload.rowHeight : 72}px`);
-  root.appendChild(grid);
+  for(const page of pages){
+    const grid=document.createElement('div');grid.className='export-grid';grid.dataset.pageId=page.id;grid.hidden=page.id!==activePageId;
+    grid.style.setProperty('--grid-row-height',`${payload.version>=3?payload.rowHeight:72}px`);root.appendChild(grid);pageGrids.set(page.id,grid);
+  }
 
   const rendered = [];
   const brushStates = new WeakMap();
@@ -179,8 +203,9 @@ function renderExport(payload) {
     const chartEl = document.createElement("div");
     chartEl.className = "tile-chart";
     tile.appendChild(chartEl);
-    grid.appendChild(tile);
-    rendered.push({ t, entry, chartEl });
+    const pageId=pages.some(page=>page.id===t.pageId)?t.pageId:pages[0].id;
+    pageGrids.get(pageId).appendChild(tile);
+    rendered.push({ t:{...t,pageId}, entry, chartEl });
   }
 
   const paint = () => {
@@ -203,7 +228,7 @@ function renderExport(payload) {
         try {
           const mode=t.tileOptions?.crossfilterMode||'filter';
           const activeFilters = filters.filter(filter => filter.values.length > 0 && (filter.source!=='crossfilter'||filter.sourceTile===t.id||mode==='filter'));
-          const filtered = applyFilters(t.rows, activeFilters, { sourceTile: t.id });
+          const filtered = applyFilters(t.rows, activeFilters, { sourceTile: t.id, pageId:t.pageId });
           const sortable = ['bar','column','dot','stackedBar','stackedColumn'].includes(t.type);
           const data = sortable && t.tileOptions?.topN != null
             ? sortAndLimitRows(t.type, filtered.rows, { sort: t.tileOptions?.sort ?? 'desc', topN: t.tileOptions.topN })
@@ -234,7 +259,7 @@ function renderExport(payload) {
           }
           if(inspection?.tileId===t.id){
             const sourceFilters=filters.filter(filter=>filter.source!=='crossfilter'||filter.sourceTile===t.id||mode==='filter');
-            const records=applyFilters(t.rows,sourceFilters,{sourceTile:t.id}).rows.filter(row=>inspection.values.some(value=>Object.is(row[entry.crossfilterField],value)));
+            const records=applyFilters(t.rows,sourceFilters,{sourceTile:t.id,pageId:t.pageId}).rows.filter(row=>inspection.values.some(value=>Object.is(row[entry.crossfilterField],value)));
             if(records.length){const details=chartData(records,[...new Set(records.flatMap(row=>Object.keys(row)))].map(key=>({key})),`${t.title} — selected records`);details.classList.add('chart-drillthrough');chartEl.append(details);details.open=true;}
           }
         } catch (err) {
@@ -257,7 +282,8 @@ function renderExport(payload) {
       if (!Array.isArray(values) || !values.length) return;
       event.preventDefault();
       const action=t.tileOptions?.clickAction||'filter-and-inspect';
-      if(action==='inspect-only'){
+      const destination=t.tileOptions?.clickDestinationPageId;
+      if(action==='inspect-only'&&!destination){
         inspection={tileId:t.id,values};
         paint();
         return;
@@ -274,7 +300,8 @@ function renderExport(payload) {
       } else if (sameSource && values.length === current.values.length && values.every(value => current.values.some(item => Object.is(item, value)))) nextValues = [];
       filters = filters.filter(filter => filter !== current);
       if (nextValues.length) filters.push({ id: current?.id || `cross-export-${Date.now().toString(36)}`, field: t.crossfilterField, op: "is", values: nextValues, source: "crossfilter", sourceTile: t.id });
-      inspection=action==='filter-only'||!nextValues.length?null:{tileId:t.id,values};
+      if(destination&&pageGrids.has(destination)){activePageId=destination;for(const [id,grid] of pageGrids)grid.hidden=id!==activePageId;for(const button of pageNav.children)button.setAttribute('aria-selected',String(pages[[...pageNav.children].indexOf(button)]?.id===destination));}
+      inspection=action==='filter-only'||!nextValues.length||destination?null:{tileId:t.id,values};
       paint();
     });
   }

@@ -402,6 +402,7 @@ export function areaChart(data, { x = "date", y = "value", series = null, width 
   const marks=series?
     [Plot.areaY(data,{x,y1:0,y2:y,z:series,fill:series,fillOpacity:.18,tip:true}),Plot.lineY(data,{x,y,z:series,stroke:series,strokeWidth:1.5})]:
     [Plot.areaY(data,{x,y1:0,y2:y,fill:t.primary,fillOpacity:.45,tip:true}),Plot.lineY(data,{x,y,stroke:t.primary,strokeWidth:2})];
+  marks.push(Plot.dot(data,{x,y,r:1,fillOpacity:0,strokeOpacity:0,tip:false,ariaLabel:()=>""}));
   marks.push(...referenceMarks("y",referenceValue,referenceLabel,theme,{x:axisMaximum(data,x),y:Number(referenceValue)}));
   return themedPlot(theme,{width,height,x:{label:xLabel??null,type:xType},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt),grid:true,domain:domainWithReference(data.map(row=>row[y]),referenceValue,null,true)},color:series?{range:t.categorical,legend:true}:undefined,marks});
 }
@@ -646,6 +647,7 @@ export const chartStyles = html`<style>
 .tile-chart svg a[data-crossfilter-selected="true"] { filter: drop-shadow(0 0 3px var(--periwinkle)); }
 .tile-chart svg a[data-crossfilter-selected="false"],
 .tile-chart svg path[data-crossfilter-selected="false"] { opacity: .38; }
+.tile-chart svg .db-time-brush { fill: rgb(62 92 118 / 14%); stroke: var(--periwinkle); stroke-width: 1.25; pointer-events: none; }
 .db-data-table { min-width: 0; }
 .db-data-table-scroll { max-width: 100%; max-height: min(60vh, 560px); overflow: auto; }
 .db-data-table-grid { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12px; }

@@ -133,32 +133,86 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
 
   const popover = await openFilters(page);
   await expect(popover.locator('[data-crossfilter-chip="true"]')).toContainText('label is Housing');
-  await expect(popover.locator('[data-crossfilter-chip="true"]')).toContainText('Source Bar');
+  await expect(popover.locator('[data-crossfilter-chip="true"]').first()).toContainText('Source Bar');
   await fs.mkdir('docs/screenshots/phase2', { recursive: true });
   await popover.screenshot({ path: 'docs/screenshots/phase2/crossfilter-chip.png' });
   await page.locator('#btn-filters').click();
-  await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
-  await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
-
-  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click();
-  await expect(donut.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(8 rows)');
+  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  await expect(donut.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(1 rows)');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
-  const donutFilter = await openFilters(page);
-  await expect(donutFilter.locator('[data-crossfilter-chip="true"]')).toContainText('label is Housing');
-  await expect(donutFilter.locator('[data-crossfilter-chip="true"]')).toContainText('Category Donut');
-  await page.locator('#btn-filters').click();
-
-  await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
-  const replacement = await openFilters(page);
-  await expect(replacement.locator('[data-crossfilter-chip="true"]')).toContainText('Source Bar');
+  const independent = await openFilters(page);
+  await expect(independent.locator('[data-crossfilter-chip="true"]')).toHaveCount(2);
+  await expect(independent.locator('[data-crossfilter-chip="true"]').last()).toContainText('Category Donut');
   await page.locator('#btn-filters').click();
   await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
-  await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
-
-  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click();
+  const oneLeft = await openFilters(page);
+  await expect(oneLeft.locator('[data-crossfilter-chip="true"]')).toHaveCount(1);
+  await expect(oneLeft.locator('[data-crossfilter-chip="true"]').first()).toContainText('Category Donut');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
-  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click();
+  await page.locator('#btn-filters').click();
+  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
   await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
+});
+
+test('Desktop parity: cross-filter selections from different source charts remain independent', async ({ page }) => {
+  await ready(page);
+  await importJSON(page, envelope([
+    tile('source-bar', 'bar', 'categorical', 0),
+    tile('other-bar', 'bar', 'categorical', 16),
+    tile('category-donut', 'donut', 'categorical', 32)
+  ]));
+  const sourceBar=page.locator('.grid-stack-item[gs-id="source-bar"]');
+  const otherBar=page.locator('.grid-stack-item[gs-id="other-bar"]');
+  const donut=page.locator('.grid-stack-item[gs-id="category-donut"]');
+  await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
+  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  const popover=await openFilters(page);
+  await expect(popover.locator('[data-crossfilter-chip="true"]')).toHaveCount(2);
+  await expect(popover.locator('[data-crossfilter-chip="true"]').first()).toContainText('Source Bar');
+  await expect(popover.locator('[data-crossfilter-chip="true"]').last()).toContainText('Category Donut');
+  await page.locator('#btn-filters').click();
+  await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
+  const remaining=await openFilters(page);
+  await expect(remaining.locator('[data-crossfilter-chip="true"]')).toHaveCount(1);
+  await expect(remaining.locator('[data-crossfilter-chip="true"]')).toContainText('Category Donut');
+  await page.locator('#btn-filters').click();
+  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
+});
+
+test('Desktop parity: target charts can filter, highlight, or ignore incoming selections', async ({ page }) => {
+  await ready(page);
+  await importJSON(page,envelope([tile('source','bar','categorical',0),tile('target','bar','categorical',16)]));
+  const source=page.locator('.grid-stack-item[gs-id="source"]');
+  const target=page.locator('.grid-stack-item[gs-id="target"]');
+  await target.locator('.tile-settings summary').click();
+  await target.getByLabel('Incoming cross-filter behavior').selectOption('highlight');
+  await source.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
+  await expect(target.locator('.chart-data summary')).toContainText('(8 rows)');
+  await expect(target.locator('.tile-chart svg a[data-crossfilter-selected="true"]')).toHaveCount(1);
+  await expect(target.locator('.tile-chart svg a[data-crossfilter-selected="false"]').first()).toBeVisible();
+  await target.getByLabel('Incoming cross-filter behavior').selectOption('none');
+  await expect(target.locator('.chart-data summary')).toContainText('(8 rows)');
+  await expect(target.locator('.tile-chart svg [data-crossfilter-selected]')).toHaveCount(0);
+});
+
+test('Desktop parity: mark clicks can filter charts or inspect records independently', async ({ page }) => {
+  await ready(page);
+  await importJSON(page,envelope([tile('source','bar','categorical',0),tile('target','bar','categorical',16)]));
+  const source=page.locator('.grid-stack-item[gs-id="source"]');
+  const target=page.locator('.grid-stack-item[gs-id="target"]');
+  await source.locator('.tile-settings summary').click();
+  await source.getByLabel('Mark click action').selectOption('inspect-only');
+  await source.locator('.tile-settings summary').click();
+  await source.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
+  await expect(source.locator('.chart-drillthrough summary')).toContainText('(1 rows)');
+  await expect(target.locator('.chart-data summary')).toContainText('(8 rows)');
+  await source.locator('.tile-settings summary').click();
+  await source.getByLabel('Mark click action').selectOption('filter-only');
+  await source.locator('.tile-settings summary').click();
+  await source.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
+  await expect(target.locator('.chart-data summary')).toContainText('(1 rows)');
+  await expect(source.locator('.chart-drillthrough')).toHaveCount(0);
 });
 
 test('Desktop parity: date range controls filter a tile and chart type switching preserves its data binding', async ({ page }) => {
@@ -182,6 +236,40 @@ test('Desktop parity: date range controls filter a tile and chart type switching
   await expect(page.locator('#status')).toContainText('Saved');
   await page.reload();
   await expect(page.locator('.grid-stack-item[gs-id="monthly-trend"] .chart-data summary')).toContainText('(4 rows)');
+});
+
+test('Desktop parity: relative year-to-date date filter uses calendar boundaries', async ({ page }) => {
+  await ready(page);
+  await importJSON(page, envelope([tile('monthly-trend', 'line', 'timeseries', 0)]));
+  const chart=page.locator('.grid-stack-item[gs-id="monthly-trend"]');
+  const popover=await openFilters(page);
+  await popover.getByRole('button',{name:'Add filter'}).click();
+  await popover.getByLabel('Filter source chart').selectOption('monthly-trend');
+  await popover.getByLabel('Filter field').selectOption('date');
+  await popover.getByLabel('Date range preset').selectOption('year-to-date');
+  await popover.getByRole('button',{name:'Apply filter'}).click();
+  const expectedRows=await page.evaluate(()=>2*(new Date().getUTCMonth()+1));
+  await expect(chart.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText(`(${expectedRows} rows)`);
+  await expect(popover.locator('.dashboard-filter-chip')).toContainText('Year to date');
+});
+
+test('Desktop parity: time-series brushing applies a date range to other charts', async ({page})=>{
+  await ready(page);
+  await importJSON(page,envelope([tile('brush-source','line','timeseries',0),tile('brush-target','line','timeseries',16)]));
+  const source=page.locator('.grid-stack-item[gs-id="brush-source"]');
+  const target=page.locator('.grid-stack-item[gs-id="brush-target"]');
+  await expect(source.locator('.chart-data summary')).toContainText('(24 rows)');
+  const svg=source.locator('.tile-chart svg[viewBox]:not([width="15"])');
+  const box=await svg.boundingBox();
+  await page.mouse.move(box.x+box.width*0.3,box.y+box.height*0.45);
+  await page.mouse.down();
+  await page.mouse.move(box.x+box.width*0.7,box.y+box.height*0.45,{steps:6});
+  await expect(source.locator('.tile-chart svg .db-time-brush')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(target.locator('.chart-data summary')).not.toContainText('(24 rows)');
+  await expect(target.locator('.chart-data summary')).not.toContainText('(0 rows)');
+  const filters=await openFilters(page);
+  await expect(filters.locator('[data-crossfilter-chip="true"]')).toContainText('Brush Source');
 });
 
 test('Phase 2 SQL parameters define, substitute, re-run, export, and report missing names', async ({ page }) => {

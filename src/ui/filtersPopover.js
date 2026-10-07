@@ -1,5 +1,5 @@
 import { anchorPopover } from "./anchoredPopover.js";
-import { validateFilters } from "../data/filters.js";
+import { dateRangeForPreset, validateFilters } from "../data/filters.js";
 import { validateParameters } from "../data/parameters.js";
 
 let popover = null;
@@ -72,7 +72,12 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
   };
   const filterDescription=filter=>{
     if(filter.op==='between') return `${filter.field} between ${filter.values[0]} and ${filter.values[1]}`;
-    if(filter.op==='date-between') return `${filter.field} from ${filter.values[0]} to ${filter.values[1]}`;
+    if(filter.op==='date-between') {
+      const source=filter.source==='crossfilter'?` — from “${tileTitle(filter.sourceTile)}”`:'';
+      return filter.relativePreset
+        ? `${filter.field} · ${({"last-7-days":"Last 7 days","last-30-days":"Last 30 days","month-to-date":"Month to date","last-month":"Last month","year-to-date":"Year to date"})[filter.relativePreset]}${source}`
+        : `${filter.field} from ${filter.values[0]} to ${filter.values[1]}${source}`;
+    }
     const values=filter.values.map(value=>value===null?'Blank':String(value));
     const valueText=values.length>2?`${values[0]} + ${values.length-1} more`:values.join(', ');
     const op=filter.op==='is-not'?'is not':'is';
@@ -141,7 +146,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
     const cancel=element("button","filter-cancel","Cancel");cancel.type="button";cancel.addEventListener("click",()=>{addFilterOpen=false;renderFiltersPanel();});
     const apply=element("button","filter-apply","Apply filter");apply.type="button";apply.disabled=true;
     actions.append(cancel,apply);form.append(actions);
-    let selectedTile=null,selectedField=null,selectedOperator="is",selectedValues=[],selectedTargets=[],targetsTouched=false;
+    let selectedTile=null,selectedField=null,selectedOperator="is",selectedValues=[],selectedTargets=[],targetsTouched=false,selectedRelativePreset=null;
 
     const showError=message=>{error.textContent=message;error.hidden=!message;};
     const renderControls=()=>{
@@ -154,14 +159,26 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
         fieldSelect.disabled=!tile;selectedField=null;selectedValues=[];selectedTargets=[];targetWrap.replaceChildren();apply.disabled=true;return;
       }
       selectedField=selectedTile?.fields.find(option=>option.field===fieldSelect.value)||null;
-      selectedValues=[];selectedTargets=[];targetWrap.replaceChildren();apply.disabled=true;
+      selectedValues=[];selectedTargets=[];selectedRelativePreset=null;targetWrap.replaceChildren();apply.disabled=true;
       if(!selectedField)return;
       if(selectedField.type==='number'||selectedField.type==='date'){
+        let preset=null;
+        if(selectedField.type==='date'){
+          preset=element('select','filter-date-preset');preset.setAttribute('aria-label','Date range preset');
+          for(const [value,label] of [['','Custom range'],['last-7-days','Last 7 days'],['last-30-days','Last 30 days'],['month-to-date','Month to date'],['last-month','Last month'],['year-to-date','Year to date']]){const option=element('option','',label);option.value=value;preset.append(option);}
+          preset.addEventListener('change',()=>{
+            selectedRelativePreset=preset.value||null;
+            const [start,end]=selectedRelativePreset?dateRangeForPreset(selectedRelativePreset):['',''];
+            min.value=start;max.value=end;min.disabled=max.disabled=!!selectedRelativePreset;
+            selectedValues=[min.value,max.value];updateApplyState();
+          });
+          controls.append(preset);
+        }
         const range=element("div","filter-number-range");
         const min=element("input","filter-min");min.type=selectedField.type==='date'?'date':'number';if(min.type==='number')min.step="any";min.setAttribute("aria-label",selectedField.type==='date'?'Start date':'Minimum');
         const max=element("input","filter-max");max.type=selectedField.type==='date'?'date':'number';if(max.type==='number')max.step="any";max.setAttribute("aria-label",selectedField.type==='date'?'End date':'Maximum');
         range.append(min,max);controls.append(range);
-        const update=()=>{selectedValues=[min.value,max.value];updateApplyState();};
+        const update=()=>{selectedRelativePreset=null;if(preset)preset.value='';selectedValues=[min.value,max.value];updateApplyState();};
         min.addEventListener("input",update);max.addEventListener("input",update);
       }else{
         const operator=element("select","filter-operator");operator.setAttribute("aria-label","Filter match");
@@ -209,7 +226,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
         if(!Number.isFinite(min)||!Number.isFinite(max)||min>max){showError("Enter a valid minimum and maximum.");return;}
         filter={id:newId('filter'),field:selectedField.field,op:'between',values:[min,max],...targetOptions};
       }else if(selectedField.type==='date'){
-        filter={id:newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...targetOptions};
+        filter={id:newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...(selectedRelativePreset?{relativePreset:selectedRelativePreset}:{}),...targetOptions};
       }else filter={id:newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues,...targetOptions};
       try{emitFilters([...currentFilters,filter]);addFilterOpen=false;renderFiltersPanel();}
       catch(err){showError(err.message);}

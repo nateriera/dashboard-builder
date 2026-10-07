@@ -8,6 +8,7 @@ import { TILE_TYPES } from "../tiles/registry.js";
 import { chartStyles } from "../charts/charts.js";
 import { previewTheme } from "../themes/themes.js";
 import { applyFilters, sortAndLimitRows } from "../data/filters.js";
+import { chartData } from "../ui/chartData.js";
 
 document.head.appendChild(chartStyles);
 
@@ -77,6 +78,7 @@ function renderExport(payload) {
   const editableFilters = filters.filter(filter => filter.source !== "crossfilter");
   const defaults = editableFilters.map(filter => [...filter.values]);
   const filterBindings = [];
+  let inspection=null;
   for (const [index, filter] of editableFilters.entries()) {
     const field = filter.targets?.[0]?.field || filter.field;
     const label = document.createElement("label");
@@ -86,6 +88,18 @@ function renderExport(payload) {
     label.appendChild(name);
     if (filter.op === "between" || filter.op === "date-between") {
       const date = filter.op === "date-between";
+      let presetControl=null;
+      if (date && filter.relativePreset) {
+        const preset = document.createElement("select");
+        presetControl=preset;
+        preset.setAttribute("aria-label", `${field} date range preset`);
+        for (const [value,label] of [["last-7-days","Last 7 days"],["last-30-days","Last 30 days"],["month-to-date","Month to date"],["last-month","Last month"],["year-to-date","Year to date"]]) {
+          const option=document.createElement("option"); option.value=value; option.textContent=label; preset.appendChild(option);
+        }
+        preset.value=filter.relativePreset;
+        preset.addEventListener("change",()=>{filter.relativePreset=preset.value;schedulePaint();});
+        label.appendChild(preset);
+      }
       const inputs = [0, 1].map((slot) => {
         const input = document.createElement("input");
         input.type = date ? "date" : "number";
@@ -93,6 +107,7 @@ function renderExport(payload) {
         input.value = filter.values[slot];
         input.setAttribute("aria-label", `${field} ${slot === 0 ? "minimum" : "maximum"}`);
         input.addEventListener("input", () => {
+          if(date&&presetControl){filter.relativePreset=undefined;presetControl.value="";}
           const pair = inputs.map(item => item.value);
           if (pair.some(value => value === "")) filter.values = [];
           else {
@@ -104,7 +119,7 @@ function renderExport(payload) {
         label.appendChild(input);
         return input;
       });
-      filterBindings.push({ filter, inputs });
+      filterBindings.push({ filter, inputs, presetControl });
     } else {
       const select = document.createElement("select");
       select.multiple = true;
@@ -168,7 +183,8 @@ function renderExport(payload) {
         paintEmpty(chartEl,t.emptyMessage);
       } else if (t.rows) {
         try {
-          const activeFilters = filters.filter(filter => filter.values.length > 0);
+          const mode=t.tileOptions?.crossfilterMode||'filter';
+          const activeFilters = filters.filter(filter => filter.values.length > 0 && (filter.source!=='crossfilter'||filter.sourceTile===t.id||mode==='filter'));
           const filtered = applyFilters(t.rows, activeFilters, { sourceTile: t.id });
           const sortable = ['bar','column','dot','stackedBar','stackedColumn'].includes(t.type);
           const data = sortable && t.tileOptions?.topN != null
@@ -185,14 +201,21 @@ function renderExport(payload) {
             }
           });
           const active = filters.find(filter => filter.source === "crossfilter" && filter.sourceTile === t.id);
+          const incoming=mode==='highlight'?filters.filter(filter=>filter.source==='crossfilter'&&filter.sourceTile!==t.id&&filter.field===entry.crossfilterField):[];
           for (const mark of chartEl.querySelectorAll("a")) {
             const href = crossfilterHref(mark);
             if (!href.startsWith("#db-crossfilter:")) continue;
             let values = [];
             try { values = JSON.parse(decodeURIComponent(href.slice("#db-crossfilter:".length))); } catch { /* invalid link is inert */ }
-            if (active) mark.setAttribute("data-crossfilter-selected", String(values.some(value => active.values.some(item => Object.is(item, value)))));
+            const selected=(!active||values.some(value=>active.values.some(item=>Object.is(item,value))))&&incoming.every(filter=>values.some(value=>filter.values.some(item=>Object.is(item,value))));
+            if (active||incoming.length) mark.setAttribute("data-crossfilter-selected", String(selected));
             else mark.removeAttribute("data-crossfilter-selected");
             mark.setAttribute("aria-description", "Activate to filter other charts. Hold Control or Command while selecting to add or remove values.");
+          }
+          if(inspection?.tileId===t.id){
+            const sourceFilters=filters.filter(filter=>filter.source!=='crossfilter'||filter.sourceTile===t.id||mode==='filter');
+            const records=applyFilters(t.rows,sourceFilters,{sourceTile:t.id}).rows.filter(row=>inspection.values.some(value=>Object.is(row[entry.crossfilterField],value)));
+            if(records.length){const details=chartData(records,[...new Set(records.flatMap(row=>Object.keys(row)))].map(key=>({key})),`${t.title} — selected records`);details.classList.add('chart-drillthrough');chartEl.append(details);details.open=true;}
           }
         } catch (err) {
           // Surface the real message: an export failure should name its cause.
@@ -212,8 +235,14 @@ function renderExport(payload) {
       try { values = JSON.parse(decodeURIComponent(crossfilterHref(link).slice("#db-crossfilter:".length))); } catch { return; }
       if (!Array.isArray(values) || !values.length) return;
       event.preventDefault();
-      const current = filters.find(filter => filter.source === "crossfilter");
-      const sameSource = current?.sourceTile === t.id && current.field === t.crossfilterField;
+      const action=t.tileOptions?.clickAction||'filter-and-inspect';
+      if(action==='inspect-only'){
+        inspection={tileId:t.id,values};
+        paint();
+        return;
+      }
+      const current = filters.find(filter => filter.source === "crossfilter" && filter.sourceTile === t.id && filter.field === t.crossfilterField);
+      const sameSource = !!current;
       let nextValues = values;
       if ((event.ctrlKey || event.metaKey) && sameSource) {
         const selected = new Map(current.values.map(value => [JSON.stringify([typeof value, value]), value]));
@@ -222,8 +251,9 @@ function renderExport(payload) {
         else for (const [index, key] of keys.entries()) selected.set(key, values[index]);
         nextValues = [...selected.values()];
       } else if (sameSource && values.length === current.values.length && values.every(value => current.values.some(item => Object.is(item, value)))) nextValues = [];
-      filters = filters.filter(filter => filter.source !== "crossfilter");
-      if (nextValues.length) filters.push({ id: `cross-export-${Date.now().toString(36)}`, field: t.crossfilterField, op: "is", values: nextValues, source: "crossfilter", sourceTile: t.id });
+      filters = filters.filter(filter => filter !== current);
+      if (nextValues.length) filters.push({ id: current?.id || `cross-export-${Date.now().toString(36)}`, field: t.crossfilterField, op: "is", values: nextValues, source: "crossfilter", sourceTile: t.id });
+      inspection=action==='filter-only'||!nextValues.length?null:{tileId:t.id,values};
       paint();
     });
   }

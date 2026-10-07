@@ -16,14 +16,17 @@
 - CSV/JSON upload processed locally — your data never leaves the browser — plus built-in sample datasets
 - Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
-- Dashboard category, numeric, and date filters connect explicitly to chart fields, including fields with different names
-- Select category marks to cross-filter matching tiles; add multi-value selections and see the source chart highlight the selection
+- Dashboard category, numeric, and date filters connect explicitly to chart fields, including relative date presets
+- Brush a time-series range or select category marks to create independent cross-filters from multiple charts
+- Choose whether each category chart filters rows, highlights matching marks, or ignores incoming cross-filters
+- Configure chart mark clicks to filter charts, inspect source records, or do both
 - Inspect source columns in each chart's paginated data table
 - Select a category to see its contributing source rows
 - Export a standalone HTML dashboard with working filters and chart cross-filtering
 - Switch a tile among chart types supported by its current data columns
 - Named SQL parameters support local what-if analysis with `{{name}}` placeholders
 - Optional per-tile reference lines, with labels, mark targets and thresholds
+- Save and reuse local data-wrangling recipes for pivots and calculated fields
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
 - 4 themes, 6 starter templates, save/load dashboards as JSON
 - Export to a single self-contained HTML file — email it or host it anywhere, no server needed

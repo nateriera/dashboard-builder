@@ -546,6 +546,11 @@ body.present .tile-toolbar { display: none; }
 }
 
 .data-preview-wrap { margin-top: 10px; }
+.wrangle-recipes { display: grid; grid-template-columns: minmax(150px,1fr) auto auto minmax(130px,1fr) auto; align-items: end; gap: 6px; margin: 10px 0 14px; padding: 10px; border: 1px solid var(--slate-200); border-radius: 8px; }
+.wrangle-recipes strong, .wrangle-recipes span[role="status"] { grid-column: 1 / -1; }
+.wrangle-recipes span[role="status"] { min-height: 1em; color: var(--slate-500); font-size: 12px; }
+.wrangle-recipes input, .wrangle-recipes select { min-width: 0; }
+@media (max-width: 620px) { .wrangle-recipes { grid-template-columns: 1fr 1fr; } }
 
 .data-preview-note {
   font-size: 11px;

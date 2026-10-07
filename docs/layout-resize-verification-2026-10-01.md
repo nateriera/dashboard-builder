@@ -27,6 +27,6 @@ On the retained sample-bar run, the first changed plot redraw occurred 43.5ms af
 - [1440×900 screenshot](diagnostics/layout-resize-2026-10-01/verified-1440.png)
 - [1024×768 screenshot](diagnostics/layout-resize-2026-10-01/verified-1024.png)
 - [Print PDF](diagnostics/layout-resize-2026-10-01/verified-print.pdf)
-- [Full browser results](verification/browser-results.json)
+- Browser acceptance can be reproduced with `npx playwright test`; the JSON reporter writes to ignored `test-results/browser-results.json`.
 
 Legacy saved dashboards retain their arrangement rather than adopting the fresh starter composition. Browser acceptance was run against the local Vite server with isolated storage; hosted acceptance was not part of this verification.

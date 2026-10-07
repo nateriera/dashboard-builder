@@ -49,6 +49,17 @@ export function validateFilters(input) {
       throw new Error("Invalid filter operator.");
     }
     const result = { id: filter.id, field: filter.field, op: filter.op, values: [...filter.values] };
+    const scope = filter.scope ?? (filter.targets ? 'charts' : 'dashboard');
+    if (!['dashboard','page','charts'].includes(scope)) throw new Error('Invalid filter scope.');
+    if (scope === 'page') {
+      if (!idPattern.test(filter.pageId || '')) throw new Error('Page-scoped filter requires a valid page id.');
+      result.scope = 'page'; result.pageId = filter.pageId;
+    } else {
+      if (filter.pageId !== undefined) throw new Error('Unexpected filter page id.');
+      if (scope !== 'charts' && filter.targets !== undefined) throw new Error('Dashboard filters cannot have explicit chart connections.');
+      if (scope === 'charts' && filter.targets === undefined) throw new Error('Chart-scoped filter requires chart connections.');
+      if (scope === 'charts') result.scope = 'charts';
+    }
     if (filter.relativePreset !== undefined) result.relativePreset = filter.relativePreset;
     if (filter.targets !== undefined) {
       if (!Array.isArray(filter.targets) || filter.targets.length === 0 || filter.targets.length > 100) throw new Error("Invalid filter connections.");
@@ -85,12 +96,13 @@ function numericFilterValue(value) {
 }
 
 /** Apply filters only when a tile's resolved rows contain the named field. */
-export function applyFilters(rows, filters = [], { sourceTile = null, now = new Date() } = {}) {
+export function applyFilters(rows, filters = [], { sourceTile = null, pageId = null, now = new Date() } = {}) {
   let result = rows;
   let applied = false;
   let appliedCount = 0;
   for (const filter of filters) {
     if (filter.source === "crossfilter" && filter.sourceTile === sourceTile) continue;
+    if (filter.scope === 'page' && filter.pageId !== pageId) continue;
     const connection = filter.targets?.find(target => target.tileId === sourceTile);
     if (filter.targets && !connection) continue;
     const field = connection?.field || filter.field;

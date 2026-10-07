@@ -14,6 +14,10 @@
       <div class="header-actions">
         <button id="btn-data" type="button" title="Pick one dataset for every chart — tiles with their own data keep it">Data: Tile samples</button>
         <button id="btn-filters" type="button" title="Filter charts and change SQL parameters">Filters</button>
+        <label class="view-picker-label" for="saved-view-picker">View</label>
+        <select id="saved-view-picker" aria-label="Saved dashboard view"><option value="">Current view</option></select>
+        <button id="btn-save-view" type="button" title="Save the current filters, parameters, and theme as a reusable view">Save view</button>
+        <button id="btn-apply-view" type="button" title="Apply the selected saved view">Apply view</button>
         <button id="btn-theme" type="button" title="Pick a visual theme for the dashboard">Theme</button>
         <button id="btn-templates" type="button" title="Start from a template dashboard">Templates</button>
         <button id="btn-save" type="button" title="Save layout to this browser">Save layout</button>
@@ -35,6 +39,7 @@
       </aside>
 
       <main id="grid-wrap">
+        <nav id="page-tabs" aria-label="Dashboard pages"></nav>
         <div class="grid-stack" aria-label="Dashboard grid"></div>
       </main>
     </div>

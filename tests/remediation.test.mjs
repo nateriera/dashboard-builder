@@ -50,7 +50,7 @@ test('R3: every binding survives migration, reload and JSON without input mutati
     const v2 = validateLayout(original), roundTrip = validateLayout(JSON.parse(JSON.stringify(v2)));
     assert.equal(JSON.stringify(original),raw); assert.equal(roundTrip.tiles[0].dataset,dataset);
     assert.deepEqual(roundTrip.tiles[0].binding,dataset === null ? {mode:'dashboard'} : {mode:'explicit',ref:dataset});
-    assert.equal(roundTrip.version,3);
+    assert.equal(roundTrip.version,4);
   }
 });
 test('R7: malformed envelopes fail validation before any mutation', () => {
@@ -58,6 +58,37 @@ test('R7: malformed envelopes fail validation before any mutation', () => {
   for (const change of changes) { const l=layout(); change(l); assert.throws(()=>validateLayout(l)); }
   const candidate=validateLayout({...layout('upload:u'),datasets:{u:{name:'new',rows:[{label:'a',value:2}],columns:['label','value']}}});
   assert.throws(()=>assertNoCollisions(candidate,()=>({name:'old',rows:[{value:1}]}),()=>null),/Conflicting/);
+});
+test('Desktop parity: saved views validate and survive layout round trips', () => {
+  const saved = { id: 'view-1', name: 'West region', theme: 'paper', currentPageId:'page-1', filters: [{ id:'f1', field:'region', op:'is', values:['West'] }], parameters: [] };
+  const roundTrip = validateLayout({ ...layout(), savedViews:[saved] });
+  assert.deepEqual(roundTrip.savedViews, [saved]);
+  assert.deepEqual(validateLayout(JSON.parse(JSON.stringify(roundTrip))).savedViews, [saved]);
+  for (const invalid of [[{...saved,id:'bad id'}],[{...saved,name:'  '}],[{...saved,theme:'unknown'}],[{...saved,filters:[{id:'f',field:'x',op:'hack',values:[]}]}]]) {
+    assert.throws(() => validateLayout({ ...layout(), savedViews:invalid }));
+  }
+});
+test('Desktop parity: multi-page layouts and dashboard/page/chart filter scopes round-trip safely', () => {
+  const input={app:'dashboard-builder',version:4,rowHeight:24,theme:'paper',pages:[{id:'overview',name:'Overview'},{id:'detail',name:'Detail'}],currentPageId:'detail',
+    defaultDataset:{kind:'samples'},tiles:[
+      {id:'one',type:'bar',dataset:'categorical',binding:{mode:'explicit',ref:'categorical'},pageId:'overview',x:0,y:0,w:6,h:15},
+      {id:'two',type:'scatter',dataset:'scatter',binding:{mode:'explicit',ref:'scatter'},pageId:'detail',x:0,y:0,w:6,h:15}],
+    filters:[{id:'dash',field:'label',op:'is',values:['Housing'],scope:'dashboard'},
+      {id:'page',field:'label',op:'is',values:['Housing'],scope:'page',pageId:'detail'},
+      {id:'charts',field:'group',op:'is',values:['A'],scope:'charts',targets:[{tileId:'two',field:'group'}]}]};
+  const saved=validateLayout(input);
+  assert.equal(saved.version,4);assert.equal(saved.currentPageId,'detail');assert.equal(saved.tiles[0].pageId,'overview');
+  assert.deepEqual(validateLayout(JSON.parse(JSON.stringify(saved))).filters,saved.filters);
+  assert.throws(()=>validateLayout({...input,filters:[{id:'page',field:'label',op:'is',values:['Housing'],scope:'page',pageId:'missing'}]}),/missing page/);
+  assert.throws(()=>validateLayout({...input,currentPageId:'missing'}),/current dashboard page/);
+  const rows=[{label:'A',value:1},{label:'B',value:2}];
+  const scoped=validateFilters([{id:'page-only',field:'label',op:'is',values:['A'],scope:'page',pageId:'detail'}]);
+  assert.deepEqual(applyFilters(rows,scoped,{pageId:'detail'}).rows,[rows[0]]);
+  assert.deepEqual(applyFilters(rows,scoped,{pageId:'overview'}).rows,rows);
+  const destination={...input,tiles:input.tiles.map(tile=>tile.id==='one'?{...tile,tileOptions:{clickDestinationPageId:'detail'}}:tile)};
+  assert.equal(validateLayout(destination).tiles[0].tileOptions.clickDestinationPageId,'detail');
+  assert.throws(()=>validateLayout({...destination,tiles:destination.tiles.map(tile=>({...tile,tileOptions:{clickDestinationPageId:'overview'}}))}),/different page/);
+  assert.throws(()=>validateLayout({...destination,tiles:destination.tiles.map(tile=>({...tile,tileOptions:{clickDestinationPageId:'missing'}}))}),/chart option/);
 });
 test('R8: exact integers survive SQL, JSON, store and KPI; plotting refuses approximation', async () => {
   for (const n of [9007199254740991n,9007199254740992n,9007199254740993n,-9007199254740993n]) {
@@ -369,7 +400,7 @@ test('Desktop parity: date filters and target connections survive layout validat
     filters:[{id:'date-filter',field:'created',op:'date-between',values:['2025-01-01','2025-01-31'],targets:[{tileId:'bar1',field:'date'}]}],
     tiles:[{id:'bar1',type:'bar',dataset:'categorical',binding:{mode:'explicit',ref:'categorical'},tileOptions:{},x:0,y:0,w:6,h:15}]};
   const restored=validateLayout(JSON.parse(JSON.stringify(validateLayout(input))));
-  assert.deepEqual(restored.filters,input.filters);
+  assert.deepEqual(restored.filters,[{...input.filters[0],scope:'charts'}]);
   assert.throws(()=>validateLayout({...input,filters:[{...input.filters[0],targets:[{tileId:'missing',field:'date'}]}]}),/missing tile/i);
   const relative={...input,filters:[{id:'relative',field:'created',op:'date-between',values:['2025-01-01','2025-01-31'],relativePreset:'last-7-days'}]};
   assert.equal(validateLayout(relative).filters[0].relativePreset,'last-7-days');

@@ -433,6 +433,7 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
   const render = entry.render;
   entry.render = (el, { data, options = {} }) => {
     const previousDetails = options.resizeOnly ? el.querySelector('.chart-data') : null;
+    if (!options.resizeOnly) el.querySelectorAll('.chart-data').forEach(details => details.remove());
     lastRender.set(el, { type, data, options });
     options = { ...options, preferredHeight: type === 'bar' || type === 'dot' ? Math.min(600, Math.max(220, data.length * 24 + 50)) : type === 'donut' ? 340 : type === 'table' ? 420 : type === 'treemap' ? 380 : 260, legendSpace: options.legendSpace ?? (['line','area'].includes(type) ? 32 : 0) };
     try {
@@ -448,11 +449,20 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
         const note = document.createElement('p'); note.className = 'chart-transform-note';
         note.textContent = prepared.note || 'Cropped shared domain selected: zero may be excluded.'; el.append(note);
       }
-      for (const svg of el.querySelectorAll('svg')) { svg.setAttribute('role','img'); svg.setAttribute('aria-label',options.title || entry.label); }
+      for (const svg of el.querySelectorAll('svg')) {
+        const title=options.title||entry.label;
+        const interactive=!!options.crossfilterField&&[...svg.querySelectorAll('a')].some(mark=>(mark.getAttributeNS('http://www.w3.org/1999/xlink','href')||mark.getAttribute('href')||'').startsWith('#db-crossfilter:'));
+        svg.setAttribute('role',interactive?'group':'img');
+        svg.setAttribute('aria-label',interactive?`${title}. Interactive chart; activate a category to filter other charts.`:title);
+      }
     } catch (err) {
       el.replaceChildren(); const error = document.createElement('div'); error.className = 'tile-error'; error.setAttribute('role','alert'); error.textContent = err.message; el.append(error);
     }
-    if (!entry.dynamicFields && !entry.noData) el.append(previousDetails || chartData(data,entry.fields,options.title));
+    if (!entry.dynamicFields && !entry.noData) {
+      const known = new Set(entry.fields.map(field => field.key));
+      const sourceFields = [...new Set(data.flatMap(row => Object.keys(row)))].filter(key => !known.has(key)).map(key => ({ key }));
+      el.append(previousDetails || chartData(data,[...entry.fields,...sourceFields],options.title));
+    }
     if (options.sizing !== 'auto' && el.clientHeight && el.querySelector('.db-card')) {
       const extras = [...el.children].filter(node => !node.classList.contains('db-card'));
       const footerHeight = extras.reduce((sum, node) => {
@@ -472,7 +482,12 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
         options = { ...options, footerHeight, legendSpace };
         render(el, { data: renderData(type,data).rows, options });
         el.append(...extras);
-        for (const svg of el.querySelectorAll('svg')) { svg.setAttribute('role','img'); svg.setAttribute('aria-label', options.title || entry.label); }
+        for (const svg of el.querySelectorAll('svg')) {
+          const title=options.title||entry.label;
+          const interactive=!!options.crossfilterField&&[...svg.querySelectorAll('a')].some(mark=>(mark.getAttributeNS('http://www.w3.org/1999/xlink','href')||mark.getAttribute('href')||'').startsWith('#db-crossfilter:'));
+          svg.setAttribute('role',interactive?'group':'img');
+          svg.setAttribute('aria-label',interactive?`${title}. Interactive chart; activate a category to filter other charts.`:title);
+        }
       }
       lastRender.set(el, {type, data, options});
     }

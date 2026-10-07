@@ -546,6 +546,11 @@ body.present .tile-toolbar { display: none; }
 }
 
 .data-preview-wrap { margin-top: 10px; }
+.wrangle-recipes { display: grid; grid-template-columns: minmax(150px,1fr) auto auto minmax(130px,1fr) auto; align-items: end; gap: 6px; margin: 10px 0 14px; padding: 10px; border: 1px solid var(--slate-200); border-radius: 8px; }
+.wrangle-recipes strong, .wrangle-recipes span[role="status"] { grid-column: 1 / -1; }
+.wrangle-recipes span[role="status"] { min-height: 1em; color: var(--slate-500); font-size: 12px; }
+.wrangle-recipes input, .wrangle-recipes select { min-width: 0; }
+@media (max-width: 620px) { .wrangle-recipes { grid-template-columns: 1fr 1fr; } }
 
 .data-preview-note {
   font-size: 11px;
@@ -1259,6 +1264,14 @@ body.present .tile-toolbar { display: none; }
 .filter-values { display: grid; gap: 4px; max-height: 180px; overflow: auto; padding: 6px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--white); }
 .filter-value { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
 .filter-value input { accent-color: var(--dusk); }
+.filter-targets, .filter-connection-list { display: grid; gap: 7px; }
+.filter-targets > strong { font-size: 12px; }
+.filter-connection-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(130px, 1.2fr); align-items: center; gap: 8px; font-size: 12px; }
+.filter-connection-select { min-width: 0; }
+.filter-connections { grid-column: 1 / -1; margin: -4px 0 8px; padding: 0 10px 8px; border: 1px solid var(--slate-200); border-radius: 7px; background: var(--white); }
+.filter-connections summary { padding: 7px 0 2px; color: var(--dusk); font-size: 12px; cursor: pointer; }
+.filter-connection-list { padding-top: 8px; }
+.filter-connection-list .filter-apply { justify-self: end; }
 .filters-overflow { margin: 2px 0 0; color: var(--slate-600); font-size: 12px; }
 .filter-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .filters-form-error { margin: 0; color: var(--danger); font-size: 12px; }

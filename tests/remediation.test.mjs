@@ -18,9 +18,10 @@ const { validateLayout, assertNoCollisions } = await import('../src/data/layout.
 const { migrateLegacy } = await import('../src/data/migrate.js');
 const { createQueryCoordinator, createPreviewGate } = await import('../src/data/queryCoordinator.js');
 const { parseFile } = await import('../src/data/parse.js');
-const { validateFilters, applyFilters, distinctValues, filterFieldType, sortAndLimitRows } = await import('../src/data/filters.js');
+const { validateFilters, applyFilters, dateRangeForPreset, distinctValues, filterFieldType, sortAndLimitRows } = await import('../src/data/filters.js');
 const { validateParameters, substituteParameters } = await import('../src/data/parameters.js');
 const store = await import('../src/data/store.js');
+const wranglingRecipes = await import('../src/data/wranglingRecipes.js');
 const layout = (dataset = 'categorical') => ({ app: 'dashboard-builder', version: 1, defaultDataset: {kind:'dataset',ref:'upload:revenue'}, tiles: [{id:'bar1',type:'bar',dataset,x:0,y:0,w:6,h:5}] });
 const total = rows => rows.reduce((s,r)=>s+r.value,0);
 
@@ -245,10 +246,51 @@ test('Phase 2: categorical and numeric dashboard filters preserve absent-field t
   const self=applyFilters(rows,[{id:'cf',field:'category',op:'is',values:['Housing'],source:'crossfilter',sourceTile:'bar1'}],{sourceTile:'bar1'});
   assert.equal(self.applied,false);
   assert.deepEqual(self.rows,rows);
+  const independent=[
+    {id:'cf1',field:'category',op:'is',values:['Housing'],source:'crossfilter',sourceTile:'bar1'},
+    {id:'cf2',field:'region',op:'is',values:['North'],source:'crossfilter',sourceTile:'bar2'}
+  ];
+  assert.equal(validateFilters(independent).length,2);
+  assert.deepEqual(applyFilters([
+    {category:'Housing',region:'North'},
+    {category:'Housing',region:'South'},
+    {category:'Food',region:'North'}
+  ], independent).rows,[{category:'Housing',region:'North'}]);
+  assert.deepEqual(applyFilters(rows,independent,{sourceTile:'bar1'}).rows,rows);
   assert.equal(filterFieldType(rows,'amount'),'number');
   assert.equal(filterFieldType([...DATASETS.categorical,...DATASETS.kpis],'value'),'number');
   assert.equal(filterFieldType([{fips:'01'},{fips:'06'}],'fips'),'category');
   assert.equal(filterFieldType([{date:'2025-01-01'},{date:'2025-02-01'}],'date'),'date');
+});
+
+test('Desktop parity: date ranges use inclusive calendar dates and explicit tile field mappings', () => {
+  const dateRows=[
+    {created:'2025-01-01T23:30:00-08:00',state:'open'},
+    {created:'2025-01-02 23:59:59',state:'closed'},
+    {created:'2025-01-03',state:'open'}
+  ];
+  const dateFilter={id:'date-filter',field:'created',op:'date-between',values:['2025-01-01','2025-01-02']};
+  assert.deepEqual(applyFilters(dateRows,[dateFilter]).rows,dateRows.slice(0,2));
+  const now=new Date('2025-03-15T21:00:00Z');
+  assert.deepEqual(dateRangeForPreset('last-7-days',now),['2025-03-09','2025-03-15']);
+  assert.deepEqual(dateRangeForPreset('month-to-date',now),['2025-03-01','2025-03-15']);
+  assert.deepEqual(dateRangeForPreset('last-month',now),['2025-02-01','2025-02-28']);
+  assert.deepEqual(dateRangeForPreset('year-to-date',now),['2025-01-01','2025-03-15']);
+  assert.deepEqual(applyFilters(dateRows,[{...dateFilter,relativePreset:'last-7-days'}],{now}).rows,[]);
+  assert.throws(()=>validateFilters([{...dateFilter,relativePreset:'next-century'}]),/relative date/i);
+  const brushed={id:'brush-one',field:'created',op:'date-between',values:['2025-01-01','2025-01-02'],source:'crossfilter',sourceTile:'bar1'};
+  assert.deepEqual(applyFilters(dateRows,validateFilters([brushed]),{sourceTile:'bar2'}).rows,dateRows.slice(0,2));
+  assert.deepEqual(applyFilters(dateRows,[brushed],{sourceTile:'bar1'}).rows,dateRows);
+  assert.throws(()=>validateFilters([{...dateFilter,values:['2025-02-30','2025-03-01']}]),/date/i);
+  assert.equal(filterFieldType([{created:'2025-02-30'},{created:'2025-03-01'}],'created'),'category');
+
+  const mapped={id:'status-filter',field:'state',op:'is',values:['open'],targets:[{tileId:'tasks',field:'status'}]};
+  const taskRows=[{status:'open'},{status:'closed'}];
+  assert.deepEqual(applyFilters(taskRows,[mapped],{sourceTile:'tasks'}).rows,[taskRows[0]]);
+  const unrelated=applyFilters([{state:'open'}],[mapped],{sourceTile:'other'});
+  assert.equal(unrelated.applied,false);
+  assert.deepEqual(unrelated.rows,[{state:'open'}]);
+  assert.throws(()=>validateFilters([{...mapped,targets:[...mapped.targets,...mapped.targets]}]),/connection/i);
 });
 
 test('Phase 2: filter validation and distinct-value caps are bounded', () => {
@@ -310,12 +352,36 @@ test('Phase 2: filters and parameters persist through layout validation and JSON
   const input={app:'dashboard-builder',version:3,rowHeight:24,theme:'paper',defaultDataset:{kind:'samples'},
     filters:[{id:'filter-1',field:'label',op:'is',values:['Housing']}],
     parameters:[{name:'growth',type:'number',value:1.1,min:0,max:2}],
-    tiles:[{id:'bar1',type:'bar',dataset:'categorical',binding:{mode:'explicit',ref:'categorical'},tileOptions:{topN:3,sort:'asc'},x:0,y:0,w:6,h:15}]};
+    tiles:[{id:'bar1',type:'bar',dataset:'categorical',binding:{mode:'explicit',ref:'categorical'},tileOptions:{topN:3,sort:'asc',crossfilterMode:'highlight',clickAction:'inspect-only'},x:0,y:0,w:6,h:15}]};
   const candidate=validateLayout(input);
   const restored=validateLayout(JSON.parse(JSON.stringify(candidate)));
   assert.deepEqual(restored.filters,input.filters);
   assert.deepEqual(restored.parameters,input.parameters);
   assert.equal(restored.tiles[0].tileOptions.topN,3);
+  assert.equal(restored.tiles[0].tileOptions.crossfilterMode,'highlight');
+  assert.equal(restored.tiles[0].tileOptions.clickAction,'inspect-only');
   assert.deepEqual(validateLayout({...input,filters:undefined,parameters:undefined}).filters,[]);
   assert.throws(()=>validateLayout({...input,filters:[{id:'f',field:'label',op:'unknown',values:[]}]}),/filter/i);
+});
+
+test('Desktop parity: date filters and target connections survive layout validation', () => {
+  const input={app:'dashboard-builder',version:3,rowHeight:24,theme:'paper',defaultDataset:{kind:'samples'},
+    filters:[{id:'date-filter',field:'created',op:'date-between',values:['2025-01-01','2025-01-31'],targets:[{tileId:'bar1',field:'date'}]}],
+    tiles:[{id:'bar1',type:'bar',dataset:'categorical',binding:{mode:'explicit',ref:'categorical'},tileOptions:{},x:0,y:0,w:6,h:15}]};
+  const restored=validateLayout(JSON.parse(JSON.stringify(validateLayout(input))));
+  assert.deepEqual(restored.filters,input.filters);
+  assert.throws(()=>validateLayout({...input,filters:[{...input.filters[0],targets:[{tileId:'missing',field:'date'}]}]}),/missing tile/i);
+  const relative={...input,filters:[{id:'relative',field:'created',op:'date-between',values:['2025-01-01','2025-01-31'],relativePreset:'last-7-days'}]};
+  assert.equal(validateLayout(relative).filters[0].relativePreset,'last-7-days');
+});
+
+test('Desktop parity: saved wrangling recipes validate, persist locally, and reject duplicates', () => {
+  localStorage.removeItem('dashbuilder.wrangling-recipes.v1');
+  const recipe={id:'recipe-test',name:'Regional totals',kind:'pivot',groups:[{column:'region',bin:null}],aggregations:[{column:'amount',operation:'SUM',name:'Total'}]};
+  assert.deepEqual(wranglingRecipes.saveWranglingRecipe(recipe),recipe);
+  assert.deepEqual(wranglingRecipes.listWranglingRecipes(),[recipe]);
+  assert.throws(()=>wranglingRecipes.saveWranglingRecipe({...recipe,id:'recipe-other'}),/already exists/i);
+  assert.throws(()=>wranglingRecipes.validateWranglingRecipe({...recipe,groups:[{column:'region',bin:'week'}]}),/date bin/i);
+  assert.equal(wranglingRecipes.removeWranglingRecipe('recipe-test'),true);
+  assert.deepEqual(wranglingRecipes.listWranglingRecipes(),[]);
 });

@@ -99,6 +99,8 @@ export function validateLayout(input) {
     for (const [k,v] of Object.entries(opts)) {
       if (['xLabel','yLabel'].includes(k)) tileOptions[k] = text(v, 'axis label', 120);
       else if (['trend','diverging','includeZero'].includes(k) && typeof v === 'boolean') tileOptions[k] = v;
+      else if (k === 'crossfilterMode' && ['filter','highlight','none'].includes(v) && e.crossfilterField) tileOptions[k] = v;
+      else if (k === 'clickAction' && ['filter-and-inspect','filter-only','inspect-only'].includes(v) && e.crossfilterField) tileOptions[k] = v;
       else if (k === 'body' && e.noData) tileOptions.body = text(v,'annotation',10000);
       else if (k === 'mode' && ['stacked','grouped'].includes(v) && ['stackedBar','stackedColumn'].includes(t.type)) tileOptions.mode = v;
       else if (k === 'binCount' && Number.isInteger(v) && v >= 5 && v <= 100 && t.type === 'histogram') tileOptions.binCount = v;
@@ -124,6 +126,8 @@ export function validateLayout(input) {
     }
   }
   const filters = validateFilters(data.filters);
+  const tileIds = new Set(tiles.map(tile => tile.id));
+  if (filters.some(filter => filter.targets?.some(target => !tileIds.has(target.tileId)))) fail('Filter connection references a missing tile.');
   const parameters = validateParameters(data.parameters);
   return { app: 'dashboard-builder', version: 3, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, tiles, datasets, queries };
 }

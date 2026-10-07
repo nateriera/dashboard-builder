@@ -30,6 +30,23 @@ test('visual wrangling pivot runs detailed DuckDB preview, maps output and saves
   expect(queries.some(query => query.sql.includes('AVG("value") AS "Average total"'))).toBe(true);
 });
 
+test('desktop parity: reusable wrangling recipes save and restore pivot steps', async ({ page }) => {
+  test.setTimeout(120000);
+  await ready(page);
+  const pop=page.locator('.wrangling-popover');
+  await expect(pop.locator('[aria-label="Grouping 1 column"]')).toBeVisible({timeout:90000});
+  await pop.getByLabel('Pivot recipe name').fill('Category totals');
+  await pop.getByRole('button',{name:'Save recipe'}).click();
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dashbuilder.wrangling-recipes.v1')||'[]').length)).toBe(1);
+  await pop.locator('[aria-label="Grouping 1 column"]').selectOption('value');
+  await pop.locator('[aria-label="Pivot recipe"]').selectOption({label:'Category totals'});
+  await pop.getByRole('button',{name:'Load recipe'}).click();
+  await expect(pop.locator('[aria-label="Grouping 1 column"]')).toHaveValue('label');
+  await expect(pop.locator('[aria-label="Aggregation 1 source column"]')).toHaveValue('value');
+  await pop.getByRole('button',{name:'Preview pivot'}).click();
+  await expect(pop.locator('.data-preview thead').last()).toContainText('label');
+});
+
 test('calculated-field entry opens formula panel, validates formula and applies derived field', async ({ page }) => {
   test.setTimeout(120000);
   await page.goto('/');

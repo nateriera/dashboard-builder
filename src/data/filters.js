@@ -1,7 +1,28 @@
 const own = (value, key) => value != null && Object.hasOwn(value, key);
 const forbidden = new Set(["__proto__", "constructor", "prototype"]);
 const idPattern = /^[a-zA-Z0-9_-]{1,100}$/;
-const datePattern = /^\d{4}-\d{2}(?:-\d{2})?(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+const datePattern = /^\d{4}-\d{2}(?:-\d{2})?(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?: ?Z|[+-]\d{2}:\d{2})?)?$/;
+const relativeDatePresets = new Set(["last-7-days", "last-30-days", "month-to-date", "last-month", "year-to-date"]);
+
+function validCalendarDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function calendarDate(value) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value !== "string" || !datePattern.test(value.trim())) return null;
+  const match = /^(\d{4}-\d{2})(?:-(\d{2}))?/.exec(value.trim());
+  if (!match) return null;
+  const date = `${match[1]}-${match[2] || "01"}`;
+  return validCalendarDate(date) ? date : null;
+}
 
 function validField(field) {
   return typeof field === "string" && field.length > 0 && field.length <= 200 && !forbidden.has(field);
@@ -15,18 +36,33 @@ function validValue(value) {
 export function validateFilters(input) {
   if (input === undefined) return [];
   if (!Array.isArray(input) || input.length > 100) throw new Error("Invalid filters.");
-  let crossfilterCount = 0;
+  const crossfilterSources = new Set();
   return input.map(filter => {
     if (!filter || typeof filter !== "object" || Array.isArray(filter) || !idPattern.test(filter.id || "") || !validField(filter.field)) throw new Error("Invalid filter.");
     if (!Array.isArray(filter.values) || filter.values.length === 0 || filter.values.length > 200 || filter.values.some(value => !validValue(value))) throw new Error("Invalid filter values.");
     if (filter.op === "between") {
       if (filter.values.length !== 2 || filter.values.some(value => typeof value !== "number") || filter.values[0] > filter.values[1]) throw new Error("Invalid numeric filter range.");
+    } else if (filter.op === "date-between") {
+      if (filter.values.length !== 2 || !filter.values.every(validCalendarDate) || filter.values[0] > filter.values[1]) throw new Error("Invalid date filter range.");
+      if (filter.relativePreset !== undefined && !relativeDatePresets.has(filter.relativePreset)) throw new Error("Invalid relative date preset.");
     } else if (!["is", "is-not"].includes(filter.op)) {
       throw new Error("Invalid filter operator.");
     }
     const result = { id: filter.id, field: filter.field, op: filter.op, values: [...filter.values] };
+    if (filter.relativePreset !== undefined) result.relativePreset = filter.relativePreset;
+    if (filter.targets !== undefined) {
+      if (!Array.isArray(filter.targets) || filter.targets.length === 0 || filter.targets.length > 100) throw new Error("Invalid filter connections.");
+      const seenTiles = new Set();
+      result.targets = filter.targets.map(target => {
+        if (!target || typeof target !== "object" || Array.isArray(target) || !idPattern.test(target.tileId || "") || !validField(target.field) || seenTiles.has(target.tileId)) throw new Error("Invalid filter connection.");
+        seenTiles.add(target.tileId);
+        return { tileId: target.tileId, field: target.field };
+      });
+    }
     if (filter.source !== undefined) {
-      if (filter.source !== "crossfilter" || filter.op !== "is" || !idPattern.test(filter.sourceTile || "") || ++crossfilterCount > 1) throw new Error("Invalid cross-filter source.");
+      const sourceKey = JSON.stringify([filter.sourceTile, filter.field]);
+      if (filter.source !== "crossfilter" || !["is","date-between"].includes(filter.op) || filter.targets !== undefined || !idPattern.test(filter.sourceTile || "") || crossfilterSources.has(sourceKey)) throw new Error("Invalid cross-filter source.");
+      crossfilterSources.add(sourceKey);
       result.source = "crossfilter";
       result.sourceTile = filter.sourceTile;
     } else if (filter.sourceTile !== undefined) {
@@ -49,27 +85,60 @@ function numericFilterValue(value) {
 }
 
 /** Apply filters only when a tile's resolved rows contain the named field. */
-export function applyFilters(rows, filters = [], { sourceTile = null } = {}) {
+export function applyFilters(rows, filters = [], { sourceTile = null, now = new Date() } = {}) {
   let result = rows;
   let applied = false;
   let appliedCount = 0;
   for (const filter of filters) {
     if (filter.source === "crossfilter" && filter.sourceTile === sourceTile) continue;
-    if (!rows.some(row => own(row, filter.field))) continue;
+    const connection = filter.targets?.find(target => target.tileId === sourceTile);
+    if (filter.targets && !connection) continue;
+    const field = connection?.field || filter.field;
+    if (!rows.some(row => own(row, field))) continue;
     applied = true;
     appliedCount++;
     result = result.filter(row => {
-      if (!own(row, filter.field)) return true;
-      const value = row[filter.field];
+      if (!own(row, field)) return true;
+      const value = row[field];
       if (filter.op === "between") {
         const numeric = numericFilterValue(value);
         return numeric !== null && numeric >= filter.values[0] && numeric <= filter.values[1];
+      }
+      if (filter.op === "date-between") {
+        const date = calendarDate(value);
+        const [start, end] = filter.relativePreset ? dateRangeForPreset(filter.relativePreset, now) : filter.values;
+        return date !== null && date >= start && date <= end;
       }
       const selected = filter.values.some(candidate => sameValue(candidate, value));
       return filter.op === "is" ? selected : !selected;
     });
   }
   return { rows: result, applied, appliedCount };
+}
+
+/** Calendar-relative date bounds in UTC, suitable for repeatable tests and exports. */
+export function dateRangeForPreset(preset, now = new Date()) {
+  if (!relativeDatePresets.has(preset)) throw new Error("Unsupported relative date preset.");
+  const current = now instanceof Date ? new Date(now) : new Date(now);
+  if (!Number.isFinite(current.getTime())) throw new Error("Invalid current date.");
+  const today = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate()));
+  const endOfMonth = (year, month) => new Date(Date.UTC(year, month + 1, 0)).toISOString().slice(0, 10);
+  let start, end = today.toISOString().slice(0, 10);
+  if (preset === "last-7-days" || preset === "last-30-days") {
+    const days = preset === "last-7-days" ? 6 : 29;
+    today.setUTCDate(today.getUTCDate() - days);
+    start = today.toISOString().slice(0, 10);
+  } else if (preset === "month-to-date") {
+    start = `${end.slice(0, 7)}-01`;
+  } else if (preset === "last-month") {
+    const year = today.getUTCMonth() === 0 ? today.getUTCFullYear() - 1 : today.getUTCFullYear();
+    const month = (today.getUTCMonth() + 11) % 12;
+    start = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    end = endOfMonth(year, month);
+  } else {
+    start = `${today.getUTCFullYear()}-01-01`;
+  }
+  return [start, end];
 }
 
 function scalarKey(value) {
@@ -93,10 +162,10 @@ export function distinctValues(rows, field, limit = 200) {
 }
 
 function isDateValue(value) {
-  return value instanceof Date && Number.isFinite(value.getTime()) || typeof value === "string" && datePattern.test(value.trim());
+  return calendarDate(value) !== null;
 }
 
-/** Infer the phase-2 filter control for a source field; date fields stay out. */
+/** Infer a filter control for a source field. */
 export function filterFieldType(rows, field) {
   const values = rows.filter(row => own(row, field)).map(row => row[field]).filter(value => value !== null && value !== "");
   if (values.length && values.every(isDateValue)) return "date";

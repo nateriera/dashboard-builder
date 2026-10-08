@@ -345,6 +345,19 @@ body.present .first-run-hint { display: none; }
   color: var(--ink);
 }
 
+.tile-inspect-selected {
+  flex: 0 0 auto;
+  border: 1px solid var(--periwinkle);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--periwinkle) 10%, var(--white));
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+.tile-inspect-selected:hover { background: color-mix(in srgb, var(--periwinkle) 18%, var(--white)); }
+.tile-inspect-selected:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+
 .tile-data-label {
   font-weight: 600;
   color: var(--dusk);

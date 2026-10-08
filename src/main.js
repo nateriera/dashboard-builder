@@ -288,7 +288,19 @@ function buildTileContent(type, meta) {
     document.querySelector(".palette-item")?.focus();
   });
 
-  toolbar.append(titleInput, dataBtn);
+  const inspectSelected = document.createElement("button");
+  inspectSelected.type = "button";
+  inspectSelected.className = "tile-inspect-selected";
+  inspectSelected.hidden = true;
+  inspectSelected.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const details = tile.querySelector(".chart-drillthrough");
+    if (!details) return;
+    details.open = true;
+    details.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    details.querySelector("summary")?.focus();
+  });
+  toolbar.append(titleInput, dataBtn, inspectSelected);
   const settings = document.createElement('details'); settings.className = 'tile-settings';
   const summary = document.createElement('summary'); summary.textContent = 'Settings'; settings.append(summary);
   const settingsBody = document.createElement('div'); settingsBody.className = 'tile-settings-body'; settings.append(settingsBody);
@@ -703,7 +715,12 @@ function wireCrossfilter(chartEl, meta, entry) {
     }
     const next=filters.filter(filter=>filter!==current);
     if (nextValues.length) next.push({id:current?.id||`cross-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,field:entry.crossfilterField,op:'is',values:nextValues,source:'crossfilter',sourceTile:meta.id});
-    for(const tile of tileMeta.values())tile.drillValues=null;
+    for(const tile of tileMeta.values()){
+      tile.drillValues=null;
+      const tileEl=gridEl.querySelector(`.grid-stack-item[gs-id="${CSS.escape(tile.id)}"]`);
+      tileEl?.querySelector('.chart-drillthrough')?.remove();
+      syncDrillthroughAction(tileEl?.querySelector('.tile-chart'),tile,[]);
+    }
       const action=meta.tileOptions?.clickAction||'filter-and-inspect';
       const destination=meta.tileOptions?.clickDestinationPageId;
       if(destination&&pages.some(page=>page.id===destination)){
@@ -727,18 +744,28 @@ function wireCrossfilter(chartEl, meta, entry) {
 }
 
 function renderDrillRows(chartEl,meta,field,values){
+  chartEl.querySelector('.chart-drillthrough')?.remove();
   if(!Array.isArray(meta.filterRows)||!field)return;
   const base=applyFilters(meta.filterRows,filtersForTile(meta),{sourceTile:meta.id,pageId:meta.pageId}).rows;
   const rows=base.filter(row=>values.some(value=>Object.is(row[field],value)));
-  if(!rows.length)return;
+  if(!rows.length){syncDrillthroughAction(chartEl,meta,[]);return;}
   const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))].map(key=>({key}));
   const valueText=values.map(value=>value===null?'Blank':String(value)).join(', ');
   const countText=`${rows.length} ${rows.length===1?'row':'rows'}`;
   const summaryLabel=`Inspect selected records · ${meta.title} · ${field} is ${valueText} · ${countText}`;
-  const details=chartData(rows,columns,`${meta.title} — selected mark`,{summaryLabel});
+  const details=chartData(rows,columns,`${meta.title} — selected records`,{summaryLabel});
   details.classList.add('chart-drillthrough');
-  details.open=true;
+  details.open=false;
   chartEl.append(details);
+  syncDrillthroughAction(chartEl,meta,rows);
+}
+
+function syncDrillthroughAction(chartEl,meta,rows){
+  const button=chartEl?.closest('.tile')?.querySelector('.tile-inspect-selected');
+  if(!button)return;
+  button.hidden=!rows.length;
+  button.textContent=`Inspect ${rows.length} selected ${rows.length===1?'record':'records'}`;
+  button.setAttribute('aria-label',button.textContent);
 }
 
 function renderTile(el) {
@@ -750,6 +777,7 @@ function renderTile(el) {
   const entry = TILE_TYPES[meta.type];
   const chartEl = el.querySelector(".tile-chart");
   if (!entry || !chartEl) return;
+  syncDrillthroughAction(chartEl,meta,[]);
 
   if (entry.noData) {
     entry.render(chartEl,{data:[],options:{title:meta.title,source:meta.source,tileOptions:meta.tileOptions,sizing:meta.sizing}});

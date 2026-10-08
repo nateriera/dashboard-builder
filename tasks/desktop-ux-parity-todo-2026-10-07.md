@@ -1,44 +1,40 @@
 # Desktop UX and UI Parity Follow-up
 
-Checklist corresponding to [desktop-ux-parity-plan-2026-10-07.md](desktop-ux-parity-plan-2026-10-07.md). Planning only; no implementation has started.
+Implementation checklist corresponding to [desktop-ux-parity-plan-2026-10-07.md](desktop-ux-parity-plan-2026-10-07.md).
 
-## Phase 1: Header and navigation
+## Phase 1: Header and navigation — complete
 
-- [ ] Group actions into a clear desktop hierarchy.
-- [ ] Separate page/saved-view navigation from save/export/present/destructive actions.
-- [ ] Verify 1024×768, 1280×800, and 1440×900, keyboard order, focus, labels, and stable IDs.
+- [x] Group actions into a clear desktop hierarchy.
+- [x] Separate page/saved-view navigation from save/export/present/destructive actions.
+- [x] Verify header geometry at 1024, 1280, and 1440 widths; preserve keyboard access, labels, and stable IDs.
 
-## Phase 2: Filter feedback
+## Phase 2: Filter feedback — complete
 
-- [ ] Improve source-field and scope clarity in filter creation.
-- [ ] Make active selections and affected chart behavior apparent.
-- [ ] Differentiate filtered-empty, ignored, and unmapped states without color-only cues.
-- [ ] Preserve saved views, date filters, page scope, and export semantics.
+- [x] Clarify active selection context and source field.
+- [x] Distinguish filtered, highlighted, ignored, and unmapped chart behavior with text.
+- [x] Preserve saved views, date filters, page scope, and export semantics.
 
-### Checkpoint: Header and filter feedback
+## Phase 3: Drill-through and table inspection — complete
 
-- [ ] Focused browser cases and full browser suite pass.
-- [ ] Production build passes; desktop screenshots show no clipping or obstruction.
+- [x] Add a named tile-toolbar action to reach selected-mark records.
+- [x] Keep selected records in a separate, initially collapsed table from the full chart data table.
+- [x] Show source chart, selected field/value, and row count in the selected-record label.
+- [x] Open and focus the selected-record table from the keyboard-operable action.
+- [x] Preserve table search, sorting, pagination, and configured destination behavior.
+- [x] Verify selected-record action for bar and donut marks; configured navigation is covered by existing browser tests.
 
-## Phase 3: Drill-through and table inspection
+## Phase 4: First-run hint — complete
 
-- [ ] Add an explicit route to selected-mark records.
-- [ ] Distinguish selected-mark records from the full tile data table.
-- [ ] Verify chart type, keyboard, search, sort, pagination, and destination behavior.
+- [x] Move help into the palette so it does not cover charts.
+- [x] Preserve dismissal, discoverability, accessibility, and present-mode behavior.
 
-## Phase 4: First-run hint
+## Phase 5: Parity and finish — complete
 
-- [ ] Relocate the hint so it does not cover charts.
-- [ ] Preserve dismissal, discoverability, accessibility, and present-mode behavior.
+- [x] Keep scope to the desktop composer; mobile path/branch remains untouched.
+- [x] Run `npm test`, `npm run test:browser`, and `npm run build`.
+- [x] Review and discard browser-generated screenshots/diagnostics before committing.
 
-## Phase 5: Parity and finish
+## Follow-up opportunities
 
-- [ ] Compare desktop action hierarchy, filtering, drill-through, and orientation against the selected reference set.
-- [ ] Run `npm test`, `npm run test:browser`, and `npm run build`.
-- [ ] Review screenshots, generated artifacts, and working tree before any release action.
-
-## Scope guard
-
-- [ ] Desktop composer only; mobile path/branch is excluded.
-- [ ] No filter-semantic or export-viewer changes without a reproduced defect and explicit scope update.
-- [ ] No implementation, commit, or push has been performed as part of this planning task.
+- [ ] Verify selected-record navigation on scatter charts in a separate interaction pass; the current automated browser check covers bar and donut marks.
+- [ ] Consider splitting the main app bundle, which remains above Vite's 500 kB warning threshold.

@@ -261,6 +261,9 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
   await page.locator('#btn-filters').click();
   await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  await expect(donut.locator('.tile-inspect-selected')).toBeVisible();
+  await expect(donut.locator('.chart-drillthrough')).toHaveCount(1);
+  await expect(donut.locator('.chart-drillthrough')).not.toHaveAttribute('open','');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
 });
 
@@ -346,8 +349,16 @@ test('Desktop parity: mark clicks can filter charts or inspect records independe
   await source.getByLabel('Mark click action').selectOption('inspect-only');
   await source.locator('.tile-settings summary').click();
   await source.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
+  const inspect=source.getByRole('button',{name:'Inspect 1 selected record'});
+  await expect(inspect).toBeVisible();
+  await expect(source.locator('.chart-drillthrough')).toHaveCount(1);
+  await expect(source.locator('.chart-drillthrough')).not.toHaveAttribute('open','');
+  await inspect.focus();
+  await inspect.press('Enter');
+  await expect(source.locator('.chart-drillthrough')).toBeVisible();
+  await expect(source.locator('.chart-drillthrough')).toHaveAttribute('open','');
   await expect(source.locator('.chart-drillthrough summary')).toContainText('1 row');
-  await source.locator('.chart-drillthrough [aria-label="Search records in Source — selected mark"]').fill('Housing');
+  await source.locator('.chart-drillthrough [aria-label="Search records in Source — selected records"]').fill('Housing');
   await expect(source.locator('.chart-drillthrough tbody')).toContainText('Housing');
   await source.locator('.chart-drillthrough [aria-label="Sort by value"]').click();
   await expect(source.locator('.chart-drillthrough [aria-label="Rows per page"]')).toHaveValue('100');
@@ -358,6 +369,7 @@ test('Desktop parity: mark clicks can filter charts or inspect records independe
   await source.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
   await expect(target.locator('.chart-data summary')).toContainText('(1 rows)');
   await expect(source.locator('.chart-drillthrough')).toHaveCount(0);
+  await expect(source.locator('.tile-inspect-selected')).toBeHidden();
 });
 
 test('Desktop parity: date range controls filter a tile and chart type switching preserves its data binding', async ({ page }) => {

@@ -36,5 +36,5 @@ Implementation checklist corresponding to [desktop-ux-parity-plan-2026-10-07.md]
 
 ## Follow-up opportunities
 
-- [ ] Verify selected-record navigation on scatter charts in a separate interaction pass; the current automated browser check covers bar and donut marks.
+- [ ] Revisit scatter mark activation and selected-record inspection; the focused browser attempt did not reliably invoke the chart selection handler.
 - [ ] Consider splitting the main app bundle, which remains above Vite's 500 kB warning threshold.

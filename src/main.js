@@ -543,6 +543,61 @@ function paintFilteredEmpty(el) {
   el.append(box);
 }
 
+function crossfilterValueDescription(filter) {
+  if (filter.op === 'date-between') return `${filter.field} from ${filter.values[0]} to ${filter.values[1]}`;
+  const values = filter.values.map(value => value === null ? 'Blank' : String(value)).join(', ');
+  return `${filter.field} ${filter.op === 'is-not' ? 'is not' : 'is'} ${values}`;
+}
+
+function tileFilterFeedback(meta, entry, rows) {
+  const incoming = filters.filter(filter => filter.source === 'crossfilter' && filter.sourceTile !== meta.id);
+  if (!incoming.length) return null;
+  const mode = meta.tileOptions?.crossfilterMode || 'filter';
+  const sourceName = filter => tileMeta.get(filter.sourceTile)?.title || 'another chart';
+  const feedback = document.createElement('div');
+  feedback.className = 'tile-filter-status';
+  feedback.setAttribute('role', 'status');
+  feedback.setAttribute('aria-live', 'polite');
+
+  if (mode === 'none') {
+    feedback.dataset.state = 'ignored';
+    feedback.textContent = `Incoming selection from ${[...new Set(incoming.map(sourceName))].join(', ')} is ignored for this chart.`;
+    return feedback;
+  }
+
+  if (mode === 'highlight') {
+    const mappings = meta.tileOptions?.crossfilterFieldMappings || {};
+    const mapped = incoming.filter(filter => {
+      const targetField = mappings[filter.field] ?? (filter.field === entry.crossfilterField ? entry.crossfilterField : null);
+      return targetField && (targetField === entry.crossfilterField || entry.crossfilterFields?.includes(targetField));
+    });
+    if (mapped.length) {
+      feedback.dataset.state = 'highlight';
+      feedback.textContent = `Highlighting ${mapped.map(filter => `${crossfilterValueDescription(filter)} from ${sourceName(filter)}`).join('; ')}.`;
+    } else {
+      feedback.dataset.state = 'unmapped';
+      feedback.textContent = `Selection from ${[...new Set(incoming.map(sourceName))].join(', ')} is not highlighted. Map the source field in chart Settings.`;
+    }
+    return feedback;
+  }
+
+  const applicable = incoming.filter(filter => rows.some(row => Object.prototype.hasOwnProperty.call(row, filter.field)));
+  if (applicable.length) {
+    feedback.dataset.state = 'filtered';
+    feedback.textContent = `Filtered by ${applicable.map(filter => `${sourceName(filter)}: ${crossfilterValueDescription(filter)}`).join('; ')}.`;
+  } else {
+    feedback.dataset.state = 'unmapped';
+    const sourceFields = [...new Set(incoming.map(filter => `“${filter.field}”`))].join(', ');
+    feedback.textContent = `Selection from ${[...new Set(incoming.map(sourceName))].join(', ')} was not applied. No matching field ${sourceFields} exists in this chart's data.`;
+  }
+  return feedback;
+}
+
+function showTileFilterFeedback(chartEl, meta, entry, rows) {
+  const feedback = tileFilterFeedback(meta, entry, rows);
+  if (feedback) chartEl.prepend(feedback);
+}
+
 function crossfilterValuesFromTarget(target) {
   const dataMark=target.closest?.('[data-crossfilter-values]');
   const encoded=dataMark?.getAttribute('data-crossfilter-values');
@@ -677,7 +732,10 @@ function renderDrillRows(chartEl,meta,field,values){
   const rows=base.filter(row=>values.some(value=>Object.is(row[field],value)));
   if(!rows.length)return;
   const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))].map(key=>({key}));
-  const details=chartData(rows,columns,`${meta.title} — selected mark`);
+  const valueText=values.map(value=>value===null?'Blank':String(value)).join(', ');
+  const countText=`${rows.length} ${rows.length===1?'row':'rows'}`;
+  const summaryLabel=`Inspect selected records · ${meta.title} · ${field} is ${valueText} · ${countText}`;
+  const details=chartData(rows,columns,`${meta.title} — selected mark`,{summaryLabel});
   details.classList.add('chart-drillthrough');
   details.open=true;
   chartEl.append(details);
@@ -731,11 +789,12 @@ function renderTile(el) {
   meta.filterRows = data;
   const prepared=prepareTileRows(meta,data);
   meta.renderRows=prepared.rows;
-  if (prepared.empty) { paintFilteredEmpty(chartEl); return; }
+  if (prepared.empty) { paintFilteredEmpty(chartEl); showTileFilterFeedback(chartEl,meta,entry,data); return; }
   entry.render(chartEl, {
     data: prepared.rows,
     options: { title: meta.title, source: meta.source, tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present"), crossfilterField: entry.crossfilterField }
   });
+  showTileFilterFeedback(chartEl,meta,entry,data);
   wireCrossfilter(chartEl,meta,entry);
 }
 
@@ -758,8 +817,9 @@ async function renderQueryTile(el, meta, entry, chartEl) {
     meta.filterRows = rows;
     const prepared=prepareTileRows(meta,rows);
     meta.renderRows=prepared.rows;
-    if (prepared.empty) { paintFilteredEmpty(chartEl); return; }
+    if (prepared.empty) { paintFilteredEmpty(chartEl); showTileFilterFeedback(chartEl,meta,entry,rows); return; }
     entry.render(chartEl,{data:prepared.rows,options:options()});
+    showTileFilterFeedback(chartEl,meta,entry,rows);
     wireCrossfilter(chartEl,meta,entry);
   };
 
@@ -1553,7 +1613,10 @@ function showFirstRunHint() {
     firstRunHint = null;
   });
   hint.append(heading, list, dismiss);
-  document.body.appendChild(hint);
+  const palette=document.getElementById('palette');
+  const paletteItems=document.getElementById('palette-items');
+  if(palette&&paletteItems)palette.insertBefore(hint,paletteItems);
+  else document.body.appendChild(hint);
   firstRunHint = hint;
 }
 

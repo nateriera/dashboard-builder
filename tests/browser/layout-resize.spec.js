@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { clickHeaderAction } from './header-actions.js';
 
 const key = 'dashboard-builder:layout:v1';
 async function ready(page) {
@@ -9,7 +10,7 @@ async function ready(page) {
   await expect(page.locator('[gs-id="import-1"] svg').first()).toBeVisible();
 }
 async function saved(page) {
-  await page.locator('#btn-save').click();
+  await clickHeaderAction(page, '#btn-save');
   return page.evaluate(k => JSON.parse(localStorage.getItem(k)), key);
 }
 async function dimensions(tile) {

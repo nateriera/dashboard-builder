@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { clickHeaderAction } from './header-actions.js';
 
 const tile = (id, type, dataset, y, tileOptions = {}) => ({
   id, type, title: id.replace(/(^|-)([a-z])/g, (_, separator, letter) => `${separator ? ' ' : ''}${letter.toUpperCase()}`), source: 'Bundled sample data', dataset,
@@ -69,12 +70,12 @@ test('Phase 2 filters apply by source field, persist, export resolved rows, and 
   await popover.screenshot({ path: 'docs/screenshots/phase2/filters.png' });
 
   const jsonDownload = page.waitForEvent('download');
-  await page.locator('#btn-export').click();
+  await clickHeaderAction(page, '#btn-export');
   const backupFile = await jsonDownload;
   const backup = JSON.parse(await fs.readFile(await backupFile.path(), 'utf8'));
   expect(backup.filters).toEqual([{ id: expect.any(String), field: 'label', op: 'is', values: ['Housing'] }]);
 
-  await page.locator('#btn-save').click();
+  await clickHeaderAction(page, '#btn-save');
   await expect(page.locator('#status')).toContainText('Saved');
   await page.reload();
   await expect(page.locator('#status')).toContainText('build');
@@ -133,7 +134,7 @@ test('Desktop parity: saved views capture and restore filters across reloads', a
   await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(8 rows)');
   await page.locator('#btn-apply-view').click();
   await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(1 rows)');
-  await page.locator('#btn-save').click();
+  await clickHeaderAction(page, '#btn-save');
   await page.reload();
   await expect(page.locator('#saved-view-picker')).toContainText('Housing view');
   await page.locator('#saved-view-picker').selectOption({ label: 'Housing view' });
@@ -176,12 +177,12 @@ test('Desktop parity: pages retain separate tile layouts and page-scoped filters
   await expect(page.locator('.grid-stack-item[gs-id="overview-chart"] .chart-data summary')).toContainText('(8 rows)');
   await page.getByRole('tab', { name: 'Detail' }).click();
 
-  await page.locator('#btn-save').click();
+  await clickHeaderAction(page, '#btn-save');
   await page.reload();
   await expect(page.getByRole('tab', { name: 'Detail' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.grid-stack-item .chart-data summary')).toContainText('(1 rows)');
   const jsonDownload = page.waitForEvent('download');
-  await page.locator('#btn-export').click();
+  await clickHeaderAction(page, '#btn-export');
   const backup = JSON.parse(await fs.readFile(await (await jsonDownload).path(), 'utf8'));
   expect(backup.version).toBe(4);
   expect(backup.pages.map(item => item.name)).toEqual(['Page 1', 'Detail']);
@@ -237,7 +238,7 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
   await expect(sourceBar.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(8 rows)');
   await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
   await expect(sourceBar.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(8 rows)');
-  await expect(sourceBar.locator('.chart-drillthrough summary')).toContainText('(1 rows)');
+  await expect(sourceBar.locator('.chart-drillthrough summary')).toContainText('1 row');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
 
   const popover = await openFilters(page);
@@ -345,7 +346,7 @@ test('Desktop parity: mark clicks can filter charts or inspect records independe
   await source.getByLabel('Mark click action').selectOption('inspect-only');
   await source.locator('.tile-settings summary').click();
   await source.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
-  await expect(source.locator('.chart-drillthrough summary')).toContainText('(1 rows)');
+  await expect(source.locator('.chart-drillthrough summary')).toContainText('1 row');
   await source.locator('.chart-drillthrough [aria-label="Search records in Source — selected mark"]').fill('Housing');
   await expect(source.locator('.chart-drillthrough tbody')).toContainText('Housing');
   await source.locator('.chart-drillthrough [aria-label="Sort by value"]').click();
@@ -376,7 +377,7 @@ test('Desktop parity: date range controls filter a tile and chart type switching
   await chart.locator('.tile-settings summary').click();
   await chart.getByLabel('Chart type').selectOption('area');
   await expect(chart.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(4 rows)');
-  await page.locator('#btn-save').click();
+  await clickHeaderAction(page, '#btn-save');
   await expect(page.locator('#status')).toContainText('Saved');
   await page.reload();
   await expect(page.locator('.grid-stack-item[gs-id="monthly-trend"] .chart-data summary')).toContainText('(4 rows)');
@@ -467,7 +468,7 @@ test('Phase 2 SQL parameters define, substitute, re-run, export, and report miss
   await popover.screenshot({ path: 'docs/screenshots/phase2/parameters.png' });
 
   await page.locator('#btn-filters').click();
-  await page.locator('#btn-save').click();
+  await clickHeaderAction(page, '#btn-save');
   await expect(page.locator('#status')).toContainText('Saved');
   await page.reload();
   await expect(page.locator('#status')).toContainText('build');
@@ -503,7 +504,7 @@ test('Phase 2 SQL parameters define, substitute, re-run, export, and report miss
   await expect(tileEl.locator('.chart-data tbody')).toContainText('25680', { timeout: 90000 });
 
   const jsonDownload = page.waitForEvent('download');
-  await page.locator('#btn-export').click();
+  await clickHeaderAction(page, '#btn-export');
   const backupFile = await jsonDownload;
   const backup = JSON.parse(await fs.readFile(await backupFile.path(), 'utf8'));
   expect(backup.parameters).toEqual([

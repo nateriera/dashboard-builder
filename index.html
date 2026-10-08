@@ -11,23 +11,34 @@
         <h1>Dashboard Builder</h1>
         <p class="brand-sub">Compose charts into dashboards</p>
       </div>
-      <div class="header-actions">
-        <button id="btn-data" type="button" title="Pick one dataset for every chart — tiles with their own data keep it">Data: Tile samples</button>
-        <button id="btn-filters" type="button" title="Filter charts and change SQL parameters">Filters</button>
-        <label class="view-picker-label" for="saved-view-picker">View</label>
-        <select id="saved-view-picker" aria-label="Saved dashboard view"><option value="">Current view</option></select>
-        <button id="btn-save-view" type="button" title="Save the current filters, parameters, and theme as a reusable view">Save view</button>
-        <button id="btn-apply-view" type="button" title="Apply the selected saved view">Apply view</button>
-        <button id="btn-theme" type="button" title="Pick a visual theme for the dashboard">Theme</button>
-        <button id="btn-templates" type="button" title="Start from a template dashboard">Templates</button>
-        <button id="btn-save" type="button" title="Save layout to this browser">Save layout</button>
-        <button id="btn-export" type="button" title="Download layout as a JSON file">Export JSON</button>
-        <button id="btn-export-html" type="button" title="Download a self-contained HTML file of this dashboard">Export HTML</button>
-        <button id="btn-import" type="button" title="Load a layout from a JSON file">Import JSON</button>
-        <button id="btn-present" type="button" title="Hide the editor chrome and lock the grid">Present</button>
-        <button id="btn-clear" type="button" class="danger" title="Remove all tiles">Clear grid</button>
+      <nav class="header-actions" aria-label="Dashboard actions">
+        <div class="header-action-group" role="group" aria-label="Data controls">
+          <button id="btn-data" type="button" title="Pick one dataset for every chart — tiles with their own data keep it">Data: Tile samples</button>
+          <button id="btn-filters" type="button" title="Filter charts and change SQL parameters">Filters</button>
+        </div>
+        <div class="header-action-group header-view-group" role="group" aria-label="Saved views">
+          <label class="view-picker-label" for="saved-view-picker">View</label>
+          <select id="saved-view-picker" aria-label="Saved dashboard view"><option value="">Current view</option></select>
+          <button id="btn-save-view" type="button" title="Save the current filters, parameters, and theme as a reusable view">Save view</button>
+          <button id="btn-apply-view" type="button" title="Apply the selected saved view">Apply view</button>
+        </div>
+        <div class="header-action-group" role="group" aria-label="Share and present">
+          <button id="btn-export-html" type="button" title="Download a self-contained HTML file of this dashboard">Export HTML</button>
+          <button id="btn-present" type="button" title="Hide the editor chrome and lock the grid">Present</button>
+        </div>
+        <details class="header-more">
+          <summary aria-label="More actions">More</summary>
+          <div class="header-more-menu" role="group" aria-label="Additional dashboard actions">
+            <button id="btn-theme" type="button" title="Pick a visual theme for the dashboard">Theme</button>
+            <button id="btn-templates" type="button" title="Start from a template dashboard">Templates</button>
+            <button id="btn-save" type="button" title="Save layout to this browser">Save layout</button>
+            <button id="btn-export" type="button" title="Download layout as a JSON file">Export JSON</button>
+            <button id="btn-import" type="button" title="Load a layout from a JSON file">Import JSON</button>
+            <button id="btn-clear" type="button" class="danger" title="Remove all tiles">Clear grid</button>
+          </div>
+        </details>
         <input type="file" id="file-import" accept="application/json,.json" hidden />
-      </div>
+      </nav>
       <div id="status" role="status" aria-live="polite"></div>
     </header>
 

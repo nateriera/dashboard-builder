@@ -1,9 +1,9 @@
 // Paginated text alternative uses authoritative rows, including sampled plots.
-export function chartData(rows, fields, title) {
+export function chartData(rows, fields, title, { summaryLabel } = {}) {
   const details = document.createElement('details');
   details.className = 'chart-data';
   const summary = document.createElement('summary');
-  summary.textContent = `View data for ${title || 'chart'} (${rows.length.toLocaleString()} rows)`;
+  summary.textContent = summaryLabel || `View data for ${title || 'chart'} (${rows.length.toLocaleString()} rows)`;
   const table = document.createElement('table');
   const caption = document.createElement('caption');
   caption.textContent = title || 'Chart data';

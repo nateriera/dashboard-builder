@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { clickHeaderAction } from './header-actions.js';
 
 const envelope = (tiles, datasets = {}, queries = {}) => ({
   app: 'dashboard-builder', version: 1, theme: 'paper', tiles, datasets, queries
@@ -37,7 +38,7 @@ async function importJSON(page, data) {
 test('prelaunch: add bar then dot gets a distinct title and templates keep explicit titles', async ({ page }) => {
   await ready(page);
   page.once('dialog', dialog => dialog.accept());
-  await page.locator('#btn-clear').click();
+  await clickHeaderAction(page, '#btn-clear');
   await expect(page.locator('.tile')).toHaveCount(0);
 
   await page.locator('.palette-item[data-tile-type="bar"]').click();
@@ -48,7 +49,7 @@ test('prelaunch: add bar then dot gets a distinct title and templates keep expli
   await expect(titles.nth(1)).toHaveValue('Requests by category 2');
   await page.screenshot({ path: 'docs/screenshots/tile-title-disambiguation.png' });
 
-  await page.locator('#btn-templates').click();
+  await clickHeaderAction(page, '#btn-templates');
   const overview = page.locator('.tpl-card').filter({ hasText: 'Executive overview' });
   await overview.getByRole('button', { name: 'Use template' }).click();
   await overview.getByRole('button', { name: 'Replace' }).click();
@@ -67,7 +68,7 @@ test('prelaunch: starter templates show bundled images and user templates keep s
   await page.setViewportSize({ width: 1440, height: 1100 });
   await ready(page);
   await dismissHint(page);
-  await page.locator('#btn-templates').click();
+  await clickHeaderAction(page, '#btn-templates');
   await expect(page.locator('.tpl-card')).toHaveCount(7);
   await expect(page.locator('.tpl-preview.has-screenshot img')).toHaveCount(6);
   await page.waitForFunction(() => [...document.querySelectorAll('.tpl-preview img')]
@@ -198,7 +199,7 @@ test('docs #6: JSON backup is editable in the composer and HTML viewer opens off
   await ready(page);
   await dismissHint(page);
   const jsonDownload = page.waitForEvent('download');
-  await page.locator('#btn-export').click();
+  await clickHeaderAction(page, '#btn-export');
   const jsonFile = await jsonDownload;
   const backup = JSON.parse(await fs.readFile(await jsonFile.path(), 'utf8'));
   expect(backup.tiles.length).toBeGreaterThan(0);

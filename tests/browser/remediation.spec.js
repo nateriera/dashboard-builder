@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { clickHeaderAction, focusHeaderAction } from './header-actions.js';
 
 const upload = { name:'Revenue',columns:['label','value'],rows:[{label:'North',value:12},{label:'South',value:30}],fieldKeys:['label','value'],mapping:{label:'label',value:'value'},raw:null };
 const envelope = (tiles,datasets={},queries={}) => ({app:'dashboard-builder',version:1,theme:'paper',tiles,datasets,queries});
@@ -11,7 +12,7 @@ async function importJSON(page,data) {
   await expect(page.locator('#status')).toContainText(/Imported|Import failed/);
 }
 async function jsonExport(page) {
-  const downloaded=page.waitForEvent('download'); await page.locator('#btn-export').click();
+  const downloaded=page.waitForEvent('download'); await clickHeaderAction(page, '#btn-export');
   const download=await downloaded; return JSON.parse(await fs.readFile(await download.path(),'utf8'));
 }
 test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus', async ({page}) => {
@@ -33,7 +34,7 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
   await expect(page.locator('.tile-chart')).toContainText('USD');
   const exported=await jsonExport(page); expect(exported.version).toBe(4); expect(exported.tiles[0].binding).toEqual({mode:'explicit',ref:'categorical'});
-  await page.locator('#btn-templates').focus(); await page.keyboard.press('Enter');
+  await focusHeaderAction(page, '#btn-templates'); await page.keyboard.press('Enter');
   await expect(page.locator('.tpl-close')).toBeFocused(); await page.keyboard.press('Shift+Tab');
   expect(await page.evaluate(()=>document.querySelector('.tpl-modal').contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Escape'); await expect(page.locator('#btn-templates')).toBeFocused();
@@ -143,7 +144,7 @@ test('R5/R7: partial IndexedDB write and construction faults leave prior layout 
   await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
   await page.evaluate(()=>{
     const create=document.createElement.bind(document); let failed=false;
-    document.createElement=function(tag,...rest){if(tag==='input'&&!failed){failed=true;throw new Error('Injected construction failure');}return create(tag,...rest);};
+    document.createElement=function(tag,...rest){if(tag==='div'&&!failed){failed=true;throw new Error('Injected construction failure');}return create(tag,...rest);};
   });
   await importJSON(page,envelope([tile('upload:new')],{new:upload})); await expect(page.locator('#status')).toContainText('Import failed');
   await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
@@ -173,9 +174,9 @@ test('R6/R9: worker upload, keyboard save/import/export and cancel remain operab
   await expect(page.locator('.data-preview-note').first()).toContainText('2 rows');
   await page.locator('.data-apply').first().focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.tile-data-label')).toContainText('revenue.csv');
-  await page.locator('#btn-save').focus(); await page.keyboard.press('Enter'); await expect(page.locator('#status')).toContainText('Saved');
-  const downloaded=page.waitForEvent('download'); await page.locator('#btn-export').focus(); await page.keyboard.press('Enter'); await downloaded;
-  const chooser=page.waitForEvent('filechooser'); await page.locator('#btn-import').focus(); await page.keyboard.press('Enter');
+  await focusHeaderAction(page, '#btn-save'); await page.keyboard.press('Enter'); await expect(page.locator('#status')).toContainText('Saved');
+  const downloaded=page.waitForEvent('download'); await focusHeaderAction(page, '#btn-export'); await page.keyboard.press('Enter'); await downloaded;
+  const chooser=page.waitForEvent('filechooser'); await focusHeaderAction(page, '#btn-import'); await page.keyboard.press('Enter');
   await (await chooser).setFiles({name:'keyboard.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(envelope([tile('categorical')])))});
   await expect(page.locator('#status')).toContainText('Imported');
   await page.locator('.tile-data-btn').click(); await page.getByRole('button',{name:'Upload',exact:true}).click();

@@ -47,12 +47,15 @@ body {
 #app-header {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 12px 20px;
+  gap: 16px;
+  min-width: 0;
+  padding: 10px 16px;
   background: var(--white);
   border-bottom: 1px solid var(--slate-200);
   flex: 0 0 auto;
 }
+
+.brand { flex: 0 0 auto; }
 
 .brand h1 {
   font-family: var(--font-display);
@@ -60,6 +63,7 @@ body {
   font-size: 20px;
   letter-spacing: 0.04em;
   margin: 0;
+  white-space: nowrap;
 }
 
 .brand-sub {
@@ -69,15 +73,19 @@ body {
 }
 
 .header-actions {
+  flex: 1 1 auto;
+  min-width: 0;
   margin-left: auto;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .header-actions button,
 .header-actions select,
-#btn-exit-present {
+#btn-exit-present,
+.header-more > summary {
   font-family: var(--font-body);
   font-size: 13px;
   font-weight: 500;
@@ -85,8 +93,9 @@ body {
   background: var(--white);
   border: 1px solid var(--slate-300);
   border-radius: 6px;
-  padding: 7px 14px;
+  padding: 6px 9px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .header-actions button:hover,
@@ -94,37 +103,63 @@ body {
 #btn-exit-present:hover {
   background: color-mix(in srgb, var(--ink) 8%, transparent);
 }
-.view-picker-label { font-size: 12px; color: var(--slate-600); margin-left: 4px; }
+.header-action-group { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.header-view-group { gap: 5px; }
+.header-view-group select { max-width: 130px; }
+.view-picker-label { font-size: 12px; color: var(--slate-600); }
 
 .header-actions button.danger { color: var(--danger); }
 
+.header-more { position: relative; flex: 0 0 auto; }
+.header-more > summary { list-style: none; border: 1px solid var(--slate-300); border-radius: 6px; background: var(--white); color: var(--ink); }
+.header-more > summary::-webkit-details-marker { display: none; }
+.header-more > summary::after { content: " ▾"; color: var(--slate-500); }
+.header-more[open] > summary,
+.header-more > summary:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.header-more-menu {
+  position: absolute;
+  z-index: 3000;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: 0 8px 24px rgba(35, 40, 57, .16);
+}
+.header-more-menu button { width: 100%; text-align: left; border: 0; background: transparent; }
+.header-more-menu button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
 .first-run-hint {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 1500;
-  width: min(340px, calc(100vw - 40px));
+  position: relative;
+  width: 100%;
   box-sizing: border-box;
-  padding: 16px 18px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
   border: 1px solid var(--slate-300);
   border-radius: 10px;
   background: var(--white);
-  box-shadow: 0 12px 36px rgba(30, 35, 71, 0.18);
+  box-shadow: var(--card-shadow);
   color: var(--ink);
-  pointer-events: none;
+  font-size: 12px;
 }
 
 .first-run-hint strong {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
 }
 
+.first-run-hint[aria-labelledby] { display: grid; gap: 4px; }
+
 .first-run-hint ul {
-  margin: 8px 0 12px;
-  padding-left: 18px;
+  margin: 5px 0 7px;
+  padding-left: 16px;
   color: var(--slate-600);
-  font-size: 12.5px;
+  font-size: 11px;
 }
 
 .first-run-hint li + li { margin-top: 4px; }
@@ -137,18 +172,22 @@ body {
   color: var(--ink);
   font: inherit;
   cursor: pointer;
-  pointer-events: auto;
 }
 
 .first-run-hint button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 body.present .first-run-hint { display: none; }
 
 #status {
+  flex: 0 1 180px;
+  min-width: 0;
+  max-width: 210px;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--slate-500);
-  min-width: 180px;
   text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Body: palette + grid ───────────────────────────────────────────── */
@@ -1082,7 +1121,11 @@ body.present .tile-toolbar { display: none; }
 .tile-toolbar { flex-wrap: nowrap; }
 .tile-control input[type=text] { width: 100px; color: var(--ink); background: var(--white); border: 1px solid var(--slate-300); border-radius: 6px; }
 .data-popover { max-height: calc(100vh - 16px); overflow: auto; }
-@media (max-width: 1100px) { #app-header { flex-wrap: wrap; gap: 8px; } .header-actions { flex-wrap: wrap; } #status { text-align: left; } }
+@media (max-width: 1100px) {
+  #app-header { flex-wrap: wrap; gap: 8px 12px; }
+  .header-actions { flex: 1 1 calc(100% - 150px); flex-wrap: wrap; justify-content: flex-start; }
+  #status { flex: 1 0 100%; max-width: none; text-align: left; }
+}
 @media (max-width: 700px) { #palette { flex-basis: 160px; } .header-actions button { padding: 6px; } }
 
 /* One compact heading and a disclosure for secondary controls. */
@@ -1294,4 +1337,7 @@ body.present .tile-toolbar { display: none; }
 .parameter-example { display: block; margin: 0 0 10px; padding: 8px; border-radius: 5px; background: var(--paper); font-size: 11px; overflow-wrap: anywhere; white-space: normal; }
 .parameter-form input[type=text] { width: 100%; }
 .tile-empty { display: flex; align-items: center; min-height: 90px; padding: 16px; border: 1px solid var(--slate-200); border-radius: 8px; background: var(--white); color: var(--slate-600); font-size: 13px; }
+.tile-filter-status { margin: 8px 12px 0; padding: 6px 9px; border-left: 3px solid var(--dusk); background: color-mix(in srgb, var(--dusk) 7%, var(--white)); color: var(--slate-600); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.tile-filter-status[data-state="ignored"], .tile-filter-status[data-state="unmapped"] { border-left-color: var(--warning); }
+.tile-filter-status[data-state="highlight"] { border-left-color: var(--success); }
 @media (max-width: 480px) { .dashboard-filters-popover { width: min(390px, calc(100vw - 16px)); } .dashboard-parameter { grid-template-columns: 1fr auto; } .dashboard-parameter .parameter-value-label { grid-column: 1 / -1; } }

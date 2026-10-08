@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { clickHeaderAction } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');
@@ -45,7 +46,7 @@ test('guided upload profiles locally, permits field choice, and builds only afte
   await expect(page.locator('#status')).toContainText('Built 3 suggested charts');
 
   const downloadEvent = page.waitForEvent('download');
-  await page.locator('#btn-export').click();
+  await clickHeaderAction(page, '#btn-export');
   const download = await downloadEvent;
   const exported = JSON.parse(await fs.readFile(await download.path(), 'utf8'));
   const scatter = exported.tiles.find((tile) => tile.type === 'scatter');

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { clickHeaderAction } from './header-actions.js';
 
 const datasets={
   table:'categorical',stackedBar:'stacked',stackedColumn:'stacked',histogram:'scatter',
@@ -62,19 +63,19 @@ test('Phase 1 tiles bind samples, save annotations, export offline, and capture 
   await expect(annotation.locator('.db-annotation')).toContainText('<script>');
   await expect(annotation.locator('.db-annotation script')).toHaveCount(0);
   expect(await page.evaluate(()=>window.phase1Pwned)).toBeUndefined();
-  await page.locator('#btn-save').click();
+  await clickHeaderAction(page, '#btn-save');
   await expect(page.locator('#status')).toContainText('Saved');
   await page.reload();
   await expect(annotation.locator('.db-annotation')).toContainText('<script>');
   await expect(annotation.locator('.tile-data-btn')).toBeHidden();
-  const jsonDownload=page.waitForEvent('download');await page.locator('#btn-export').click();
+  const jsonDownload=page.waitForEvent('download');await clickHeaderAction(page, '#btn-export');
   const jsonFile=await jsonDownload;
   const saved=JSON.parse(await fs.readFile(await jsonFile.path(),'utf8'));
   expect(saved.tiles.find(t=>t.type==='text').binding).toEqual({mode:'none'});
   expect(saved.tiles.find(t=>t.type==='text').tileOptions.body).toContain('<script>');
 
   for(let i=0;i<4;i++){
-    await page.locator('#btn-theme').click();
+    await clickHeaderAction(page, '#btn-theme');
     await page.locator('.theme-option').nth(i).click();
     await expect(page.locator('#status')).toContainText('Theme:');
     await page.locator('.grid-stack-item[gs-id="table"]').screenshot({path:`docs/screenshots/phase1/table-theme-${i+1}.png`});

@@ -1,5 +1,6 @@
 // Conservative engineering budgets, not a claim of measured device capacity.
 export const LIMITS = Object.freeze({
+  queryTimeoutMs: 30_000,
   fileBytes: 16 * 1024 * 1024, columns: 100, rows: 250000,
   queryRows: 10000, marks: 2000, categories: 100, facets: 12,
   tiles: 100, layoutBytes: 32 * 1024 * 1024

@@ -16,7 +16,7 @@ const { normalizeRows } = await import('../src/tiles/normalize.js');
 const { sanitizeValue, materializeResult } = await import('../src/data/sql.js');
 const { validateLayout, assertNoCollisions } = await import('../src/data/layout.js');
 const { migrateLegacy } = await import('../src/data/migrate.js');
-const { createQueryCoordinator, createPreviewGate } = await import('../src/data/queryCoordinator.js');
+const { createQueryCoordinator, createPreviewGate, executeWithTimeout } = await import('../src/data/queryCoordinator.js');
 const { parseFile } = await import('../src/data/parse.js');
 const store = await import('../src/data/store.js');
 const layout = (dataset = 'categorical') => ({ app: 'dashboard-builder', version: 1, defaultDataset: {kind:'dataset',ref:'upload:revenue'}, tiles: [{id:'bar1',type:'bar',dataset,x:0,y:0,w:6,h:5}] });
@@ -112,6 +112,31 @@ test('R4: revisions synchronize serially and superseded query results are reject
   rev++; const newer=coordinator.ensure(); release();
   await assert.rejects(pending,/Datasets changed/); await newer;
   assert.equal(syncCount,2); assert.equal(max,1);
+});
+test('R4: timed-out query waits for worker cleanup and rejects late results', async () => {
+  let finishQuery, finishCleanup, cleanupStarted = false;
+  const operation = executeWithTimeout(
+    () => new Promise(resolve => { finishQuery = resolve; }),
+    5,
+    () => { cleanupStarted = true; return new Promise(resolve => { finishCleanup = resolve; }); }
+  );
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(cleanupStarted, true);
+  let settled = false;
+  operation.catch(() => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false, 'timeout must wait until the worker has been stopped');
+  finishCleanup();
+  await assert.rejects(operation, /Query timed out/);
+  finishQuery({ rows: [{ value: 1 }] });
+});
+test('R4: invalidated query coordinator synchronizes again before the next query', async () => {
+  let rev=1, syncCount=0;
+  const coordinator=createQueryCoordinator({revision:()=>rev,collect:()=>rev,sync:async()=>{syncCount++;},execute:async()=>({rows:[]})});
+  await coordinator.ensure();
+  coordinator.invalidate();
+  await coordinator.run('SELECT 1');
+  assert.equal(syncCount,2);
 });
 test('R6: 250,000-row fixtures have safe domains and bounded plotted marks', () => {
   const rows=Array.from({length:250000},(_,i)=>({x:i,y:i,value:i,date:i}));

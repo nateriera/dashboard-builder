@@ -1,4 +1,4 @@
-import { createQueryCoordinator } from "./queryCoordinator.js";
+import { createQueryCoordinator, executeWithTimeout } from "./queryCoordinator.js";
 import { LIMITS } from "./limits.js";
 // DuckDB-WASM in-browser SQL (phase 2b).
 //
@@ -33,12 +33,14 @@ import {
 
 // ── Lazy singleton ────────────────────────────────────────────────────────
 let dbPromise = null;
+let dbInstance = null;
 
 async function initDB() {
   const worker = new Worker(duckdbWorkerUrl);
   const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
   await db.instantiate(duckdbWasmUrl);
   const conn = await db.connect();
+  dbInstance = db;
   return { db, conn };
 }
 
@@ -46,6 +48,7 @@ async function getDB() {
   if (!dbPromise) {
     dbPromise = initDB().catch((err) => {
       dbPromise = null; // let a later attempt retry
+      dbInstance = null;
       throw err;
     });
   }
@@ -87,10 +90,29 @@ const coordinator = createQueryCoordinator({
     const trimmed = sql.trim().replace(/;\s*$/, '');
     if (!/^(SELECT|WITH)\b/i.test(trimmed)) throw new Error('Only SELECT/WITH queries are supported.');
     const { conn } = await getDB();
-    const result = await conn.query('SELECT * FROM (' + trimmed + ') AS dashboard_result LIMIT ' + (LIMITS.queryRows + 1));
+    const result = await queryWithTimeout(conn, 'SELECT * FROM (' + trimmed + ') AS dashboard_result LIMIT ' + (LIMITS.queryRows + 1));
     return materializeResult(result);
   }
 });
+
+async function queryWithTimeout(conn, sql) {
+  return executeWithTimeout(
+    () => conn.query(sql),
+    LIMITS.queryTimeoutMs,
+    restartDatabase,
+    'Query timed out after ' + (LIMITS.queryTimeoutMs / 1000) + ' seconds. DuckDB was restarted; rerun the query.'
+  );
+}
+
+function restartDatabase() {
+  const current = dbInstance;
+  dbPromise = null;
+  dbInstance = null;
+  registered.clear();
+  coordinator.invalidate();
+  return current ? current.terminate() : Promise.resolve();
+}
+
 export function ensureTables() { return coordinator.ensure(); }
 export function runQuery(sql) { return coordinator.run(sql); }
 
@@ -111,6 +133,7 @@ export function listTables() {
 // qid -> {revision, identity, rows}; field contracts are part of identity.
 
 const queryCache = new Map();
+const tileQueryPromises = new Map();
 
 export function getCachedRows(qid, query, entry) {
   const e = queryCache.get(qid);
@@ -118,9 +141,18 @@ export function getCachedRows(qid, query, entry) {
 }
 export function dropCachedRows(qid) { queryCache.delete(qid); }
 export async function runTileQuery(qid, query, entry) {
-  const { rows, revision } = await runQuery(query.sql);
-  const { rows: normalized } = normalizeRows(entry, rows, query.mapping || {});
-  if (revision !== datasetVersion()) throw new Error('Datasets changed. Run again.');
-  queryCache.set(qid, { revision, identity: JSON.stringify([query,entry.fields]), rows: normalized });
-  return normalized;
+  const identity = JSON.stringify([query,entry.fields]);
+  const pendingIdentity = JSON.stringify([identity,datasetVersion()]);
+  const pending = tileQueryPromises.get(qid);
+  if (pending?.identity === pendingIdentity) return pending.promise;
+  const promise = (async () => {
+    const { rows, revision } = await runQuery(query.sql);
+    const { rows: normalized } = normalizeRows(entry, rows, query.mapping || {});
+    if (revision !== datasetVersion()) throw new Error('Datasets changed. Run again.');
+    queryCache.set(qid, { revision, identity, rows: normalized });
+    return normalized;
+  })();
+  tileQueryPromises.set(qid, { identity: pendingIdentity, promise });
+  try { return await promise; }
+  finally { if (tileQueryPromises.get(qid)?.promise === promise) tileQueryPromises.delete(qid); }
 }

@@ -14,6 +14,7 @@ export function createQueryCoordinator({ revision, collect, sync, execute }) {
     }
   }
   return {
+    invalidate() { synced = -1; },
     ensure: () => enqueue(ensure),
     run: sql => enqueue(async () => {
       await ensure();
@@ -23,6 +24,27 @@ export function createQueryCoordinator({ revision, collect, sync, execute }) {
       return { ...result, revision: captured };
     })
   };
+}
+
+// Keep the serialized queue occupied until timeout cleanup has finished and
+// route late results back to the timeout instead of returning them to callers.
+export async function executeWithTimeout(operation, timeoutMs, onTimeout, message = 'Query timed out.') {
+  let timer, timedOut = false;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      Promise.resolve().then(onTimeout).then(
+        () => reject(new Error(message)),
+        reject
+      );
+    }, timeoutMs);
+  });
+  const work = Promise.resolve().then(operation).then(
+    result => timedOut ? timeout : result,
+    error => timedOut ? timeout : Promise.reject(error)
+  );
+  try { return await Promise.race([work, timeout]); }
+  finally { clearTimeout(timer); }
 }
 
 export function createPreviewGate(revision) {

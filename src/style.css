@@ -178,9 +178,9 @@ body {
 body.present .first-run-hint { display: none; }
 
 #status {
-  flex: 0 1 180px;
+  flex: 0 1 300px;
   min-width: 0;
-  max-width: 210px;
+  max-width: 340px;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--slate-500);
@@ -354,6 +354,10 @@ body.present .first-run-hint { display: none; }
   color: var(--ink);
   font-size: 12px;
   cursor: pointer;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tile-inspect-selected:hover { background: color-mix(in srgb, var(--periwinkle) 18%, var(--white)); }
 .tile-inspect-selected:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
@@ -410,8 +414,8 @@ body.present .tile-toolbar { display: none; }
 
 #btn-exit-present {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 16px;
+  right: 16px;
   z-index: 1000;
   box-shadow: 0 2px 8px rgba(30, 35, 71, 0.18);
 }
@@ -473,8 +477,9 @@ body.present .tile-toolbar { display: none; }
   color: var(--slate-600);
   font-family: var(--font-body);
   font-size: 12px;
-  padding: 7px 0;
+  padding: 7px 4px;
   cursor: pointer;
+  white-space: nowrap; /* UI pass 2026-10-09: "Calculated field" wrapped mid-label */
 }
 
 .data-tab.active {

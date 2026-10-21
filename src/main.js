@@ -62,7 +62,7 @@ const STORAGE_KEY = "dashboard-builder:layout:v1";
 const FIRST_RUN_HINT_KEY = "dashbuilder.seenHint.v1";
 // Build stamp, shown in the status bar on boot. Bump on every shipped archive
 // so it's always possible to confirm which code is actually running.
-const BUILD = "2f-pages-fit";
+const BUILD = typeof __BUILD_TAG__ !== "undefined" ? __BUILD_TAG__ : "local";
 const gridEl = document.querySelector(".grid-stack");
 const statusEl = document.getElementById("status");
 
@@ -441,7 +441,7 @@ function buildTileContent(type, meta) {
 }
 
 // Add a tile of `type` to the grid. Omit x/y for auto-placement.
-function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, sizing = "manual", fit = false, pageId = currentPageId } = {}) {
+function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, drillValues = null, sizing = "manual", fit = false, pageId = currentPageId } = {}) {
   const entry = TILE_TYPES[type];
   if (!entry) return null;
 
@@ -456,7 +456,10 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, si
     dataset: dataset === undefined ? null : dataset,
     sizing: fit ? "auto" : sizing,
     pageId,
-    tileOptions: { ...(tileOptions || {}) }
+    tileOptions: { ...(tileOptions || {}) },
+    // Restored selections (UI pass 2026-10-09): validated by validateLayout;
+    // renderTile re-opens the drill-through rows when present.
+    drillValues: Array.isArray(drillValues) ? drillValues : null
   };
   tileMeta.set(widgetId, meta);
 
@@ -764,8 +767,13 @@ function syncDrillthroughAction(chartEl,meta,rows){
   const button=chartEl?.closest('.tile')?.querySelector('.tile-inspect-selected');
   if(!button)return;
   button.hidden=!rows.length;
-  button.textContent=`Inspect ${rows.length} selected ${rows.length===1?'record':'records'}`;
-  button.setAttribute('aria-label',button.textContent);
+  // Keep the toolbar compact: the count is the visible label, the full
+  // description lives in title/aria-label so long selections never squeeze
+  // the tile title or Data button (UI pass 2026-10-09).
+  const full=`Inspect ${rows.length} selected ${rows.length===1?'record':'records'}`;
+  button.textContent=`Inspect ${rows.length}`;
+  button.title=full;
+  button.setAttribute('aria-label',full);
 }
 
 function renderTile(el) {
@@ -923,7 +931,8 @@ function serializeLayout() {
     const meta = tileMeta.get(n.id) || {};
     return { id:n.id, type:meta.type, title:meta.title, source:meta.source, dataset:meta.dataset,
       binding:TILE_TYPES[meta.type]?.noData?{mode:'none'}:meta.dataset==null?{mode:'dashboard'}:{mode:'explicit',ref:meta.dataset},
-      sizing:meta.sizing, tileOptions:meta.tileOptions, pageId:currentPageId, x:n.x,y:n.y,w:n.w,h:n.h };
+      sizing:meta.sizing, tileOptions:meta.tileOptions, drillValues:meta.drillValues ?? null,
+      pageId:currentPageId, x:n.x,y:n.y,w:n.w,h:n.h };
   });
   const tiles = pages.flatMap(page => page.id === currentPageId ? activeTiles : pageTileCache.get(page.id) || []);
   return {
@@ -1243,6 +1252,9 @@ if (btnTheme) {
 if (btnTemplates) {
   btnTemplates.addEventListener("click", (e) => {
     e.stopPropagation();
+    // The modal dialog renders under the open More menu (z-index); close the
+    // menu first so it doesn't float above the gallery (UI pass 2026-10-09).
+    document.querySelector(".header-more")?.removeAttribute("open");
     openTemplateGallery({
       applyTemplate,
       getCurrentTiles: () => serializeLayout().tiles.map(({ id, ...rest }) => rest),

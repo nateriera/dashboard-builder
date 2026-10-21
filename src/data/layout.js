@@ -130,7 +130,17 @@ export function validateLayout(input) {
     const pageId = t.pageId ?? pages[0].id;
     if (!pageIds.has(pageId)) fail('Tile references an unknown dashboard page.');
     if (tileOptions.clickDestinationPageId === pageId) fail('Drill-through destination must be a different page.');
-    return { id, type: t.type, title: text(t.title ?? e.defaultTitle,'title'), source: text(t.source ?? 'Sample data','source'), dataset, binding, tileOptions, sizing, pageId, ...geometry };
+    // Selected-mark values backing the "Inspect N" action. Restored on load so
+    // the inspect button reappears alongside the persisted crossfilter banner
+    // (UI pass 2026-10-09). Plain JSON scalars only, capped like other lists.
+    let drillValues = null;
+    if (t.drillValues !== undefined && t.drillValues !== null) {
+      if (!Array.isArray(t.drillValues) || t.drillValues.length > 100 ||
+          !t.drillValues.every((v) => v === null || ['string','number','boolean'].includes(typeof v)))
+        fail('Invalid selected-mark values.');
+      drillValues = t.drillValues.slice();
+    }
+    return { id, type: t.type, title: text(t.title ?? e.defaultTitle,'title'), source: text(t.source ?? 'Sample data','source'), dataset, binding, tileOptions, sizing, pageId, drillValues, ...geometry };
   });
   const datasets = records(data.datasets,'dataset'), queries = records(data.queries,'query');
   for (const t of tiles) {

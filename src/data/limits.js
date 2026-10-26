@@ -13,7 +13,16 @@ export function numericExtent(values, includeZero = false) {
   }
   if (lo === Infinity) return [0, 1];
   if (includeZero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
-  return lo === hi ? [Math.min(lo, 0), hi || 1] : [lo, hi];
+  // A constant value needs a non-degenerate domain: anchor it at zero,
+  // mirroring on both sides — [5, 5] -> [0, 5] and [-3, -3] -> [-3, 0].
+  // (The previous `hi || 1` fallback never fired for a negative hi,
+  // so constant negative data got the zero-width domain [hi, hi].)
+  if (lo === hi) {
+    if (lo > 0) return [0, lo];
+    if (lo < 0) return [lo, 0];
+    return [0, 1];
+  }
+  return [lo, hi];
 }
 export function assertRows(rows, cap = LIMITS.rows) {
   if (!Array.isArray(rows) || rows.length > cap) throw new Error(`Row limit is ${cap.toLocaleString()}. Reduce the input or aggregate it in SQL.`);

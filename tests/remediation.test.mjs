@@ -171,6 +171,20 @@ test('numericExtent: constant values get a non-degenerate zero-anchored domain',
   assert.deepEqual(numericExtent([-3, -3], true), [-3, 0]);
   assert.deepEqual(numericExtent([5, 5], true), [0, 5]);
 });
+test('parseFile CSV: duplicate, empty and reserved header names are rejected', () => {
+  // Regression (autonomy cycle 4): d3-dsv keys row objects by header
+  // name, so a duplicate header silently overwrote the first column's
+  // values, and a "__proto__" header's column silently vanished. The
+  // paste parser (importSource.js) already rejects all of these.
+  assert.throws(() => parseFile('a.csv', 'Region,Region\nWest,1\nEast,2'), /Duplicate column name: Region\./);
+  assert.throws(() => parseFile('a.csv', 'a,,c\n1,2,3'), /Header names must be non-empty and cannot be reserved words\./);
+  assert.throws(() => parseFile('a.csv', '__proto__,a\npolluted,1'), /Header names must be non-empty and cannot be reserved words\./);
+  assert.throws(() => parseFile('a.csv', 'constructor,a\nx,1'), /Header names must be non-empty and cannot be reserved words\.|Reserved column name\./);
+  // A well-formed CSV parses exactly as before.
+  const parsed = parseFile('a.csv', 'Region,Amount\nWest,1\nEast,2');
+  assert.deepEqual(parsed.columns, ['Region', 'Amount']);
+  assert.deepEqual(parsed.rows.map(r => [r.Region, r.Amount]), [['West', '1'], ['East', '2']]);
+});
 test('R2/R6: upload row boundaries and oversized dependency reasons are explicit', () => {
   const csv='label,value\n'+'a,1\n'.repeat(LIMITS.rows);
   assert.equal(parseFile('maximum.csv',csv).rows.length,LIMITS.rows);

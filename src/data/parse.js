@@ -70,6 +70,18 @@ function parseCsv(text) {
   }
   const columns = rows.columns || [];
   if (!columns.length) throw new Error("No columns found — is this a valid CSV file?");
+  // Header names key every row object, so a duplicate name silently
+  // overwrites the earlier column's values, an empty name keys data
+  // under "", and "__proto__" never becomes an own key — its column
+  // silently vanishes (and slips past the reserved-name check in
+  // assertRows, which only sees own keys). The paste parser
+  // (importSource.js) already rejects all three; match it here.
+  const seenColumns = new Set();
+  for (const column of columns) {
+    if (!column || ["__proto__", "constructor", "prototype"].includes(column)) throw new Error("Header names must be non-empty and cannot be reserved words.");
+    if (seenColumns.has(column)) throw new Error(`Duplicate column name: ${column}.`);
+    seenColumns.add(column);
+  }
   if (!rows.length) throw new Error("The CSV has headers but no data rows.");
   if (rows.length > MAX_ROWS) {
     throw new Error(`Too many rows (${rows.length.toLocaleString()}); the limit is ${MAX_ROWS.toLocaleString()}.`);

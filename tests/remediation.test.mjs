@@ -157,6 +157,20 @@ test('R6: 250,000-row fixtures have safe domains and bounded plotted marks', () 
   assert.throws(()=>parseFile('a.json',JSON.stringify([Object.fromEntries(Array.from({length:101},(_,i)=>['c'+i,i]))])),/Column/);
   assert.throws(()=>materializeResult({numRows:LIMITS.queryRows+1}),/result limit/);
 });
+test('numericExtent: constant values get a non-degenerate zero-anchored domain', () => {
+  // Regression (autonomy cycle 3): a constant negative value previously
+  // returned the zero-width domain [-3, -3], which heatmap/choropleth
+  // colour scales and small-multiples shared domains consume directly.
+  assert.deepEqual(numericExtent([-3, -3]), [-3, 0]);
+  assert.deepEqual(numericExtent([-3]), [-3, 0]);
+  // Previously correct results are preserved exactly.
+  assert.deepEqual(numericExtent([5, 5]), [0, 5]);
+  assert.deepEqual(numericExtent([0, 0]), [0, 1]);
+  assert.deepEqual(numericExtent([2, 5]), [2, 5]);
+  assert.deepEqual(numericExtent([null, NaN]), [0, 1]);
+  assert.deepEqual(numericExtent([-3, -3], true), [-3, 0]);
+  assert.deepEqual(numericExtent([5, 5], true), [0, 5]);
+});
 test('R2/R6: upload row boundaries and oversized dependency reasons are explicit', () => {
   const csv='label,value\n'+'a,1\n'.repeat(LIMITS.rows);
   assert.equal(parseFile('maximum.csv',csv).rows.length,LIMITS.rows);

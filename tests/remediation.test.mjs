@@ -171,6 +171,29 @@ test('numericExtent: constant values get a non-degenerate zero-anchored domain',
   assert.deepEqual(numericExtent([-3, -3], true), [-3, 0]);
   assert.deepEqual(numericExtent([5, 5], true), [0, 5]);
 });
+test('parseFile CSV: duplicate header names are auto-renamed and no column data is lost', () => {
+  // Regression (autonomy cycle 5, re-scoping cycle 4 per the owner's
+  // direction on PR #15): duplicate headers previously collapsed into one
+  // object key, silently overwriting the first column's values.
+  const dup = parseFile('a.csv', 'Region,Region\nWest,1\nEast,2');
+  assert.deepEqual(dup.columns, ['Region', 'Region_2']);
+  assert.deepEqual(dup.rows, [{ Region: 'West', Region_2: '1' }, { Region: 'East', Region_2: '2' }]);
+  const triple = parseFile('a.csv', 'Region,Region,Region\nWest,1,X');
+  assert.deepEqual(triple.columns, ['Region', 'Region_2', 'Region_3']);
+  assert.deepEqual(triple.rows, [{ Region: 'West', Region_2: '1', Region_3: 'X' }]);
+  // A rename never collides with a header already present in the file.
+  const colliding = parseFile('a.csv', 'Region,Region_2,Region\nWest,A,1');
+  assert.deepEqual(colliding.columns, ['Region', 'Region_2', 'Region_3']);
+  assert.deepEqual(colliding.rows, [{ Region: 'West', Region_2: 'A', Region_3: '1' }]);
+  // Previously valid CSVs parse identically, and the scoped axes are pinned:
+  // a unique empty header is accepted as before, ragged rows keep the old
+  // semantics, and a reserved header reaches the existing assertRows guard.
+  assert.deepEqual(parseFile('a.csv', 'Region,Amount\nWest,1'), { columns: ['Region', 'Amount'], rows: [{ Region: 'West', Amount: '1' }] });
+  assert.deepEqual(parseFile('a.csv', 'a,,c\n1,2,3').rows, [{ a: '1', '': '2', c: '3' }]);
+  assert.deepEqual(parseFile('a.csv', 'a,b\n1').rows, [{ a: '1', b: '' }]);
+  assert.deepEqual(parseFile('a.csv', 'a,b\n1,2,3').rows, [{ a: '1', b: '2' }]);
+  assert.throws(() => parseFile('a.csv', '__proto__,a\npolluted,1'), /Reserved column name/);
+});
 test('R2/R6: upload row boundaries and oversized dependency reasons are explicit', () => {
   const csv='label,value\n'+'a,1\n'.repeat(LIMITS.rows);
   assert.equal(parseFile('maximum.csv',csv).rows.length,LIMITS.rows);

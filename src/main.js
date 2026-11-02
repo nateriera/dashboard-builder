@@ -53,6 +53,7 @@ import { toggleFiltersPopover } from "./ui/filtersPopover.js";
 import { chartData } from "./ui/chartData.js";
 import { profileRows } from './data/profile.js';
 import { timeBrushPoints as brushPoints, timeBrushSelection } from './charts/timeMarks.js';
+import { partitionExportViews } from './export/savedViews.js';
 import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows } from './data/dataQuality.js';
 import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
 
@@ -1497,6 +1498,11 @@ async function exportHtml() {
     }
 
     const layout=serializeLayout();
+    const exportViews=partitionExportViews(layout.savedViews,layout.parameters);
+    if(exportViews.excluded.length && !window.confirm('These saved views will be excluded from the HTML export because their parameters differ from the materialized values:\n' + exportViews.excluded.map(view=>`- ${view.name}: ${view.reason}`).join('\n') + '\nContinue exporting the matching views?')) {
+      setStatus('HTML export cancelled.');
+      return;
+    }
     const tiles = [];
     let blanked = 0, dropped = 0;
     for (const savedTile of layout.tiles) {
@@ -1531,7 +1537,7 @@ async function exportHtml() {
     rowHeight: ROW_HEIGHT,
       pages:layout.pages,
       currentPageId:layout.currentPageId,
-      savedViews:layout.savedViews,
+      savedViews:exportViews.included,
       kind: "dashboard-export",
       title: serializeLayout().title || "Dashboard",
       exportedAt: new Date().toISOString(),

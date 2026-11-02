@@ -77,3 +77,37 @@ test('S7: category multiselect survives deselection, Apply, reopening and editin
   await expect(pop.getByRole('checkbox',{name:'B',exact:true})).toBeChecked();
   await expect(pop.getByRole('checkbox',{name:'C',exact:true})).toBeChecked();
 });
+
+test('S10: HTML export names parameter-mismatched views before saving, supports cancel and exports truthful matching views', async ({page,browser}) => {
+  await ready(page);
+  const qid=await page.evaluate(async()=> (await import('/src/data/queries.js')).saveQuery({name:'Forecast',sql:"SELECT 'Revenue' AS label, CAST({{growth}} AS DOUBLE) * 10 AS value",columns:['label','value'],fieldKeys:['label','value'],mapping:{label:'label',value:'value'},dependencies:[]}).id);
+  const growth=value=>({name:'growth',type:'number',value}),region={name:'region',type:'text',value:'North'};
+  const views=[{id:'old',name:'Old growth 1',parameters:[growth(1),region]},{id:'matching',name:'Matching growth 2',parameters:[region,growth(2)]},{id:'missing',name:'No region',parameters:[growth(2)]}];
+  await importLayout(page,{app:'dashboard-builder',version:1,tiles:[tile('forecast','bar',`query:${qid}`)],parameters:[growth(2),region],savedViews:views});
+  await expect(page.locator('.tile-chart svg')).toContainText('20');
+  let accept=false,downloads=0;const messages=[];
+  page.on('download',()=>downloads++);
+  page.on('dialog',async dialog=>{messages.push(dialog.message());if(accept)await dialog.accept();else await dialog.dismiss();});
+  await page.locator('#btn-export-html').click();
+  await expect(page.locator('#status')).toContainText('HTML export cancelled');
+  expect(downloads).toBe(0);expect(messages).toHaveLength(1);
+  expect(messages[0]).toContain('Old growth 1');expect(messages[0]).toContain('growth');
+  expect(messages[0]).toContain('No region');expect(messages[0]).toContain('region');
+  expect(messages[0]).not.toContain('Matching growth 2');
+  const retained=await page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).savedViews.map(view=>view.name));
+  expect(retained).toEqual(views.map(view=>view.name));
+  accept=true;const downloading=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const html=await fs.readFile(await (await downloading).path(),'utf8');
+  expect(messages).toHaveLength(2);
+  const payload=JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+  expect(payload.savedViews.map(view=>view.name)).toEqual(['Matching growth 2']);
+  expect(payload.tiles[0].rows).toEqual([{label:'Revenue',value:20}]);
+  const context=await browser.newContext();
+  try {
+    await context.setOffline(true);const offline=await context.newPage();await offline.setContent(html,{waitUntil:'load'});
+    await offline.getByLabel('Saved dashboard view',{exact:true}).selectOption('matching');
+    await offline.getByRole('button',{name:'Apply view',exact:true}).click();
+    await expect(offline.locator('.tile-chart svg')).toContainText('20');
+    expect(await offline.getByLabel('Saved dashboard view',{exact:true}).locator('option:not([value=""])').allTextContents()).toEqual(['Matching growth 2']);
+  } finally {await context.close();}
+});

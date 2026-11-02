@@ -66,7 +66,7 @@ export function formatTimestamp(d) {
 }
 
 function formatValue(v, type) {
-  if (v == null || v === "" || (typeof v === "number" && Number.isNaN(v))) return "NULL";
+  if (v == null || (typeof v === "number" && Number.isNaN(v)) || (v === "" && type !== "varchar")) return "NULL";
   switch (type) {
     case "double": {
       const n = Number(v);

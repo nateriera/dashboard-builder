@@ -1551,6 +1551,11 @@ fileInput.addEventListener("change", () => {
   if (file.size > LIMITS.layoutBytes) { setStatus("Import limit is 32 MiB."); fileInput.value = ""; return; }
   const reader = new FileReader();
   reader.onload = async () => {
+    const rollbackErrors = [];
+    const attemptRollback = async step => {
+      try { await step(); }
+      catch (rollbackError) { rollbackErrors.push(rollbackError); }
+    };
     try {
       const data = validateLayout(JSON.parse(reader.result));
       assertNoCollisions(data,getDataset,getQuery);
@@ -1573,11 +1578,19 @@ fileInput.addEventListener("change", () => {
         localStorage.setItem('dashbuilder.queries.v1',serializeQueries());
         localStorage.setItem(STORAGE_KEY,JSON.stringify(serializeLayout()));
       } catch (err) {
-        rollbackQueries(queriesBefore);
-        loadLayout(previous);
-        if (restored) await rollbackDatasets(newIds);
-        if (queryRaw === null) localStorage.removeItem('dashbuilder.queries.v1'); else localStorage.setItem('dashbuilder.queries.v1',queryRaw);
-        if (layoutRaw === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY,layoutRaw);
+        await attemptRollback(() => rollbackQueries(queriesBefore));
+        await attemptRollback(() => {
+          try { loadLayout(previous); }
+          // loadLayout clears its own bulk flag; the import still owns this rollback.
+          finally { bulkLoading = true; }
+        });
+        if (restored) await attemptRollback(() => rollbackDatasets(newIds));
+        await attemptRollback(() => {
+          if (queryRaw === null) localStorage.removeItem('dashbuilder.queries.v1'); else localStorage.setItem('dashbuilder.queries.v1',queryRaw);
+        });
+        await attemptRollback(() => {
+          if (layoutRaw === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY,layoutRaw);
+        });
         throw err;
       } finally { bulkLoading = false; }
       refreshQueryTiles();
@@ -1586,7 +1599,7 @@ fileInput.addEventListener("change", () => {
       if (restoredQueries) bits.push(`${restoredQueries} quer${restoredQueries === 1 ? "y" : "ies"}`);
       setStatus(`Imported ${file.name}` + (bits.length ? ` (${bits.join(", ")} restored)` : ""));
     } catch (err) {
-      setStatus(`Import failed: ${err.message}`);
+      setStatus(`Import failed: ${err.message}` + (rollbackErrors.length ? ' Rollback incomplete; the pre-import recovery copy was retained.' : ''));
     }
     fileInput.value = "";
   };

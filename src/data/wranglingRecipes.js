@@ -63,17 +63,19 @@ export function mapWranglingRecipeColumns(input,mapping,availableColumns) {
   const columns=recipe.kind==='pivot'
     ?[...new Set([...recipe.groups.map(group=>group.column),...recipe.aggregations.map(item=>item.column)])]
     :[...new Set(recipe.columns?.length?recipe.columns:formulaIdentifiers(recipe.formula))];
-  const result=structuredClone(recipe);
+  const resolvedMapping=new Map();
   for(const source of columns){
     const target=mapping[source]??(availableColumns.includes(source)?source:null);
     if(typeof target!=='string'||!availableColumns.includes(target))throw new Error(`Map “${source}” to one of the available columns.`);
-    if(recipe.kind==='pivot'){
-      result.groups.forEach(group=>{if(group.column===source)group.column=target;});
-      result.aggregations.forEach(item=>{if(item.column===source)item.column=target;});
-    }else{
-      result.formula=replaceFormulaIdentifier(result.formula,source,target);
-      result.columns=(result.columns||columns).map(column=>column===source?target:column);
-    }
+    resolvedMapping.set(source,target);
+  }
+  const result=structuredClone(recipe);
+  if(recipe.kind==='pivot'){
+    result.groups=recipe.groups.map(group=>({...group,column:resolvedMapping.get(group.column)}));
+    result.aggregations=recipe.aggregations.map(item=>({...item,column:resolvedMapping.get(item.column)}));
+  }else{
+    result.formula=replaceFormulaIdentifiers(recipe.formula,resolvedMapping);
+    result.columns=(recipe.columns||columns).map(column=>resolvedMapping.get(column)??column);
   }
   return result;
 }
@@ -86,13 +88,13 @@ function formulaIdentifiers(formula){
   }
   return [...new Set(found)];
 }
-function replaceFormulaIdentifier(formula,source,target){
+function replaceFormulaIdentifiers(formula,mapping){
   const quote=value=>`"${value.replaceAll('"','""')}"`;
   const pattern=/"((?:[^"]|"")*)"|'(?:[^']|'')*'|([A-Za-z_][A-Za-z0-9_]*)/g;
-  return formula.replace(pattern,(token,quoted,bare)=>{
-    if(quoted!==undefined&&quoted.replaceAll('""','"')===source)return quote(target);
-    if(bare===source)return quote(target);
-    return token;
+  return formula.replace(pattern,(token,quoted,bare,offset)=>{
+    if(bare&&/^\s*\(/.test(formula.slice(offset+token.length)))return token;
+    const identifier=quoted!==undefined?quoted.replaceAll('""','"'):bare;
+    return mapping.has(identifier)?quote(mapping.get(identifier)):token;
   });
 }
 

@@ -26,7 +26,7 @@ function mapping(v, columns) {
   if (!object(v)) fail('Invalid column mapping.');
   const out = {};
   for (const [k,c] of Object.entries(v)) {
-    if (!['label','value','date','series','x','y','group','id','facet','delta','deltaDir'].includes(k) || !columns.includes(c)) fail('Invalid column mapping.');
+    if (!['label','value','date','series','x','y','group','id','facet','delta','deltaDir','parent'].includes(k) || !columns.includes(c)) fail('Invalid column mapping.');
     out[k] = c;
   }
   return out;

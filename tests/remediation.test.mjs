@@ -22,8 +22,98 @@ const { validateFilters, applyFilters, dateRangeForPreset, distinctValues, filte
 const { validateParameters, substituteParameters } = await import('../src/data/parameters.js');
 const store = await import('../src/data/store.js');
 const wranglingRecipes = await import('../src/data/wranglingRecipes.js');
+const queries = await import('../src/data/queries.js');
 const layout = (dataset = 'categorical') => ({ app: 'dashboard-builder', version: 1, defaultDataset: {kind:'dataset',ref:'upload:revenue'}, tiles: [{id:'bar1',type:'bar',dataset,x:0,y:0,w:6,h:5}] });
 const total = rows => rows.reduce((s,r)=>s+r.value,0);
+
+function isolatedQueries(t) {
+  const snapshot = queries.querySnapshot();
+  const keys = ['dashbuilder.queries.v1', 'klaroDash.queries.v1'];
+  const storage = keys.map(key => [key, localStorage.getItem(key)]);
+  queries.rollbackQueries([]);
+  for (const key of keys) localStorage.removeItem(key);
+  t.after(() => {
+    queries.rollbackQueries(snapshot);
+    for (const [key, value] of storage) {
+      if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value);
+    }
+  });
+}
+
+test('T1: restored queries are untrusted regardless of a planted trust flag', t => {
+  isolatedQueries(t);
+  for (const [id, trust] of [['plain', {}], ['planted', {trusted:true}], ['blocked', {trusted:false}]]) {
+    const input = {name:id, sql:'SELECT 1 AS value', columns:['value'], fieldKeys:['value'], mapping:{value:'value'}, ...trust};
+    const before = structuredClone(input);
+    assert.equal(queries.restoreQueries({[id]:input}), 1);
+    assert.equal(queries.getQuery(id).trusted, false);
+    assert.deepEqual(input, before);
+  }
+});
+
+test('T1: reviewed saves create new trusted records and persist/export their trust', t => {
+  isolatedQueries(t);
+  const first = queries.saveQuery({name:'Reviewed', sql:'SELECT 1 AS value', columns:['value']});
+  const second = queries.saveQuery({name:'Edited', sql:'SELECT 2 AS value', columns:['value']});
+  assert.notEqual(first.id, second.id);
+  assert.equal(queries.getQuery(first.id).sql, 'SELECT 1 AS value');
+  assert.equal(queries.getQuery(first.id).trusted, true);
+  assert.equal(queries.getQuery(second.id).trusted, true);
+  assert.equal(first.persisted, true);
+  const saved = JSON.parse(localStorage.getItem('dashbuilder.queries.v1'));
+  assert.equal(saved.items[first.id].trusted, true);
+  assert.equal(queries.inlineQueries([`query:${first.id}`])[first.id].trusted, true);
+  queries.rollbackQueries([]);
+  queries.loadPersistedQueries();
+  assert.equal(queries.getQuery(first.id).trusted, true);
+});
+
+test('T1: untrusted imports survive both import serialization and a subsequent local save/reload', t => {
+  isolatedQueries(t);
+  queries.restoreQueries({imported:{name:'Imported', sql:'SELECT 1 AS value', trusted:true}});
+  const serialized = queries.serializeQueries();
+  assert.equal(JSON.parse(serialized).items.imported.trusted, false);
+  localStorage.setItem('dashbuilder.queries.v1', serialized);
+  queries.rollbackQueries([]);
+  queries.loadPersistedQueries();
+  assert.equal(queries.getQuery('imported').trusted, false);
+  queries.saveQuery({sql:'SELECT 2 AS value'});
+  assert.equal(JSON.parse(localStorage.getItem('dashbuilder.queries.v1')).items.imported.trusted, false);
+  queries.rollbackQueries([]);
+  queries.loadPersistedQueries();
+  assert.equal(queries.getQuery('imported').trusted, false);
+  assert.equal(queries.inlineQueries(['query:imported']).imported.trusted, false);
+});
+
+test('T1: persisted queries without a trust field are grandfathered as trusted', t => {
+  isolatedQueries(t);
+  localStorage.setItem('dashbuilder.queries.v1', JSON.stringify({next:1,items:{
+    old:{sql:'SELECT 1 AS value'}, blocked:{sql:'SELECT 2 AS value',trusted:false}
+  }}));
+  assert.equal(queries.loadPersistedQueries(), 2);
+  assert.equal(queries.getQuery('old').trusted, true);
+  assert.equal(queries.getQuery('blocked').trusted, false);
+});
+
+test('T1: layout import drops planted trust and cannot replace SQL under an existing trusted id', t => {
+  isolatedQueries(t);
+  const query = {name:'Reviewed',sql:'SELECT 1 AS value',columns:['value'],fieldKeys:[],mapping:{},dependencies:null,trusted:true};
+  const input = {...layout('query:planted'), queries:{planted:query}};
+  // A table has dynamic fields and needs no field mapping.
+  input.tiles[0].type = 'table';
+  const candidate = validateLayout(input);
+  assert.equal(Object.hasOwn(candidate.queries.planted, 'trusted'), false);
+  assert.equal(input.queries.planted.trusted, true);
+  queries.restoreQueries(candidate.queries);
+  assert.equal(queries.getQuery('planted').trusted, false);
+
+  const saved = queries.saveQuery(query);
+  const changed = {...candidate,queries:{[saved.id]:{...candidate.queries.planted,sql:'SELECT 9 AS value'}}};
+  assert.throws(() => assertNoCollisions(changed, () => null, queries.getQuery), /Conflicting queries id/);
+  assert.equal(queries.restoreQueries({[saved.id]:{sql:'SELECT 9 AS value',trusted:false}}), 0);
+  assert.equal(queries.getQuery(saved.id).sql, 'SELECT 1 AS value');
+  assert.equal(queries.getQuery(saved.id).trusted, true);
+});
 
 test('R1: all eight donut categories total 48,240, independent of row order', () => {
   for (const rows of [DATASETS.categorical,[...DATASETS.categorical].reverse()]) {

@@ -214,8 +214,9 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
   open.unsubscribe = subscribeDatasetChanges(() => invalidate());
   void (async () => {
     try {
-      module = await import("../data/duckdb.js"); await module.ensureTables(); if (!pop.isConnected) return;
       const query = isQueryRef(meta.dataset) ? getQuery(queryId(meta.dataset)) : null;
+      if (query && !query.trusted) throw new Error('Review this imported query in the SQL tab: Run it, then Apply before using data wrangling.');
+      module = await import("../data/duckdb.js"); await module.ensureTables(); if (!pop.isConnected) return;
       state.sourceSql = query?.sql || null; state.table = query ? null : table;
       state.sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
       const schemaSql = state.sourceSql ? `SELECT * FROM (${state.sourceSql}) AS wrangle_source LIMIT 0` : `SELECT * FROM ${quoteIdentifier(table)} LIMIT 0`;

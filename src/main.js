@@ -43,6 +43,7 @@ import {
 } from "./data/queries.js";
 import { isMissingTableError, sampleTableName, uploadTableName } from "./data/sql.js";
 import { toggleDataPopover, closeDataPopover } from "./ui/dataPopover.js";
+import { paintQueryReview } from "./ui/queryReview.js";
 import { toggleDashboardPopover, closeDashboardPopover } from "./ui/dashboardDataPopover.js";
 import { toggleThemePopover, closeThemePopover } from "./ui/themePopover.js";
 import { openTemplateGallery } from "./ui/templateGallery.js";
@@ -169,6 +170,7 @@ async function resolveExportRows(meta, entry) {
     const qid = queryId(meta.dataset);
     const q = getQuery(qid);
     if (!q) return { error: "Saved query is missing." };
+    if (!q.trusted) return { error: "This query came from an imported file and has not run yet." };
     try {
       const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
       const rows = getCachedRows(qid, q, entry, parameters) || (await runTileQuery(qid, q, entry, parameters));
@@ -266,7 +268,7 @@ function buildTileContent(type, meta) {
       onQuery: ({ id, name, persisted }) => {
         meta.dataset = `query:${id}`;
         meta.source = name;
-        pruneQueries([...tileMeta.values()].map((m) => m.dataset));
+        pruneQueries(serializeLayout().tiles.map((tile) => tile.dataset));
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
@@ -864,6 +866,13 @@ async function renderQueryTile(el, meta, entry, chartEl) {
     return;
   }
 
+  if (!q.trusted) {
+    meta.filterRows = [];
+    meta.renderRows = [];
+    paintQueryReview(chartEl, q, () => el.querySelector('.tile-data-btn')?.click());
+    return;
+  }
+
   try {
   const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
   if (!el.isConnected || tileMeta.get(meta.id) !== meta || meta.renderToken !== renderToken || meta.dataset !== capturedDataset) return;
@@ -1256,6 +1265,7 @@ if (btnTemplates) {
     // menu first so it doesn't float above the gallery (UI pass 2026-10-09).
     document.querySelector(".header-more")?.removeAttribute("open");
     openTemplateGallery({
+      trigger: document.querySelector('.header-more > summary'),
       applyTemplate,
       getCurrentTiles: () => serializeLayout().tiles.map(({ id, ...rest }) => rest),
       getCurrentTheme: getThemeId,

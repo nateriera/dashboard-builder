@@ -25,7 +25,7 @@ export function closeTemplateGallery() {
   }
 }
 
-export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrentTheme, notify }) {
+export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrentTheme, notify, trigger }) {
   // Toggle like the data popover.
   if (overlayEl) {
     closeTemplateGallery();
@@ -147,7 +147,7 @@ export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrent
     if (e.key === "Escape") closeTemplateGallery();
   };
   document.addEventListener("keydown", docKeyHandler);
-  releaseFocus = focusDialog(modal);
+  releaseFocus = focusDialog(modal, trigger);
 
   // ── Card builders ─────────────────────────────────────────────────────
   function buildSection(heading) {

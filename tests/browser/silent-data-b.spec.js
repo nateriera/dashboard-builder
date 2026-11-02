@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { clickHeaderAction } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');
@@ -46,4 +47,33 @@ test('S6: donut Other selects its folded original records in the composer and of
       expect(await selected.locator('tbody tr td:first-child').allTextContents()).toEqual(raw.rows.slice(5).map(row=>row.label));
     }
   } finally { await context.close(); }
+});
+
+test('S7: category multiselect survives deselection, Apply, reopening and editing', async ({page}) => {
+  await ready(page);
+  const rows=['A','B','C'].map((label,index)=>({label,value:index+1}));
+  await importLayout(page,{app:'dashboard-builder',version:1,tiles:[tile('categories','bar','upload:categories')],datasets:{categories:{columns:['label','value'],rows,fieldKeys:['label','value'],mapping:{label:'label',value:'value'}}}});
+  await page.locator('#btn-filters').click(); const pop=page.locator('.dashboard-filters-popover');
+  await pop.getByRole('button',{name:'Add filter',exact:true}).click();
+  await pop.getByLabel('Filter field',{exact:true}).selectOption('label');
+  await pop.getByRole('checkbox',{name:'A',exact:true}).check();
+  await pop.getByRole('checkbox',{name:'B',exact:true}).check();
+  await pop.getByRole('checkbox',{name:'A',exact:true}).uncheck();
+  await pop.getByRole('button',{name:'Apply filter',exact:true}).click();
+  await expect(pop.locator('.dashboard-filter-chip')).toContainText('label is B');
+  await expect(pop.locator('.filters-form-error:visible')).toHaveCount(0);
+  await page.locator('#btn-filters').click(); await page.locator('#btn-filters').click();
+  await pop.getByRole('button',{name:'Edit label filter',exact:true}).click();
+  await expect(pop.getByRole('checkbox',{name:'B',exact:true})).toBeChecked();
+  await expect(pop.getByRole('checkbox',{name:'A',exact:true})).not.toBeChecked();
+  await pop.getByRole('checkbox',{name:'C',exact:true}).check();
+  await pop.getByRole('button',{name:'Apply filter',exact:true}).click();
+  await expect(pop.locator('.dashboard-filter-chip')).toHaveCount(1);
+  await page.locator('#btn-filters').click(); await clickHeaderAction(page,'#btn-save');
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).filters);
+  expect(saved).toEqual([{id:expect.any(String),field:'label',op:'is',values:['B','C']}]);
+  await page.reload(); await expect(page.locator('#status')).toContainText('build');
+  await page.locator('#btn-filters').click(); await pop.getByRole('button',{name:'Edit label filter',exact:true}).click();
+  await expect(pop.getByRole('checkbox',{name:'B',exact:true})).toBeChecked();
+  await expect(pop.getByRole('checkbox',{name:'C',exact:true})).toBeChecked();
 });

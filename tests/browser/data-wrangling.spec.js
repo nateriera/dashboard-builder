@@ -1,6 +1,104 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 
+for (const action of ['Add grouping', 'Add aggregation']) {
+  test(`wrangling integrity: ${action} invalidates a successful pivot preview`, async ({ page }) => {
+    await ready(page);
+    const pop = page.locator('.wrangling-popover');
+    await expect(pop.getByLabel('Grouping 1 column')).toBeVisible();
+    await pop.getByRole('button', { name: 'Preview pivot' }).click();
+    await expect(pop.getByRole('button', { name: 'Apply derived query to tile' })).toBeEnabled();
+    await pop.getByRole('button', { name: action, exact: true }).click();
+    await expect(pop.locator('.data-apply')).toHaveCount(0);
+    await expect(pop.locator('.data-panel:visible [role="status"]').last()).toHaveText('Preview is out of date; run again.');
+  });
+}
+
+async function openParameterizedWrangling(page, kind = 'pivot', sql = 'SELECT {{label}} AS label, CAST({{factor}} AS DOUBLE) AS value') {
+  await page.goto('/');
+  await expect(page.locator('#status')).toContainText('build');
+  await page.evaluate(async ({ kind, sql }) => {
+    const { saveQuery } = await import('/src/data/queries.js');
+    const { toggleWranglingPopover } = await import('/src/ui/dataWranglingPopover.js');
+    const saved = saveQuery({ sql });
+    window.integrityParameters = [{ name: 'label', type: 'text', value: 'Snapshot' }, { name: 'factor', type: 'number', value: 2 }];
+    toggleWranglingPopover({ anchor: document.querySelector('.tile-data-btn'), type: 'table', meta: { dataset: `query:${saved.id}` }, initialTab: kind, getParameters: () => window.integrityParameters, onQuery: query => { window.integrityApplied = query; } });
+  }, { kind, sql });
+  const pop = page.locator('.wrangling-popover');
+  await expect(pop.getByLabel(kind === 'pivot' ? 'Grouping 1 column' : 'Calculated field formula')).toBeVisible();
+  return pop;
+}
+
+async function holdPreviewCompletion(page) {
+  await page.route('**/src/data/duckdb.js', async route => {
+    const response = await route.fetch();
+    const source = await response.text();
+    const original = 'export function runQueryDetailed(sql) { return coordinator.runDetailed(sql); }';
+    expect(source).toContain(original);
+    const instrumented = source.replace(original, `export async function runQueryDetailed(sql) {
+      const result = await coordinator.runDetailed(sql);
+      if (globalThis.holdIntegrityPreview && !/LIMIT 0\\s*$/i.test(sql)) {
+        globalThis.integrityPreviewReady = true;
+        await new Promise(resolve => { globalThis.releaseIntegrityPreview = resolve; });
+      }
+      return result;
+    }`);
+    await route.fulfill({ response, body: instrumented });
+  });
+}
+
+for (const kind of ['pivot', 'formula']) {
+  test(`wrangling integrity: ${kind} edit during a real in-flight preview discards its result`, async ({ page }) => {
+    await holdPreviewCompletion(page);
+    const pop = await openParameterizedWrangling(page, kind);
+    if (kind === 'formula') {
+      await pop.getByLabel('Calculated field name').fill('Adjusted');
+      await pop.getByLabel('Calculated field formula').fill('"value" * 2');
+    }
+    await page.evaluate(() => { window.holdIntegrityPreview = true; });
+    await pop.getByRole('button', { name: kind === 'pivot' ? 'Preview pivot' : 'Preview formula' }).click();
+    await expect.poll(() => page.evaluate(() => window.integrityPreviewReady)).toBe(true);
+    if (kind === 'pivot') await pop.getByLabel('Aggregation 1 output name').fill('Edited total');
+    else await pop.getByLabel('Calculated field formula').fill('"value" * 3');
+    await page.evaluate(() => { window.holdIntegrityPreview = false; window.releaseIntegrityPreview(); });
+    await expect(pop.locator('.data-panel:visible [role="status"]').last()).toHaveText('Preview is out of date; run again.');
+    await expect(pop.locator('.data-apply')).toHaveCount(0);
+    await expect(pop.locator('.data-preview tbody')).toHaveCount(0);
+    await pop.getByRole('button', { name: kind === 'pivot' ? 'Preview pivot' : 'Preview formula' }).click();
+    const apply = pop.getByRole('button', { name: 'Apply derived query to tile' });
+    await expect(apply).toBeEnabled();
+    await expect(pop.locator('.data-panel:visible .data-preview')).toContainText(kind === 'pivot' ? 'Edited total' : '6');
+    await apply.click();
+    const savedSql = await page.evaluate(async () => (await import('/src/data/queries.js')).getQuery(window.integrityApplied.id).sql);
+    expect(savedSql).toContain(kind === 'pivot' ? 'AS "Edited total"' : '("value" * 3) AS "Adjusted"');
+    expect(savedSql).toContain('{{factor}}');
+  });
+}
+
+test('wrangling integrity: parameter edits during preview discard the captured result', async ({ page }) => {
+  await holdPreviewCompletion(page);
+  const pop = await openParameterizedWrangling(page);
+  await page.evaluate(() => { window.holdIntegrityPreview = true; });
+  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await expect.poll(() => page.evaluate(() => window.integrityPreviewReady)).toBe(true);
+  await page.evaluate(() => { window.integrityParameters[1].value = 3; window.holdIntegrityPreview = false; window.releaseIntegrityPreview(); });
+  await expect(pop.locator('.data-panel:visible [role="status"]').last()).toHaveText('Preview is out of date; run again.');
+  await expect(pop.locator('.data-apply')).toHaveCount(0);
+});
+
+test('wrangling integrity: Apply rechecks parameter tokens even without a dirty event', async ({ page }) => {
+  const pop = await openParameterizedWrangling(page);
+  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  const apply = pop.getByRole('button', { name: 'Apply derived query to tile' });
+  await expect(apply).toBeEnabled();
+  // Change a live execution input without dispatching a control event/invalidate().
+  await page.evaluate(() => { window.integrityParameters[1].value = 3; });
+  await apply.click();
+  expect(await page.evaluate(() => window.integrityApplied)).toBeUndefined();
+  await expect(pop.locator('.data-apply')).toHaveCount(0);
+  await expect(pop.locator('.data-panel:visible [role="status"]').last()).toHaveText('Preview is out of date; run again.');
+});
+
 test('parameterized wrangling preserves placeholders, never rescans values, and follows parameter changes', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#status')).toContainText('build');

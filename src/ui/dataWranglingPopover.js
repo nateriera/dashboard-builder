@@ -1,4 +1,4 @@
-import { aggregationOptions, buildCalculatedFieldApplySql, buildCalculatedFieldSql, buildPivotSql, quoteIdentifier } from "../data/wrangling.js";
+import { aggregationOptions, buildCalculatedFieldApplySql, buildCalculatedFieldSql, buildPivotSql, quoteIdentifier, wranglingConfigToken } from "../data/wrangling.js";
 import { datasetVersion, listDatasets, subscribeDatasetChanges } from "../data/store.js";
 import { saveQuery, getQuery } from "../data/queries.js";
 import { formulaReferencedColumns, importWranglingRecipes, listWranglingRecipes, mapWranglingRecipeColumns, parsePortableWranglingRecipes, recipeFormulaIdentifiers, removeWranglingRecipe, saveWranglingRecipe, serializePortableWranglingRecipes } from "../data/wranglingRecipes.js";
@@ -24,7 +24,7 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
   if (open?.anchor === anchor) { closeWranglingPopover(); return; }
   closeWranglingPopover();
   const entry = TILE_TYPES[type]; if (!entry) return;
-  const mode = initialTab === "formula" ? "formula" : "pivot";
+  let currentKind = initialTab === "formula" ? "formula" : "pivot";
   const pop = el("div", null, "data-popover wrangling-popover"); pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Data wrangling");
   const head = el("div", null, "data-pop-head"); head.append(el("span", "Data wrangling")); const close = el("button", "×", "data-pop-close"); close.type = "button"; close.setAttribute("aria-label", "Close"); close.addEventListener("click", closeWranglingPopover); head.append(close);
   const tabs = el("div", null, "data-tabs");
@@ -43,16 +43,21 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
   open = { anchor, element: pop };
   open.focus = focusDialog(pop, anchor); open.position = anchorPopover(pop, anchor);
   document.addEventListener("pointerdown", pointerDown, true); document.addEventListener("keydown", keyDown);
-  pivotTab.addEventListener("click", () => { pivotTab.classList.add("active"); formulaTab.classList.remove("active"); pivotPanel.hidden = false; formulaPanel.hidden = true; });
-  formulaTab.addEventListener("click", () => { formulaTab.classList.add("active"); pivotTab.classList.remove("active"); formulaPanel.hidden = false; pivotPanel.hidden = true; });
+  pivotTab.addEventListener("click", () => { pivotTab.classList.add("active"); formulaTab.classList.remove("active"); pivotPanel.hidden = false; formulaPanel.hidden = true; if (currentKind !== 'pivot') { currentKind = 'pivot'; invalidate(); render(); } });
+  formulaTab.addEventListener("click", () => { formulaTab.classList.add("active"); pivotTab.classList.remove("active"); formulaPanel.hidden = false; pivotPanel.hidden = true; if (currentKind !== 'formula') { currentKind = 'formula'; invalidate(); render(); } });
 
   let module;
   let initialising = true;
-  const state = { columns: [], types: {}, groups: [], aggs: [], formula: "", name: "", result: null, sql: null, dirty: true, busy: false, error: "" };
+  const state = { columns: [], types: {}, groups: [], aggs: [], formula: "", name: "", result: null, sql: null, previewToken: null, dirty: true, busy: false, error: "" };
   const table = isUploadRef(meta.dataset) ? uploadTableName(uploadId(meta.dataset)) : meta.dataset == null && dashboard?.table ? dashboard.table : sampleTableName(meta.dataset || entry.datasets[0]);
   const query = isQueryRef(meta.dataset) ? getQuery(queryId(meta.dataset)) : null;
   state.table = table; state.sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
   state.sourceSql = query?.sql || null;
+  function currentConfig() {
+    return { table: state.table, sourceSql: state.sourceSql, groups: state.groups, aggregations: state.aggs,
+      formula: state.formula, name: state.name, columns: state.columns, types: state.types, parameters: getParameters() };
+  }
+  const previewIsCurrent = kind => state.previewToken === wranglingConfigToken(kind, currentConfig());
   function render() {
     pivotPanel.replaceChildren(); formulaPanel.replaceChildren();
     if (initialising) {
@@ -75,7 +80,7 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
       row.append(col, bin, moveButton("Move grouping up", index, state.groups), moveButton("Move grouping down", index, state.groups, true), remove("Remove grouping", index, state.groups));
       list.appendChild(row);
     }); pivotPanel.appendChild(list);
-    const addGroup = el("button", "Add grouping"); addGroup.type = "button"; addGroup.addEventListener("click", () => { state.groups.push({ column: state.columns.find(name => !state.groups.some(group => group.column === name)) || state.columns[0], bin: null }); render(); }); pivotPanel.appendChild(addGroup);
+    const addGroup = el("button", "Add grouping"); addGroup.type = "button"; addGroup.addEventListener("click", () => { state.groups.push({ column: state.columns.find(name => !state.groups.some(group => group.column === name)) || state.columns[0], bin: null }); invalidate(); render(); }); pivotPanel.appendChild(addGroup);
     const aggs = el("div", null, "wrangle-list");
     state.aggs.forEach((agg, index) => {
       const row = el("div", null, "wrangle-row"); const col = columnSelect(`Aggregation ${index + 1} source column`, agg.column); col.addEventListener("change", () => { agg.column = col.value; agg.operation = aggregationOptions(state.types[col.value])[0]; invalidate(); });
@@ -83,15 +88,15 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
       const name = el("input"); name.type = "text"; name.value = agg.name; name.setAttribute("aria-label", `Aggregation ${index + 1} output name`); name.addEventListener("input", () => { agg.name = name.value; invalidate(); });
       row.append(col, op, name, moveButton(`Move aggregation ${index + 1} up`, index, state.aggs), moveButton(`Move aggregation ${index + 1} down`, index, state.aggs, true), remove(`Remove aggregation ${index + 1}`, index, state.aggs)); aggs.appendChild(row);
     }); pivotPanel.appendChild(aggs);
-    const addAgg = el("button", "Add aggregation"); addAgg.type = "button"; addAgg.addEventListener("click", () => { const col = state.columns.find(name => aggregationOptions(state.types[name]).includes('SUM')) || state.columns[0]; state.aggs.push({ column: col, operation: aggregationOptions(state.types[col])[0], name: `Result ${state.aggs.length + 1}` }); render(); }); pivotPanel.appendChild(addAgg);
-    const runPivot = el("button", "Preview pivot", "data-sql-run"); runPivot.type = "button"; runPivot.disabled = state.busy || (!state.groups.length && !state.aggs.length); runPivot.addEventListener("click", () => execute("pivot")); pivotPanel.appendChild(runPivot); status(pivotPanel); preview(pivotPanel);
+    const addAgg = el("button", "Add aggregation"); addAgg.type = "button"; addAgg.addEventListener("click", () => { const col = state.columns.find(name => aggregationOptions(state.types[name]).includes('SUM')) || state.columns[0]; state.aggs.push({ column: col, operation: aggregationOptions(state.types[col])[0], name: `Result ${state.aggs.length + 1}` }); invalidate(); render(); }); pivotPanel.appendChild(addAgg);
+    const runPivot = el("button", "Preview pivot", "data-sql-run"); runPivot.type = "button"; runPivot.disabled = state.busy || (!state.groups.length && !state.aggs.length); runPivot.addEventListener("click", () => execute("pivot")); pivotPanel.appendChild(runPivot); status(pivotPanel); preview(pivotPanel, 'pivot');
 
     renderRecipeControls(formulaPanel,'formula');
     formulaPanel.append(el("p", "Enter a DuckDB SQL expression such as price * quantity. Click a column name to insert it. Preview validates the expression.", "data-sql-note"));
     const name = el("input"); name.placeholder = "Calculated field name"; name.setAttribute("aria-label", "Calculated field name"); name.value = state.name; name.addEventListener("input", () => { state.name = name.value; invalidate(); }); formulaPanel.appendChild(name);
     const formula = el("textarea"); formula.rows = 3; formula.className = "data-sql-input"; formula.placeholder = '"price" * "quantity"'; formula.setAttribute("aria-label", "Calculated field formula"); formula.value = state.formula; formula.addEventListener("input", () => { state.formula = formula.value; invalidate(); }); formulaPanel.appendChild(formula);
     const insert = el("div", null, "wrangle-column-list"); for (const col of state.columns) { const button = el("button", col); button.type = "button"; button.title = `Insert ${col}`; button.addEventListener("click", () => { const start = formula.selectionStart ?? formula.value.length, end = formula.selectionEnd ?? start; formula.setRangeText(quoteIdentifier(col), start, end, "end"); state.formula = formula.value; invalidate(); }); insert.appendChild(button); } formulaPanel.appendChild(insert);
-    const runFormula = el("button", "Preview formula", "data-sql-run"); runFormula.type = "button"; runFormula.disabled = state.busy; runFormula.addEventListener("click", () => execute("formula")); formulaPanel.appendChild(runFormula); status(formulaPanel); preview(formulaPanel);
+    const runFormula = el("button", "Preview formula", "data-sql-run"); runFormula.type = "button"; runFormula.disabled = state.busy; runFormula.addEventListener("click", () => execute("formula")); formulaPanel.appendChild(runFormula); status(formulaPanel); preview(formulaPanel, 'formula');
   };
   function renderRecipeControls(panel,kind) {
     const box=el('div',null,'wrangle-recipes');
@@ -155,14 +160,14 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
   function remove(label, index, array) { const button = el("button", "Remove"); button.type = "button"; button.setAttribute("aria-label", label); button.addEventListener("click", () => { array.splice(index, 1); invalidate(); }); return button; }
   function moveButton(label, index, array, down = false) { const button = el("button", down ? "↓" : "↑"); button.type = "button"; button.setAttribute("aria-label", label); button.disabled = down ? index === array.length - 1 : index === 0; button.addEventListener("click", () => { const to = down ? index + 1 : index - 1; [array[index], array[to]] = [array[to], array[index]]; invalidate(); }); return button; }
   function invalidate() {
-    state.dirty = true; state.result = null; state.sql = null; state.error = "";
+    state.dirty = true; state.result = null; state.sql = null; state.previewToken = null; state.error = "";
     const statusNodes = [...pivotPanel.querySelectorAll('[role="status"]'), ...formulaPanel.querySelectorAll('[role="status"]')];
     for (const node of statusNodes) node.textContent = "Preview is out of date; run again.";
     for (const button of [...pivotPanel.querySelectorAll('.data-apply'), ...formulaPanel.querySelectorAll('.data-apply')]) button.remove();
   }
   function status(panel) { const status = el("div", state.error || (state.busy ? "Running in DuckDB…" : state.dirty ? "Preview is out of date; run again." : "Derived result; original source unchanged."), state.error ? "data-error" : "data-sql-note"); status.setAttribute("role", state.error ? "alert" : "status"); panel.appendChild(status); }
-  function preview(panel) {
-    if (!state.result || state.dirty || state.busy) return;
+  function preview(panel, kind) {
+    if (!state.result || state.dirty || state.busy || !previewIsCurrent(kind)) return;
     const wrap = el("div", null, "data-preview-wrap"); const note = el("div", `${state.result.rows.length} preview rows · derived query; source unchanged.`, "data-preview-note"); wrap.appendChild(note);
     const tableEl = el("table", null, "data-preview"); const head = el("tr"); for (const col of state.result.columns) head.appendChild(el("th", col)); const thead = el("thead"); thead.appendChild(head); tableEl.appendChild(thead);
     const body = el("tbody"); for (const row of state.result.rows.slice(0, 5)) { const tr = el("tr"); for (const col of state.result.columns) tr.appendChild(el("td", row[col] == null ? "—" : String(row[col]))); body.appendChild(tr); } tableEl.appendChild(body);
@@ -188,26 +193,32 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
     apply.addEventListener("click", () => applyResult(mapped)); panel.appendChild(apply);
   }
   async function execute(kind) {
-    if (state.busy) return; state.busy = true; state.error = ""; render();
+    if (state.busy) return; invalidate(); state.busy = true; render();
+    let token;
     try {
-      const run = await executeForConfiguration(kind, state.groups, state.aggs, state.formula, state.name, state.columns, state.types, state.table, state.sourceSql, module, getParameters);
-      const sql = kind === "pivot" ? buildPivotSql({ table: state.table, sourceSql: state.sourceSql, groups: state.groups, aggregations: state.aggs, types: state.types }) : buildCalculatedFieldApplySql({ table: state.table, sourceSql: state.sourceSql, formula: state.formula, name: state.name });
-      if (!pop.isConnected || datasetVersion() !== run.revision) throw new Error("Data changed while previewing. Run again.");
-      state.result = run; state.sql = sql; state.dirty = false;
+      const snapshot = structuredClone(currentConfig());
+      token = wranglingConfigToken(kind, snapshot);
+      const revision = datasetVersion();
+      const sql = kind === "pivot" ? buildPivotSql(snapshot) : buildCalculatedFieldApplySql(snapshot);
+      const run = await executeForConfiguration(kind, snapshot, module);
+      if (token !== wranglingConfigToken(currentKind, currentConfig())) { invalidate(); return; }
+      if (!pop.isConnected || datasetVersion() !== revision || datasetVersion() !== run.revision) throw new Error("Data changed while previewing. Run again.");
+      state.result = run; state.sql = sql; state.previewToken = token; state.dirty = false;
     } catch (error) {
+      if (token && token !== wranglingConfigToken(currentKind, currentConfig())) { invalidate(); return; }
       const message = error?.message || String(error);
       state.error = kind === "formula" ? `Formula could not be evaluated; check the expression and referenced columns. ${message}` : message;
       state.result = null; state.dirty = true;
     }
     finally { state.busy = false; if (pop.isConnected) render(); }
   }
-  async function executeForConfiguration(kind, groups, aggregations, formula, name, columns, types, table, sourceSql, duckdb, getParameters) {
-    const args = { table, sourceSql };
-    const sql = kind === "pivot" ? buildPivotSql({ ...args, groups, aggregations, types }) : buildCalculatedFieldSql({ ...args, formula, name, columns });
-    return duckdb.runQueryDetailed(substituteParameters(sql, structuredClone(getParameters())));
+  async function executeForConfiguration(kind, snapshot, duckdb) {
+    const sql = kind === "pivot" ? buildPivotSql(snapshot) : buildCalculatedFieldSql(snapshot);
+    return duckdb.runQueryDetailed(substituteParameters(sql, snapshot.parameters));
   }
   function applyResult(mapping) {
-    if (state.dirty || !state.result || !state.sql || entry.fields.some(field => !field.optional && !mapping[field.key])) return;
+    if (state.dirty || state.busy || !state.result || !state.sql || entry.fields.some(field => !field.optional && !mapping[field.key])) return;
+    if (!previewIsCurrent(currentKind)) { invalidate(); render(); return; }
     const saved = saveQuery({ sql: state.sql, dependencies: state.sourceDependencies, columns: state.result.columns, fieldKeys: entry.dynamicFields ? [...state.result.columns] : entry.fields.map(field => field.key), mapping });
     onQuery?.(saved); closeWranglingPopover();
   }

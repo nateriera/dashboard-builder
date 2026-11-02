@@ -51,6 +51,7 @@ import { openGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
 import { toggleFiltersPopover } from "./ui/filtersPopover.js";
 import { chartData } from "./ui/chartData.js";
+import { profileRows } from './data/profile.js';
 import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows } from './data/dataQuality.js';
 import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
 
@@ -1399,6 +1400,7 @@ if (btnData) {
         setStatus(`Dashboard data: ${dashboardDefaultName()}`);
       },
       onUpload: async ({ name, columns, rows, profile }) => {
+        profile ??= profileRows(columns, rows);
         const { id } = saveDataset({
           name,
           columns,

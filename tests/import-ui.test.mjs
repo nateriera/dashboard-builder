@@ -30,19 +30,8 @@ test('upload tab imports pasted TSV via existing preview and tile apply workflow
   closeDataPopover();
 });
 
-test('dashboard data popover imports pasted tabular content as its default dataset', () => {
-  const anchor = document.createElement('button');
-  document.body.append(anchor);
-  let imported;
-  toggleDashboardPopover({ anchor, current: { kind: 'samples' }, sampleKeys: [], onSelect() {}, onUpload(value) { imported = value; } });
-  const paste = document.querySelector('[aria-label="Paste tabular data"]');
-  paste.value = 'Region\tAmount\nWest\t15';
-  document.querySelectorAll('.data-import-source-button')[1].click();
-  assert.equal(imported.name, 'Pasted table');
-  assert.deepEqual(imported.columns, ['Region', 'Amount']);
-  assert.deepEqual(imported.rows, [{ Region: 'West', Amount: '15' }]);
-  closeDashboardPopover();
-});
+// Dashboard paste coverage moved to browser/dashboard-paste.spec.js: it must
+// exercise main.js's production persistence/guided callback, never a stub.
 
 test('dashboard data popover supplies a profile when importing a CSV URL', async () => {
   const anchor = document.createElement('button');

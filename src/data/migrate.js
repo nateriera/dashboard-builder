@@ -11,7 +11,7 @@ export async function migrateLegacy({ storage, keys, db, ingest }) {
       let complete = true;
       for (const [id,e] of Object.entries(entries)) {
         if (!e || !Array.isArray(e.rows)) { complete = false; continue; }
-        ingest(id,e,false);
+        if (ingest(id,e,false) === false) { complete = false; continue; }
         try {
           if (!db) throw new Error('IndexedDB unavailable');
           const record = { ...e, id }; delete record.persisted;

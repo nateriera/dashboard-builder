@@ -9,6 +9,7 @@ import { chartStyles } from "../charts/charts.js";
 import { previewTheme } from "../themes/themes.js";
 import { applyFilters, sortAndLimitRows } from "../data/filters.js";
 import { chartData } from "../ui/chartData.js";
+import { retainSourceRows } from '../data/rowProvenance.js';
 
 document.head.appendChild(chartStyles);
 
@@ -18,6 +19,7 @@ function readPayload() {
     if (!el) return null;
     const data = JSON.parse(el.textContent);
     if (!data || !Array.isArray(data.tiles)) return null;
+    for (const tile of data.tiles) if (Array.isArray(tile.rows)) retainSourceRows(tile.rows, tile.sourceRows);
     return data;
   } catch {
     return null;

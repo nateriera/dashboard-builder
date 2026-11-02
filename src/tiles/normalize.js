@@ -5,6 +5,8 @@
 // `key`s, so tile render() functions work identically for sample and
 // uploaded data.
 
+import { withDroppedCount } from '../data/dataQuality.js';
+
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // Common header synonyms so the auto-guess works on real-world files
@@ -47,7 +49,7 @@ export function guessMapping(entry, columns) {
 export function normalizeRows(entry, rawRows, mapping) {
   // Table tiles deliberately retain every source column and its original
   // scalar type; IDs and exact decimal strings must not be coerced.
-  if (entry.dynamicFields) return { rows: rawRows.map(row => ({ ...row })), dropped: 0 };
+  if (entry.dynamicFields) return { rows: withDroppedCount(rawRows.map(row => ({ ...row })), 0), dropped: 0 };
   let dropped = 0;
   const rows = rawRows.map((raw) => {
     const out = {};
@@ -58,6 +60,9 @@ export function normalizeRows(entry, rawRows, mapping) {
       if (f.numeric) {
         if (v == null || v === "") {
           out[f.key] = null;
+        } else if (typeof v === 'string' && v.trim() === '') {
+          out[f.key] = null;
+          dropped++;
         } else {
           const n = Number(v);
           if ((typeof v === "string" && /^[+-]?\d+$/.test(v.trim()) && (BigInt(v.trim()) > BigInt(Number.MAX_SAFE_INTEGER) || BigInt(v.trim()) < BigInt(Number.MIN_SAFE_INTEGER))) || (Number.isInteger(n) && !Number.isSafeInteger(n))) {
@@ -71,7 +76,7 @@ export function normalizeRows(entry, rawRows, mapping) {
           }
         }
       } else {
-        out[f.key] = v == null ? "" : String(v);
+        out[f.key] = v == null ? null : String(v);
       }
     }
     return out;
@@ -90,7 +95,7 @@ export function normalizeRows(entry, rawRows, mapping) {
       }
     }
   }
-  return { rows, dropped };
+  return { rows: withDroppedCount(rows, dropped), dropped };
 }
 
 /** Promote "YYYY-MM" / "YYYY-MM-DD" (and ISO datetimes "YYYY-MM-DDTHH:MM:SS",

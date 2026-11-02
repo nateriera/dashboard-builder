@@ -58,6 +58,18 @@ function records(v, kind) {
   return out;
 }
 
+// Only datasets become SQL tables. Query IDs identify saved statements in a
+// separate store and cannot replace a dataset's DuckDB registration.
+function assertDatasetIdCase(ids) {
+  const seen = new Map();
+  for (const id of ids) {
+    const folded = id.toLowerCase();
+    const previous = seen.get(folded);
+    if (previous !== undefined && previous !== id) fail(`Conflicting dataset IDs ${previous} and ${id} (case-insensitive SQL table names). Import cancelled; existing data retained.`);
+    seen.set(folded, id);
+  }
+}
+
 /** Side-effect-free validation/migration. V1 references always remain explicit:
  * the old format cannot distinguish intent, so guessing a follower is unsafe. */
 export function validateLayout(input) {
@@ -143,6 +155,7 @@ export function validateLayout(input) {
     return { id, type: t.type, title: text(t.title ?? e.defaultTitle,'title'), source: text(t.source ?? 'Sample data','source'), dataset, binding, tileOptions, sizing, pageId, drillValues, ...geometry };
   });
   const datasets = records(data.datasets,'dataset'), queries = records(data.queries,'query');
+  assertDatasetIdCase(Object.keys(datasets));
   for (const t of tiles) {
     const fields = TILE_TYPES[t.type].fields;
     const q = t.dataset?.startsWith('query:') ? queries[t.dataset.slice(6)] : null;
@@ -179,7 +192,8 @@ export function validateLayout(input) {
   return { app: 'dashboard-builder', version: 4, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, savedViews: views, pages, currentPageId, tiles, datasets, queries };
 }
 
-export function assertNoCollisions(candidate, getDataset, getQuery) {
+export function assertNoCollisions(candidate, getDataset, getQuery, existingDatasetIds = []) {
+  assertDatasetIdCase([...existingDatasetIds, ...Object.keys(candidate.datasets)]);
   for (const [kind,get] of [['datasets',getDataset],['queries',getQuery]]) {
     for (const [id,e] of Object.entries(candidate[kind])) {
       const old = get(id);

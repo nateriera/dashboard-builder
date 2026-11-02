@@ -20,6 +20,13 @@ const DB_STORE = "datasets";
 // Per-dataset threshold for inlining into an exported layout file.
 export const EXPORT_INLINE_BYTES = 500 * 1024;
 
+// One measure for fresh, loaded and restored datasets: UTF-8 row payloads,
+// including the retained raw rows, excluding names and persistence metadata.
+function datasetBytes(entry) {
+  const bytes = rows => new TextEncoder().encode(JSON.stringify(rows)).length;
+  return bytes(entry.rows) + (entry.raw ? bytes(entry.raw.rows) : 0);
+}
+
 let seq = 0;
 const memory = new Map(); // id -> {id, name, columns, rows, fieldKeys, mapping, raw, bytes, persisted}
 // `raw` is the pre-normalization {columns, rows} when the caller provides it.
@@ -101,30 +108,42 @@ export function listDatasets() {
 let migrationFailures = [];
 export function storageIssues() { return [...migrationFailures]; }
 export async function loadPersistedDatasets() {
+  const issues = [];
   let db = null;
-  try { db = await dbPromise; } catch { /* preserve legacy sources */ }
-  const ingest = (id,e,persisted) => {
-    if (!e || !Array.isArray(e.rows)) return;
+  try { db = await dbPromise; } catch { issues.push('Current database could not be read; retained for retry.'); }
+  const ingest = (id,e,persisted,source = 'legacy') => {
+    if (!e || !Array.isArray(e.rows)) return false;
     const prior = memory.get(id);
-    if (prior) { if (persisted && JSON.stringify(prior.rows) === JSON.stringify(e.rows)) prior.persisted = true; return; }
-    memory.set(id,{ ...e, id, name: e.name || id, columns: e.columns || [], fieldKeys: e.fieldKeys || [], mapping: e.mapping || {}, raw: e.raw || null, bytes: e.bytes || new TextEncoder().encode(JSON.stringify(e)).length, persisted });
+    if (prior) {
+      if (JSON.stringify(prior.rows) !== JSON.stringify(e.rows)) {
+        issues.push(`${id}: ${source} ID collision; existing rows and original source retained.`);
+        return false;
+      }
+      if (persisted) prior.persisted = true;
+      return true;
+    }
+    memory.set(id,{ ...e, id, name: e.name || id, columns: e.columns || [], fieldKeys: e.fieldKeys || [], mapping: e.mapping || {}, raw: e.raw || null, bytes: datasetBytes(e), persisted });
+    return true;
   };
   if (db) {
-    try { for (const e of await db.getAll(DB_STORE)) ingest(e.id,e,true); } catch { /* migration still keeps sources */ }
+    try { for (const e of await db.getAll(DB_STORE)) ingest(e.id,e,true,'current database'); }
+    catch { issues.push('Current database could not be read; retained for retry.'); }
   }
-  migrationFailures = await migrateLegacy({ storage: globalThis.localStorage, keys: [LS_KEY,LEGACY_LS_KEY], db, ingest });
+  issues.push(...await migrateLegacy({ storage: globalThis.localStorage, keys: [LS_KEY,LEGACY_LS_KEY], db, ingest }));
   // The old IndexedDB database remains a recovery source even after copying.
   try {
     const databases = await globalThis.indexedDB?.databases?.();
     if (databases?.some(d => d.name === LEGACY_DB_NAME)) {
       const oldDb = await openDB(LEGACY_DB_NAME,1);
-      for (const e of await oldDb.getAll(DB_STORE)) {
-        ingest(e.id,e,false);
-        if (!(await persistDataset(e.id))) migrationFailures.push(e.id + ': legacy database retained; session-only data');
-      }
-      oldDb.close();
+      try {
+        for (const e of await oldDb.getAll(DB_STORE)) {
+          if (!ingest(e.id,e,false,'legacy database')) continue;
+          if (!(await persistDataset(e.id))) issues.push(e.id + ': legacy database retained; session-only data');
+        }
+      } finally { oldDb.close(); }
     }
-  } catch { migrationFailures.push('Legacy database could not be read; retained for retry.'); }
+  } catch { issues.push('Legacy database could not be read; retained for retry.'); }
+  migrationFailures = issues;
   if (memory.size) bumpVersion();
   return memory.size;
 }
@@ -134,7 +153,7 @@ export async function loadPersistedDatasets() {
  *  parse. Returns {id, bytes}. Follow with `await persistDataset(id)`. */
 export function saveDataset({ name, columns, rows, fieldKeys, mapping, raw = null }) {
   const id = `u${Date.now().toString(36)}${seq++}`;
-  const bytes = JSON.stringify(rows).length + (raw ? JSON.stringify(raw.rows).length : 0);
+  const bytes = datasetBytes({rows,raw});
   memory.set(id, {
     id,
     name,
@@ -192,14 +211,14 @@ export async function restoreDatasets(obj) {
   const tx = db.transaction(DB_STORE,'readwrite');
   try {
     for (const [id,e] of pending) {
-      const record = { ...e,id,bytes: new TextEncoder().encode(JSON.stringify(e)).length };
+      const record = { ...e,id,bytes: datasetBytes(e) };
       await tx.store.add(record);
       const verified = await tx.store.get(id);
       if (JSON.stringify(record) !== JSON.stringify(verified)) throw new Error('Dataset verification failed');
     }
     await tx.done;
   } catch (err) { try { tx.abort(); } catch {} await tx.done.catch(() => {}); throw err; }
-  for (const [id,e] of pending) memory.set(id,{ ...e,id,bytes: new TextEncoder().encode(JSON.stringify(e)).length,persisted: true });
+  for (const [id,e] of pending) memory.set(id,{ ...e,id,bytes: datasetBytes(e),persisted: true });
   bumpVersion();
   return pending.length;
 }

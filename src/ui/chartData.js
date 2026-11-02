@@ -1,5 +1,12 @@
+import { sourceRowsFor } from '../data/rowProvenance.js';
+
 // Paginated text alternative uses authoritative rows, including sampled plots.
 export function chartData(rows, fields, title, { summaryLabel } = {}) {
+  const source = sourceRowsFor(rows);
+  if (source !== rows) {
+    rows = source;
+    fields = [...new Set(rows.flatMap(row => Object.keys(row)))].map(key => ({key}));
+  }
   const details = document.createElement('details');
   details.className = 'chart-data';
   const summary = document.createElement('summary');

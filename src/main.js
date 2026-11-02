@@ -51,6 +51,8 @@ import { openGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
 import { toggleFiltersPopover } from "./ui/filtersPopover.js";
 import { chartData } from "./ui/chartData.js";
+import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows } from './data/dataQuality.js';
+import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -67,8 +69,23 @@ const BUILD = typeof __BUILD_TAG__ !== "undefined" ? __BUILD_TAG__ : "local";
 const gridEl = document.querySelector(".grid-stack");
 const statusEl = document.getElementById("status");
 
-function setStatus(msg) {
-  statusEl.textContent = msg;
+const normalizationDrops = new Map();
+let statusMessage = '';
+let statusDroppedOverride = null;
+function paintStatus() {
+  const count = statusDroppedOverride ?? [...normalizationDrops.values()].reduce((sum, value) => sum + value, 0);
+  statusEl.textContent = statusMessage + (count ? ` · ${blankingNotice(count)}` : '');
+}
+function setStatus(msg, { dropped = null } = {}) {
+  statusMessage = msg;
+  statusDroppedOverride = dropped;
+  paintStatus();
+}
+function reportDropped(id, count) {
+  if (count) normalizationDrops.set(id, count);
+  else normalizationDrops.delete(id);
+  statusDroppedOverride = null;
+  paintStatus();
 }
 
 // ── Grid ─────────────────────────────────────────────────────────────────
@@ -152,7 +169,7 @@ function resolveDashboardRows(entry) {
 
 function mergeSourceColumns(normalized, sourceRows) {
   if (!Array.isArray(sourceRows) || sourceRows.length !== normalized.length) return normalized;
-  return normalized.map((row, index) => ({ ...sourceRows[index], ...row }));
+  return retainSourceRows(withDroppedCount(normalized.map((row, index) => ({ ...sourceRows[index], ...row })), droppedCount(normalized)), sourceRows);
 }
 
 function resolveUploadRows(dataset) {
@@ -164,7 +181,10 @@ function resolveUploadRows(dataset) {
 // Mirrors renderTile/renderQueryTile's data logic; returns {rows} or {error}
 // without touching the DOM or mutating tile metadata.
 async function resolveExportRows(meta, entry) {
-  const withRawRows = rows => ({ ...prepareTileRows(meta, rows), rawRows: rows });
+  const withRawRows = rows => {
+    const clean = materializeExportRows(rows, sourceRowsFor(rows));
+    return { ...prepareTileRows(meta, clean.rows), rawRows: clean.rows, sourceRows: clean.sourceRows, dropped: droppedCount(rows), blanked: clean.blanked };
+  };
   if (entry.noData) return { rows: [] };
   if (isQueryRef(meta.dataset)) {
     const qid = queryId(meta.dataset);
@@ -787,6 +807,7 @@ function renderTile(el) {
   const entry = TILE_TYPES[meta.type];
   const chartEl = el.querySelector(".tile-chart");
   if (!entry || !chartEl) return;
+  reportDropped(meta.id, 0);
   syncDrillthroughAction(chartEl,meta,[]);
 
   if (entry.noData) {
@@ -824,6 +845,7 @@ function renderTile(el) {
     paintUnavailable(chartEl, 'Data unavailable', 'The saved reference ' + meta.dataset + ' is missing. Choose Data to repair the binding.');
     return;
   }
+  reportDropped(meta.id, droppedCount(data));
   meta.filterRows = data;
   const prepared=prepareTileRows(meta,data);
   meta.renderRows=prepared.rows;
@@ -852,6 +874,7 @@ async function renderQueryTile(el, meta, entry, chartEl) {
     tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present"), crossfilterField: entry.crossfilterField
   });
   const paintRows = rows => {
+    reportDropped(meta.id, droppedCount(rows));
     meta.filterRows = rows;
     const prepared=prepareTileRows(meta,rows);
     meta.renderRows=prepared.rows;
@@ -1095,7 +1118,7 @@ window.addEventListener('resize', () => {
 });
 grid.on("change", () => scheduleAutosave());
 grid.on("removed", (_event, items) => {
-  for (const n of items) tileMeta.delete(n.id);
+  for (const n of items) { tileMeta.delete(n.id); reportDropped(n.id, 0); }
   const removed=new Set(items.map(item=>item.id));
   let filtersChanged=false;
   const next=filters.flatMap(filter=>{
@@ -1324,7 +1347,7 @@ async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
         rows,
         fieldKeys: entry.fields.map((field) => field.key),
         mapping: { ...suggestion.mapping },
-        raw: null
+        raw
       });
       const durable = await persistDataset(dataset.id);
       chartDatasets.push({ id: dataset.id, durable });
@@ -1434,9 +1457,18 @@ document.getElementById("btn-export").addEventListener("click", async () => {
     else refs.push(...listDatasets().map(ds => 'upload:' + ds.id));
   }
   const { inlined, skipped } = inlineDatasets([...new Set(refs)]);
+  let blanked = 0;
+  for (const dataset of Object.values(inlined)) {
+    const clean = materializeExportRows(dataset.rows, dataset.raw?.rows || dataset.rows);
+    dataset.rows = clean.rows;
+    if (dataset.raw) dataset.raw = { ...dataset.raw, rows: clean.sourceRows };
+    blanked += clean.blanked;
+  }
+  const exportDrops = new Map(normalizationDrops);
   for (const qref of queryRefs) if (!getQuery(queryId(qref))) skipped.push(qref + ' (missing query)');
   for (const t of layout.tiles.filter(t => isQueryRef(t.dataset))) {
     const resolved = await resolveExportRows(t,TILE_TYPES[t.type]);
+    exportDrops.set(t.id, resolved.dropped || 0);
     if (resolved.error && !skipped.some(s => s.startsWith(t.dataset))) skipped.push(t.dataset + ": " + resolved.error);
   }
   layout.omittedDependencies = skipped;
@@ -1450,9 +1482,10 @@ document.getElementById("btn-export").addEventListener("click", async () => {
     JSON.stringify(layout, null, 2)
   );
   setStatus(
-    skipped.length
+    (skipped.length
       ? `Exported layout JSON (not inlined, over size limit: ${skipped.join(", ")})`
-      : "Exported layout JSON"
+      : "Exported layout JSON") + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''),
+    { dropped: [...exportDrops.values()].reduce((sum, count) => sum + count, 0) }
   );
 });
 
@@ -1478,11 +1511,14 @@ async function exportHtml() {
 
     const layout=serializeLayout();
     const tiles = [];
+    let blanked = 0, dropped = 0;
     for (const savedTile of layout.tiles) {
       const meta = tileMeta.get(savedTile.id) || savedTile;
       const entry = TILE_TYPES[meta.type];
       if (!meta || !entry) continue;
       const resolved = await resolveExportRows(meta, entry);
+      blanked += resolved.blanked || 0;
+      dropped += resolved.dropped || 0;
       tiles.push({
         id: meta.id,
         type: meta.type,
@@ -1496,6 +1532,7 @@ async function exportHtml() {
         h: savedTile.h,
         tileOptions: meta.tileOptions || {},
         rows: resolved.error ? null : resolved.rawRows || resolved.rows || null,
+        sourceRows: resolved.error ? null : resolved.sourceRows || null,
         error: resolved.error || null,
         emptyMessage: null
       });
@@ -1535,7 +1572,7 @@ async function exportHtml() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).`);
+    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
   } catch (err) {
     setStatus(`HTML export failed: ${err && err.message ? err.message : err}`);
   }
@@ -1558,7 +1595,7 @@ fileInput.addEventListener("change", () => {
     };
     try {
       const data = validateLayout(JSON.parse(reader.result));
-      assertNoCollisions(data,getDataset,getQuery);
+      assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
       const previous = serializeLayout();
       const queriesBefore = querySnapshot();
       const layoutRaw = localStorage.getItem(STORAGE_KEY);
@@ -1732,6 +1769,6 @@ function starterLayout() {
     retry.onclick = async () => { await loadPersistedDatasets(); setStatus(storageIssues().join("; ") || "Migration verified."); };
     statusEl.after(retry);
   }
-  setStatus(`${statusEl.textContent} · build ${BUILD}`);
+  setStatus(`${statusMessage} · build ${BUILD}`);
   showFirstRunHint();
 })();

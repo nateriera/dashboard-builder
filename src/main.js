@@ -52,6 +52,7 @@ import { resolveTileTitle } from "./tiles/titles.js";
 import { toggleFiltersPopover } from "./ui/filtersPopover.js";
 import { chartData } from "./ui/chartData.js";
 import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows } from './data/dataQuality.js';
+import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -168,7 +169,7 @@ function resolveDashboardRows(entry) {
 
 function mergeSourceColumns(normalized, sourceRows) {
   if (!Array.isArray(sourceRows) || sourceRows.length !== normalized.length) return normalized;
-  return withDroppedCount(normalized.map((row, index) => ({ ...sourceRows[index], ...row })), droppedCount(normalized));
+  return retainSourceRows(withDroppedCount(normalized.map((row, index) => ({ ...sourceRows[index], ...row })), droppedCount(normalized)), sourceRows);
 }
 
 function resolveUploadRows(dataset) {
@@ -181,8 +182,8 @@ function resolveUploadRows(dataset) {
 // without touching the DOM or mutating tile metadata.
 async function resolveExportRows(meta, entry) {
   const withRawRows = rows => {
-    const clean = materializeExportRows(rows);
-    return { ...prepareTileRows(meta, clean.rows), rawRows: clean.rows, dropped: droppedCount(rows), blanked: clean.blanked };
+    const clean = materializeExportRows(rows, sourceRowsFor(rows));
+    return { ...prepareTileRows(meta, clean.rows), rawRows: clean.rows, sourceRows: clean.sourceRows, dropped: droppedCount(rows), blanked: clean.blanked };
   };
   if (entry.noData) return { rows: [] };
   if (isQueryRef(meta.dataset)) {
@@ -1346,7 +1347,7 @@ async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
         rows,
         fieldKeys: entry.fields.map((field) => field.key),
         mapping: { ...suggestion.mapping },
-        raw: null
+        raw
       });
       const durable = await persistDataset(dataset.id);
       chartDatasets.push({ id: dataset.id, durable });
@@ -1531,6 +1532,7 @@ async function exportHtml() {
         h: savedTile.h,
         tileOptions: meta.tileOptions || {},
         rows: resolved.error ? null : resolved.rawRows || resolved.rows || null,
+        sourceRows: resolved.error ? null : resolved.sourceRows || null,
         error: resolved.error || null,
         emptyMessage: null
       });

@@ -36,6 +36,7 @@ test('existing category edits initialize checked values, replace the same filter
     const checks=[...document.querySelectorAll('.filter-value input')];
     assert.equal(checks[4].checked,true);
     assert.equal(checks[3].checked,false);
+    assert.equal(document.querySelector('[aria-label="Filter match"]').value,'is-not');
     toggle('1',true);toggle('A',false);click('Apply filter');
     assert.deepEqual(saved,[{...filter,values:['1']}]);
   } finally {closeFiltersPopover();}

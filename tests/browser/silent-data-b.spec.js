@@ -76,6 +76,12 @@ test('S7: category multiselect survives deselection, Apply, reopening and editin
   await page.locator('#btn-filters').click(); await pop.getByRole('button',{name:'Edit label filter',exact:true}).click();
   await expect(pop.getByRole('checkbox',{name:'B',exact:true})).toBeChecked();
   await expect(pop.getByRole('checkbox',{name:'C',exact:true})).toBeChecked();
+  await pop.getByLabel('Filter match',{exact:true}).selectOption('is-not');
+  await pop.getByRole('button',{name:'Apply filter',exact:true}).click();
+  await pop.getByRole('button',{name:'Edit label filter',exact:true}).click();
+  await expect(pop.getByLabel('Filter match',{exact:true})).toHaveValue('is-not');
+  await expect(pop.getByRole('checkbox',{name:'B',exact:true})).toBeChecked();
+  await expect(pop.getByRole('checkbox',{name:'C',exact:true})).toBeChecked();
 });
 
 test('S10: HTML export names parameter-mismatched views before saving, supports cancel and exports truthful matching views', async ({page,browser}) => {

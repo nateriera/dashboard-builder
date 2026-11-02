@@ -253,6 +253,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
         sourceTileSelect.value=source.id;selectedTile=null;renderControls();
         fieldSelect.value=existing.field;renderControls();
         selectedValues=[...existing.values];selectedOperator=existing.op;
+        controls.querySelector('.filter-operator').value=selectedOperator;
         for(const checkbox of controls.querySelectorAll('input[type="checkbox"]')) checkbox.checked=selectedValues.some(value=>Object.is(value,JSON.parse(checkbox.value)));
         selectedTargets=existing.targets?.map(target=>({...target}))||defaultTargets(source.id,selectedField);
         renderConnectionEditors(targetWrap,selectedField.type,selectedTargets,targets=>{selectedTargets=targets;targetsTouched=true;updateApplyState();});

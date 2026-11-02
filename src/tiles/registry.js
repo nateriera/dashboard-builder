@@ -166,7 +166,7 @@ export const TILE_TYPES = {
       mount(
         el,
         (width, height) =>
-          lineChart(rows, { x: "date", y: "value", stroke: "series", width, height, yLabel: options.tileOptions?.yLabel || null, referenceValue: options.tileOptions?.referenceValue, referenceLabel: options.tileOptions?.referenceLabel }),
+          lineChart(rows, { x: "date", y: "value", stroke: "series", sourceRows: data, width, height, yLabel: options.tileOptions?.yLabel || null, referenceValue: options.tileOptions?.referenceValue, referenceLabel: options.tileOptions?.referenceLabel }),
         options
       );
     }
@@ -406,7 +406,7 @@ export const TILE_TYPES = {
     label: "Area chart", description: "Filled time series", fields:[{key:"date",label:"Date column"},{key:"value",label:"Numeric value",numeric:true},{key:"series",label:"Series column",optional:true}],
     datasets:["timeseries"], defaultDataset:"timeseries", defaultSize:{w:8,h:7}, defaultTitle:"Volume over time",
     controls:referenceControls,
-    render(el,{data,options}) { const rows=data.map(d=>({...d,date:promoteDate(d.date)})); mount(el,(width,height)=>areaChart(rows,{series:rows.some(d=>d.series!=null)?"series":null,width,height,xLabel:options.tileOptions?.xLabel||null,yLabel:options.tileOptions?.yLabel||null,referenceValue:options.tileOptions?.referenceValue,referenceLabel:options.tileOptions?.referenceLabel}),{...options,legendSpace:options.legendSpace??32}); }
+    render(el,{data,options}) { const rows=data.map(d=>({...d,date:promoteDate(d.date)})); mount(el,(width,height)=>areaChart(rows,{series:rows.some(d=>d.series!=null)?"series":null,sourceRows:data,width,height,xLabel:options.tileOptions?.xLabel||null,yLabel:options.tileOptions?.yLabel||null,referenceValue:options.tileOptions?.referenceValue,referenceLabel:options.tileOptions?.referenceLabel}),{...options,legendSpace:options.legendSpace??32}); }
   },
 
   heatmap: {

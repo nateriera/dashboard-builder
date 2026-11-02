@@ -30,7 +30,7 @@ function readAll() {
 function writeAll(next) {
   const items = {};
   for (const [id, q] of memory) {
-    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null };
+    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted };
   }
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({ next, items }));
@@ -47,6 +47,7 @@ export function saveQuery({ name, sql, columns, fieldKeys, mapping, dependencies
   const id = `q${Date.now().toString(36)}${seq++}`;
   const entry = {
     id,
+    trusted: true,
     dependencies,
     name: null, // filled below
     sql,
@@ -102,6 +103,7 @@ export function loadPersistedQueries() {
     if (!e || typeof e.sql !== "string") continue;
     memory.set(id, {
       id,
+      trusted: !Object.hasOwn(e, 'trusted') || e.trusted === true,
       name: e.name || id,
       sql: e.sql,
       dependencies: e.dependencies ?? null,
@@ -121,7 +123,7 @@ export function inlineQueries(refs) {
     if (!isQueryRef(ref)) continue;
     const q = memory.get(queryId(ref));
     if (!q) continue;
-    inlined[q.id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null };
+    inlined[q.id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted };
   }
   return inlined;
 }
@@ -134,7 +136,7 @@ export function rollbackQueries(snapshot) {
 export function restoreQueries(obj) {
   if (!obj) return 0;
   const pending = Object.entries(obj).filter(([id]) => !memory.has(id));
-  for (const [id,e] of pending) memory.set(id,{ ...e,id });
+  for (const [id,e] of pending) memory.set(id,{ ...e,id,trusted:false });
   // The import coordinator commits localStorage together with the layout.
   return pending.length;
 }

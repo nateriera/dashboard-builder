@@ -37,14 +37,16 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   await focusHeaderAction(page, '#btn-templates'); await page.keyboard.press('Enter');
   await expect(page.locator('.tpl-close')).toBeFocused(); await page.keyboard.press('Shift+Tab');
   expect(await page.evaluate(()=>document.querySelector('.tpl-modal').contains(document.activeElement))).toBe(true);
-  await page.keyboard.press('Escape'); await expect(page.locator('#btn-templates')).toBeFocused();
+  await page.keyboard.press('Escape'); await expect(page.locator('.header-more > summary')).toBeFocused();
 });
 test('R2: query JSON carries uploaded inputs into empty storage; HTML works offline', async ({page,browser},testInfo) => {
   await ready(page);
   await importJSON(page,envelope([tile('query:q1',{tileOptions:{xLabel:'USD'}})],{sales:upload},{q1:{name:'Sales SQL',sql:'SELECT label, value FROM upload_sales',columns:['label','value'],fieldKeys:['label','value'],mapping:{label:'label',value:'value'}}}));
+  await reviewImportedQuery(page);
   await expect(page.locator('.tile-chart svg')).toBeVisible(); await expect(page.locator('.tile-chart')).toContainText('30');
   const json=await jsonExport(page); expect(json.datasets.sales.rows).toEqual(upload.rows);
   const context=await browser.newContext(); const fresh=await context.newPage(); await ready(fresh); await importJSON(fresh,json);
+  await reviewImportedQuery(fresh);
   await expect(fresh.locator('.tile-chart svg')).toBeVisible(); await expect(fresh.locator('.tile-chart')).toContainText('USD');
   const downloaded=fresh.waitForEvent('download'); await fresh.locator('#btn-export-html').click();
   const download=await downloaded, html=await fs.readFile(await download.path(),'utf8');
@@ -59,6 +61,14 @@ test('R2: query JSON carries uploaded inputs into empty storage; HTML works offl
   await testInfo.attach('browser-version',{body:browser.version(),contentType:'text/plain'});
   await context.close();
 });
+
+async function reviewImportedQuery(page) {
+  await page.getByRole('button', { name:'Review query', exact:true }).click();
+  await expect(page.locator('.data-sql-run')).toBeEnabled();
+  await page.locator('.data-sql-run').click();
+  await expect(page.locator('.data-panel:visible .data-apply')).toBeEnabled();
+  await page.locator('.data-panel:visible .data-apply').click();
+}
 test('R2/R7: missing references stay blocked; collision and invalid imports preserve current layout', async ({page}) => {
   await ready(page); await importJSON(page,envelope([tile('upload:absent')]));
   await expect(page.locator('.tile-error')).toContainText('Data unavailable'); await expect(page.locator('.tile-chart svg')).toHaveCount(0);

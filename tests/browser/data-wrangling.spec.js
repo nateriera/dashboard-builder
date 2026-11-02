@@ -1,6 +1,35 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 
+test('parameterized wrangling preserves placeholders, never rescans values, and follows parameter changes', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#status')).toContainText('build');
+  await page.evaluate(async () => {
+    const { saveQuery } = await import('/src/data/queries.js');
+    const { toggleWranglingPopover } = await import('/src/ui/dataWranglingPopover.js');
+    const saved = saveQuery({ sql: 'SELECT {{p}} AS label, CAST({{factor}} AS DOUBLE) AS value' });
+    window.wrangleParameters = [{ name: 'p', type: 'text', value: '{{q}}' }, { name: 'q', type: 'text', value: 'expanded' }, { name: 'factor', type: 'number', value: 2 }];
+    toggleWranglingPopover({ anchor: document.querySelector('.tile-data-btn'), type: 'table', meta: { dataset: `query:${saved.id}` }, getParameters: () => window.wrangleParameters, onQuery: derived => { window.derivedQuery = derived; } });
+  });
+  const pop = page.locator('.wrangling-popover');
+  await expect(pop.getByLabel('Grouping 1 column')).toBeVisible();
+  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('{{q}}');
+  await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('2');
+  await pop.getByRole('button', { name: 'Apply derived query to tile' }).click();
+  const result = await page.evaluate(async () => {
+    const { getQuery } = await import('/src/data/queries.js');
+    const { runTileQuery } = await import('/src/data/duckdb.js');
+    const { TILE_TYPES } = await import('/src/tiles/registry.js');
+    const query = getQuery(window.derivedQuery.id);
+    window.wrangleParameters.find(p => p.name === 'factor').value = 3;
+    return { sql: query.sql, rows: await runTileQuery(query.id, query, TILE_TYPES.table, window.wrangleParameters) };
+  });
+  expect(result.sql).toContain('{{p}}');
+  expect(result.sql).toContain('{{factor}}');
+  expect(result.rows).toEqual([{ label: '{{q}}', 'Sum of value': 3 }]);
+});
+
 async function ready(page) {
   await page.goto('/');
   await expect(page.locator('#status')).toContainText('build');

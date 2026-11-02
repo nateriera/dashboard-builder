@@ -1,6 +1,23 @@
 const IDENTIFIER = (value) => `"${String(value).replaceAll('"', '""')}"`;
 const AGGREGATIONS = new Set(['COUNT', 'COUNT DISTINCT', 'SUM', 'AVG', 'MIN', 'MAX']);
 
+/** Keep parameters raw while removing one terminator before subquery composition. */
+export function wranglingSourceSql(query) {
+  return query?.sql ? query.sql.replace(/;\s*$/, '') : null;
+}
+
+/** Identity of the SQL configuration and parameter values used by a preview. */
+export function wranglingConfigToken(kind, config) {
+  return JSON.stringify({
+    kind, table: config.table ?? null, sourceSql: config.sourceSql ?? null,
+    ...(kind === 'pivot' ? {
+      groups: (config.groups || []).map(({ column, bin }) => ({ column, bin: bin ?? null })),
+      aggregations: (config.aggregations || []).map(({ column, operation, name }) => ({ column, operation, name }))
+    } : { formula: config.formula, name: config.name }),
+    parameters: config.parameters || []
+  });
+}
+
 export function quoteIdentifier(value) {
   return IDENTIFIER(value);
 }

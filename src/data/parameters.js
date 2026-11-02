@@ -25,13 +25,4 @@ export function validateParameters(input) {
   });
 }
 
-/** Replace {{name}} with a safe SQL number or escaped string literal. */
-export function substituteParameters(sql, parameters = []) {
-  if (typeof sql !== "string") throw new Error("SQL must be text.");
-  const byName = new Map(validateParameters(parameters).map(parameter => [parameter.name, parameter]));
-  return sql.replace(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g, (placeholder, name) => {
-    const parameter = byName.get(name);
-    if (!parameter) throw new Error(`Unknown SQL parameter "${name}". Add it in Filters → Parameters.`);
-    return parameter.type === "number" ? String(parameter.value) : `'${parameter.value.replace(/'/g, "''")}'`;
-  });
-}
+export { substituteParameters } from './parameterSql.js';

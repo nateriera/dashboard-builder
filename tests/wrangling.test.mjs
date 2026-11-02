@@ -71,3 +71,41 @@ test('portable wrangling recipes reject malformed envelopes and incomplete mappi
   const recipe={id:'recipe-pivot',name:'Regional totals',kind:'pivot',groups:[{column:'Area',bin:null}],aggregations:[]};
   assert.throws(()=>mapWranglingRecipeColumns(recipe,{Area:'Missing'},['Region']),/available columns/i);
 });
+
+test('formula recipe remapping resolves overlapping targets simultaneously and leaves input intact', () => {
+  const recipe = { id:'overlap',name:'Difference',kind:'formula',formula:'"A" - "B"',outputName:'Difference',columns:['A','B'] };
+  const before = structuredClone(recipe);
+  for (const mapping of [{ A:'B',B:'C' }, { B:'C',A:'B' }]) {
+    const mapped = mapWranglingRecipeColumns(recipe, mapping, ['B','C']);
+    assert.equal(mapped.formula, '"B" - "C"');
+    assert.deepEqual(mapped.columns, ['B','C']);
+  }
+  assert.deepEqual(recipe, before);
+});
+
+test('formula recipe remapping swaps identifiers without rescanning replacements', () => {
+  const recipe = { id:'swap',name:'Swap',kind:'formula',formula:'"A" - "B"',outputName:'Difference',columns:['A','B'] };
+  const mapped = mapWranglingRecipeColumns(recipe, { A:'B',B:'A' }, ['A','B']);
+  assert.equal(mapped.formula, '"B" - "A"');
+  assert.deepEqual(mapped.columns, ['B','A']);
+});
+
+test('formula recipe remapping preserves escaped quotes, string literals, and unmapped identifiers', () => {
+  const recipe = { id:'quoted',name:'Quoted',kind:'formula',formula:'"A""B" + \'A"B\' + "unmapped"',outputName:'Quoted result',columns:['A"B'] };
+  const mapped = mapWranglingRecipeColumns(recipe, { 'A"B':'B"C' }, ['B"C']);
+  assert.equal(mapped.formula, '"B""C" + \'A"B\' + "unmapped"');
+  assert.deepEqual(mapped.columns, ['B"C']);
+});
+
+test('formula recipe remapping preserves bare function names even when a column has the same name', () => {
+  const recipe = { id:'functions',name:'Functions',kind:'formula',formula:"ABS (A) + ABS + untouched + 'A B' + B",outputName:'Result',columns:['A','B','ABS'] };
+  const mapped = mapWranglingRecipeColumns(recipe, { A:'B',B:'C',ABS:'Magnitude' }, ['B','C','Magnitude']);
+  assert.equal(mapped.formula, 'ABS ("B") + "Magnitude" + untouched + \'A B\' + "C"');
+});
+
+test('formula recipe remapping without stored columns uses original identifier tokens once', () => {
+  const recipe = { id:'discovery',name:'Discovery',kind:'formula',formula:'A - B',outputName:'Difference' };
+  const mapped = mapWranglingRecipeColumns(recipe, { A:'B',B:'C' }, ['B','C']);
+  assert.equal(mapped.formula, '"B" - "C"');
+  assert.deepEqual(mapped.columns, ['B','C']);
+});

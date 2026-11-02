@@ -63,21 +63,19 @@ export function mapWranglingRecipeColumns(input,mapping,availableColumns) {
   const columns=recipe.kind==='pivot'
     ?[...new Set([...recipe.groups.map(group=>group.column),...recipe.aggregations.map(item=>item.column)])]
     :[...new Set(recipe.columns?.length?recipe.columns:formulaIdentifiers(recipe.formula))];
-  const result=structuredClone(recipe);
-  const formulaMapping=new Map();
+  const resolvedMapping=new Map();
   for(const source of columns){
     const target=mapping[source]??(availableColumns.includes(source)?source:null);
     if(typeof target!=='string'||!availableColumns.includes(target))throw new Error(`Map “${source}” to one of the available columns.`);
-    if(recipe.kind==='pivot'){
-      result.groups.forEach(group=>{if(group.column===source)group.column=target;});
-      result.aggregations.forEach(item=>{if(item.column===source)item.column=target;});
-    }else{
-      formulaMapping.set(source,target);
-    }
+    resolvedMapping.set(source,target);
   }
-  if(recipe.kind==='formula'){
-    result.formula=replaceFormulaIdentifiers(recipe.formula,formulaMapping);
-    result.columns=(recipe.columns||columns).map(column=>formulaMapping.get(column)??column);
+  const result=structuredClone(recipe);
+  if(recipe.kind==='pivot'){
+    result.groups=recipe.groups.map(group=>({...group,column:resolvedMapping.get(group.column)}));
+    result.aggregations=recipe.aggregations.map(item=>({...item,column:resolvedMapping.get(item.column)}));
+  }else{
+    result.formula=replaceFormulaIdentifiers(recipe.formula,resolvedMapping);
+    result.columns=(recipe.columns||columns).map(column=>resolvedMapping.get(column)??column);
   }
   return result;
 }

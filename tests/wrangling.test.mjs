@@ -109,3 +109,38 @@ test('formula recipe remapping without stored columns uses original identifier t
   assert.equal(mapped.formula, '"B" - "C"');
   assert.deepEqual(mapped.columns, ['B','C']);
 });
+
+const pivotRemapRecipe = () => ({
+  id:'pivot-remapping',name:'Pivot remapping',kind:'pivot',
+  groups:[{column:'A',bin:null},{column:'B',bin:'month'}],
+  aggregations:[{column:'A',operation:'SUM',name:'Total A'},{column:'B',operation:'AVG',name:'Mean B'}]
+});
+
+test('pivot recipe remapping resolves overlapping groups and aggregations simultaneously', () => {
+  const recipe = pivotRemapRecipe();
+  const before = structuredClone(recipe);
+  for (const mapping of [{ A:'B',B:'C' }, { B:'C',A:'B' }]) {
+    const mapped = mapWranglingRecipeColumns(recipe, mapping, ['B','C']);
+    assert.deepEqual(mapped.groups, [{column:'B',bin:null},{column:'C',bin:'month'}]);
+    assert.deepEqual(mapped.aggregations, [{column:'B',operation:'SUM',name:'Total A'},{column:'C',operation:'AVG',name:'Mean B'}]);
+  }
+  assert.deepEqual(recipe, before);
+});
+
+test('pivot recipe remapping swaps original group and aggregation columns once', () => {
+  const recipe = pivotRemapRecipe();
+  const mapped = mapWranglingRecipeColumns(recipe, { A:'B',B:'A' }, ['A','B']);
+  assert.deepEqual(mapped.groups.map(group => group.column), ['B','A']);
+  assert.deepEqual(mapped.aggregations.map(aggregate => aggregate.column), ['B','A']);
+});
+
+test('pivot recipe remapping keeps available-but-unmapped group and aggregation columns', () => {
+  const recipe = pivotRemapRecipe();
+  recipe.groups.push({column:'Unmapped',bin:null});
+  recipe.aggregations.push({column:'Unmapped',operation:'MAX',name:'Unmapped maximum'});
+  const mapped = mapWranglingRecipeColumns(recipe, { A:'B',B:'C' }, ['B','C','Unmapped']);
+  assert.deepEqual(mapped.groups.map(group => group.column), ['B','C','Unmapped']);
+  assert.deepEqual(mapped.aggregations.map(aggregate => aggregate.column), ['B','C','Unmapped']);
+  assert.deepEqual(mapped.groups[2], recipe.groups[2]);
+  assert.deepEqual(mapped.aggregations[2], recipe.aggregations[2]);
+});

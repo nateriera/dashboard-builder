@@ -24,6 +24,7 @@ import * as duckdb from "@duckdb/duckdb-wasm";
 import { DATASETS, DATASET_LABELS } from "../tiles/registry.js";
 import { listDatasets, datasetVersion } from "./store.js";
 import { normalizeRows } from "../tiles/normalize.js";
+import { withDroppedCount } from './dataQuality.js';
 import { substituteParameters } from "./parameters.js";
 import {
   buildTableStatements,
@@ -129,11 +130,11 @@ export function dropCachedRows(qid) { queryCache.delete(qid); }
 export async function runTileQuery(qid, query, entry, parameters = []) {
   const resolvedSql = substituteParameters(query.sql, parameters);
   const { rows, revision } = await runQuery(resolvedSql);
-  const { rows: normalized } = normalizeRows(entry, rows, query.mapping || {});
+  const { rows: normalized, dropped } = normalizeRows(entry, rows, query.mapping || {});
   if (revision !== datasetVersion()) throw new Error('Datasets changed. Run again.');
   // Keep the query's original columns alongside normalized chart fields so
   // dashboard filters can match materialized source column names.
-  const materialized = rows.map((row, index) => ({ ...row, ...normalized[index] }));
+  const materialized = withDroppedCount(rows.map((row, index) => ({ ...row, ...normalized[index] })), dropped);
   queryCache.set(qid, { revision, identity: JSON.stringify([query,entry.fields,resolvedSql]), rows: materialized });
   return materialized;
 }

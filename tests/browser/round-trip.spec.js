@@ -46,3 +46,44 @@ test('R1: an app-created treemap parent mapping exports and imports intact in an
     expect(restored.rows.map(row => row.parent)).toEqual(['Programs', 'Programs']);
   } finally { await context.close(); }
 });
+
+const targetFilter = targets => ({ id:'connected',field:'label',op:'is',values:['Housing'],scope:'charts',targets:targets.map(tileId => ({ tileId,field:'label' })) });
+const removalCases = [
+  { name:'retargets a same-count filter to its surviving tile',filter:targetFilter(['remove','survivor']),remove:'remove',expected:[targetFilter(['survivor'])],updates:1 },
+  { name:'drops a filter losing its final target',filter:targetFilter(['remove']),remove:'remove',expected:[],updates:1 },
+  { name:'drops a crossfilter whose source tile is removed',filter:{ id:'crossfilter',field:'label',op:'is',values:['Housing'],source:'crossfilter',sourceTile:'remove' },remove:'remove',expected:[],updates:1 },
+  { name:'keeps the autosave-only path when filters are unchanged',filter:targetFilter(['remove','survivor']),remove:'other',expected:[targetFilter(['remove','survivor'])],updates:0 }
+];
+
+for (const scenario of removalCases) {
+  test(`R3: tile removal ${scenario.name} and survives reload`, async ({ page }) => {
+    await page.addInitScript(() => { window.filterUpdateCalls = 0; });
+    await page.route('**/src/main.js', async route => {
+      const response = await route.fetch();
+      const source = await response.text();
+      const signature = 'function setFilters(next) {';
+      expect(source).toContain(signature);
+      await route.fulfill({ response,body:source.replace(signature, `${signature} globalThis.filterUpdateCalls++;`) });
+    });
+    await ready(page);
+    const ids = scenario.remove === 'other' ? ['remove','survivor','other'] : ['remove','survivor'];
+    await importLayout(page, {
+      app:'dashboard-builder',version:1,
+      tiles:ids.map((id,index) => ({ id,type:'bar',title:`Round-trip ${id}`,dataset:'categorical',x:(index % 2) * 6,y:Math.floor(index / 2) * 5,w:6,h:5 })),
+      filters:[scenario.filter]
+    });
+    await expect(page.locator('#status')).toContainText('Imported');
+    expect(await page.evaluate(() => window.filterUpdateCalls)).toBe(0);
+    await page.locator(`.grid-stack-item[gs-id="${scenario.remove}"] .tile-remove`).click();
+    const survivingIds = ids.filter(id => id !== scenario.remove).sort();
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).tiles.map(tile => tile.id).sort())).toEqual(survivingIds);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')));
+    expect(saved.filters).toEqual(scenario.expected);
+    expect(await page.evaluate(() => window.filterUpdateCalls)).toBe(scenario.updates);
+    await page.reload();
+    await expect(page.locator('#status')).toContainText('Restored autosaved layout');
+    await expect(page.locator('.grid-stack-item')).toHaveCount(survivingIds.length);
+    for (const id of survivingIds) await expect(page.locator(`.grid-stack-item[gs-id="${id}"]`)).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).filters)).toEqual(scenario.expected);
+  });
+}

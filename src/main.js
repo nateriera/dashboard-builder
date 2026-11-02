@@ -1097,13 +1097,19 @@ grid.on("change", () => scheduleAutosave());
 grid.on("removed", (_event, items) => {
   for (const n of items) tileMeta.delete(n.id);
   const removed=new Set(items.map(item=>item.id));
+  let filtersChanged=false;
   const next=filters.flatMap(filter=>{
-    if (filter.source==='crossfilter') return removed.has(filter.sourceTile) ? [] : [filter];
+    if (filter.source==='crossfilter') {
+      if (removed.has(filter.sourceTile)) { filtersChanged=true; return []; }
+      return [filter];
+    }
     if (!filter.targets) return [filter];
     const targets=filter.targets.filter(target=>!removed.has(target.tileId));
+    if (targets.length===filter.targets.length) return [filter];
+    filtersChanged=true;
     return targets.length ? [{...filter,targets}] : [];
   });
-  if (!bulkLoading && next.length!==filters.length) setFilters(next);
+  if (!bulkLoading && filtersChanged) setFilters(next);
   else scheduleAutosave();
 });
 

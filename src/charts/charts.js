@@ -1,5 +1,5 @@
 import { numericExtent } from "../data/limits.js";
-import { donutParts } from "./integrity.js";
+import { donutParts, donutSourceLabels } from "./integrity.js";
 // Chart components — theme-aware, brand-neutral.
 //
 // Every component takes `theme` in its options (defaulting to the active
@@ -575,10 +575,7 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
   const t = theme.chart;
   const compactLegend = width < 280;
   width = Math.max(80, Math.min(width, height - 80, 400));
-  const sourceLabels = [...new Set(data.map(d => String(d[label] ?? "Unlabeled")))];
   data = donutParts(data, label, value);
-  const partLabels = new Set(data.map(d => String(d[label])));
-  const otherLabels = sourceLabels.filter(name => !partLabels.has(name));
   const total = data.reduce((s, d) => s + d[value], 0);
   const slices = d3pie().value((d) => d[value]).sort(null)(data);
   const arcGen = d3arc().innerRadius(innerRadius).outerRadius(outerRadius);
@@ -593,7 +590,7 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
       <g transform="translate(${c} ${c})">
         ${slices.map((s, i) => {
           const sliceLabel = String(s.data[label]);
-          const values = crossfilterField && !sourceLabels.includes(sliceLabel) ? otherLabels : [s.data[label]];
+          const values = donutSourceLabels(s.data, label);
           const encoded = crossfilterField ? encodeURIComponent(JSON.stringify(values)) : "";
           return crossfilterField
             ? svg`<a href="#db-crossfilter:${encoded}" aria-label="${crossfilterAriaLabel(sliceLabel)}"><path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2" data-crossfilter-values="${encoded}"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path></a>`

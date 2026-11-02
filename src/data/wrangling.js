@@ -1,6 +1,11 @@
 const IDENTIFIER = (value) => `"${String(value).replaceAll('"', '""')}"`;
 const AGGREGATIONS = new Set(['COUNT', 'COUNT DISTINCT', 'SUM', 'AVG', 'MIN', 'MAX']);
 
+/** Keep parameters raw while removing one terminator before subquery composition. */
+export function wranglingSourceSql(query) {
+  return query?.sql ? query.sql.replace(/;\s*$/, '') : null;
+}
+
 /** Identity of the SQL configuration and parameter values used by a preview. */
 export function wranglingConfigToken(kind, config) {
   return JSON.stringify({

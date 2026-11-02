@@ -29,6 +29,21 @@ async function openParameterizedWrangling(page, kind = 'pivot', sql = 'SELECT {{
   return pop;
 }
 
+test('wrangling integrity: semicolon-terminated sources load async schema and retain raw parameters', async ({ page }) => {
+  const pop = await openParameterizedWrangling(page, 'pivot', 'SELECT {{label}} AS label, CAST({{factor}} AS DOUBLE) AS value; \n\t');
+  await expect(pop.getByLabel('Grouping 1 column')).toHaveValue('label');
+  await expect(pop.getByLabel('Aggregation 1 source column')).toHaveValue('value');
+  await expect(pop.locator('[role="alert"]')).toHaveCount(0);
+  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('Snapshot');
+  await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('2');
+  await pop.getByRole('button', { name: 'Apply derived query to tile' }).click();
+  const savedSql = await page.evaluate(async () => (await import('/src/data/queries.js')).getQuery(window.integrityApplied.id).sql);
+  expect(savedSql).toContain('{{label}}');
+  expect(savedSql).toContain('{{factor}}');
+  expect(savedSql).not.toMatch(/;\s*\)/);
+});
+
 async function holdPreviewCompletion(page) {
   await page.route('**/src/data/duckdb.js', async route => {
     const response = await route.fetch();

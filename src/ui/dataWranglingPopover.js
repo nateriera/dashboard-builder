@@ -1,4 +1,4 @@
-import { aggregationOptions, buildCalculatedFieldApplySql, buildCalculatedFieldSql, buildPivotSql, quoteIdentifier, wranglingConfigToken } from "../data/wrangling.js";
+import { aggregationOptions, buildCalculatedFieldApplySql, buildCalculatedFieldSql, buildPivotSql, quoteIdentifier, wranglingConfigToken, wranglingSourceSql } from "../data/wrangling.js";
 import { datasetVersion, listDatasets, subscribeDatasetChanges } from "../data/store.js";
 import { saveQuery, getQuery } from "../data/queries.js";
 import { formulaReferencedColumns, importWranglingRecipes, listWranglingRecipes, mapWranglingRecipeColumns, parsePortableWranglingRecipes, recipeFormulaIdentifiers, removeWranglingRecipe, saveWranglingRecipe, serializePortableWranglingRecipes } from "../data/wranglingRecipes.js";
@@ -52,7 +52,7 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
   const table = isUploadRef(meta.dataset) ? uploadTableName(uploadId(meta.dataset)) : meta.dataset == null && dashboard?.table ? dashboard.table : sampleTableName(meta.dataset || entry.datasets[0]);
   const query = isQueryRef(meta.dataset) ? getQuery(queryId(meta.dataset)) : null;
   state.table = table; state.sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
-  state.sourceSql = query?.sql || null;
+  state.sourceSql = wranglingSourceSql(query);
   function currentConfig() {
     return { table: state.table, sourceSql: state.sourceSql, groups: state.groups, aggregations: state.aggs,
       formula: state.formula, name: state.name, columns: state.columns, types: state.types, parameters: getParameters() };
@@ -228,7 +228,7 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
       const query = isQueryRef(meta.dataset) ? getQuery(queryId(meta.dataset)) : null;
       if (query && !query.trusted) throw new Error('Review this imported query in the SQL tab: Run it, then Apply before using data wrangling.');
       module = await import("../data/duckdb.js"); await module.ensureTables(); if (!pop.isConnected) return;
-      state.sourceSql = query?.sql || null; state.table = query ? null : table;
+      state.sourceSql = wranglingSourceSql(query); state.table = query ? null : table;
       state.sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
       const schemaSql = state.sourceSql ? `SELECT * FROM (${state.sourceSql}) AS wrangle_source LIMIT 0` : `SELECT * FROM ${quoteIdentifier(table)} LIMIT 0`;
       const schema = await module.runQueryDetailed(substituteParameters(schemaSql, structuredClone(getParameters()))); state.columns = schema.columns; state.types = schema.types;

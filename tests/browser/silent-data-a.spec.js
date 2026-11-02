@@ -83,3 +83,38 @@ for (const format of ['html','json']) {
     expect(intact).toBe(true);
   });
 }
+
+for (const collision of ['within file','with resident data']) {
+  test(`S5: case-distinct dataset IDs ${collision} are rejected before state changes`, async ({ page }) => {
+    await ready(page);
+    const record = {name:'Sales',columns:['label'],rows:[{label:'Original'}],fieldKeys:[],mapping:{}};
+    const seed = {app:'dashboard-builder',version:1,tiles:[{id:'kept',type:'table',dataset:'upload:Sales',title:'Keep this dashboard',x:0,y:0,w:6,h:5}],datasets:{Sales:record}};
+    await page.locator('#file-import').setInputFiles({name:'seed.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(seed))});
+    await expect(page.locator('#status')).toContainText('Imported');
+    const snapshot = () => page.evaluate(async () => {
+      const {listDatasets} = await import('/src/data/store.js');
+      const db = await new Promise((resolve,reject) => {
+        const request = indexedDB.open('dashbuilder',1);
+        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+      });
+      try {
+        const persisted = await new Promise((resolve,reject) => {
+          const request = db.transaction('datasets').objectStore('datasets').getAll();
+          request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+        });
+        return {layout:localStorage.getItem('dashboard-builder:layout:v1'),queries:localStorage.getItem('dashbuilder.queries.v1'),memory:listDatasets(),persisted};
+      }
+      finally { db.close(); }
+    });
+    const before = await snapshot();
+    const datasets = collision === 'within file' ? {Sales:record,sales:{...record,rows:[{label:'Replacement'}]}} : {sales:record};
+    const incoming = {app:'dashboard-builder',version:1,tiles:[],datasets};
+    await page.locator('#file-import').setInputFiles({name:'case-collision.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(incoming))});
+    await expect(page.locator('#status')).toContainText('Import failed:');
+    await expect(page.locator('#status')).toContainText('Sales');
+    await expect(page.locator('#status')).toContainText('sales');
+    expect(await snapshot()).toEqual(before);
+    await expect(page.locator('.tile-title')).toHaveValue('Keep this dashboard');
+    await expect(page.locator('.tile')).toHaveCount(1);
+  });
+}

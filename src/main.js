@@ -1595,7 +1595,7 @@ fileInput.addEventListener("change", () => {
     };
     try {
       const data = validateLayout(JSON.parse(reader.result));
-      assertNoCollisions(data,getDataset,getQuery);
+      assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
       const previous = serializeLayout();
       const queriesBefore = querySnapshot();
       const layoutRaw = localStorage.getItem(STORAGE_KEY);

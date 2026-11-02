@@ -1,5 +1,6 @@
 import { createQueryCoordinator } from "./queryCoordinator.js";
 import { LIMITS } from "./limits.js";
+import { prepareStatement } from "./sqlStatement.js";
 // DuckDB-WASM in-browser SQL (phase 2b).
 //
 // Lazy singleton: the duckdb-wasm ESM bundle and its .wasm binary load only
@@ -85,15 +86,13 @@ async function syncTables(datasets) {
 const coordinator = createQueryCoordinator({
   revision: datasetVersion, collect: collectDatasetTables, sync: syncTables,
   execute: async sql => {
-    const trimmed = sql.trim().replace(/;\s*$/, '');
-    if (!/^(SELECT|WITH)\b/i.test(trimmed)) throw new Error('Only SELECT/WITH queries are supported.');
+    const trimmed = prepareStatement(sql);
     const { conn } = await getDB();
     const result = await conn.query('SELECT * FROM (' + trimmed + ') AS dashboard_result LIMIT ' + (LIMITS.queryRows + 1));
     return materializeRows(result);
   },
   executeDetailed: async sql => {
-    const trimmed = sql.trim().replace(/;\s*$/, '');
-    if (!/^(SELECT|WITH)\b/i.test(trimmed)) throw new Error('Only SELECT/WITH queries are supported.');
+    const trimmed = prepareStatement(sql);
     const { conn } = await getDB();
     const result = await conn.query('SELECT * FROM (' + trimmed + ') AS dashboard_result LIMIT ' + (LIMITS.queryRows + 1));
     return materializeRows(result);

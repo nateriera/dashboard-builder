@@ -57,3 +57,38 @@ test('guided replacement confirms when only another page has tiles', async ({pag
   await expect(guide).toBeVisible();
   await expect(page.locator('.grid-stack-item')).toHaveCount(0);
 });
+
+test('tile upload disables Apply while loading and never binds after dismissal', async ({page}) => {
+  await page.route('**/src/ui/dataPopover.js', async route => {
+    const response = await route.fetch(); let source = await response.text();
+    source = source.replace('const { columns, rows } = await readUpload(file,pop);', 'await window.ux2Wait; const { columns, rows } = await readUpload(file,pop);');
+    source = source.replace('const persisted = await persistDataset(id);', 'await window.ux2Wait; const persisted = await persistDataset(id); window.ux2Done = true;');
+    await route.fulfill({response,body:source});
+  });
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  const tile = page.locator('.grid-stack-item').first();
+  const sourceBefore = await tile.locator('.tile-data-btn').textContent();
+  await tile.locator('.tile-data-btn').click();
+  const pop = page.locator('.data-popover');
+  await pop.getByRole('button',{name:'Upload',exact:true}).click();
+  const input = pop.locator('input[type=file]');
+  const csv = {name:'values.csv',mimeType:'text/csv',buffer:Buffer.from('label,value\nWest,12\nEast,20')};
+  await page.evaluate(() => { window.ux2Wait = new Promise(resolve => window.ux2Release = resolve); });
+  await input.setInputFiles(csv);
+  await expect(pop.getByRole('button',{name:'Apply to tile'})).toBeDisabled();
+  await expect(pop).toContainText(/loading|reading/i);
+  await pop.getByRole('button',{name:'Close',exact:true}).click();
+  await page.evaluate(() => window.ux2Release());
+  await expect(tile.locator('.tile-data-btn')).toHaveText(sourceBefore);
+  await tile.locator('.tile-data-btn').click();
+  await pop.getByRole('button',{name:'Upload',exact:true}).click();
+  await input.setInputFiles(csv);
+  await expect(pop.getByRole('button',{name:'Apply to tile'})).toBeEnabled();
+  await page.evaluate(() => { window.ux2Wait = new Promise(resolve => window.ux2Release = resolve); });
+  await pop.getByRole('button',{name:'Apply to tile'}).click();
+  await expect(pop.getByRole('button',{name:/Applying/})).toBeDisabled();
+  await pop.getByRole('button',{name:'Close',exact:true}).click();
+  await page.evaluate(() => window.ux2Release());
+  await expect.poll(() => page.evaluate(() => window.ux2Done)).toBe(true);
+  await expect(tile.locator('.tile-data-btn')).toHaveText(sourceBefore);
+});

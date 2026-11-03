@@ -237,7 +237,16 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   sourceStatus.setAttribute("role", "status");
   panelUpload.append(dropLabel, sourceUrl, urlButton, pasteArea, pasteButton, sourceStatus, fileNameEl, errorEl, mapWrap, previewWrap, actions);
 
+  let uploadBusy = false;
+  function setUploadBusy(busy, message = "") {
+    uploadBusy = busy;
+    panelUpload.querySelectorAll("input, textarea, select, button").forEach(control => { control.disabled = busy; });
+    applyBtn.disabled = busy || !state.normalized || !state.fileName;
+    sourceStatus.textContent = message;
+  }
+
   function showError(msg) {
+    state.normalized = null;
     errorEl.textContent = msg;
     errorEl.hidden = false;
     mapWrap.hidden = true;
@@ -295,6 +304,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     const required = entry.fields.filter((f) => !f.optional);
     const missing = required.filter((f) => !state.mapping[f.key]);
     if (missing.length) {
+      state.normalized = null;
       previewWrap.hidden = true;
       applyBtn.disabled = true;
       return;
@@ -333,7 +343,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       (dropped ? ` · ${dropped.toLocaleString()} non-numeric value${dropped === 1 ? "" : "s"} blanked` : "") +
       " · showing first 3";
     previewWrap.hidden = false;
-    applyBtn.disabled = false;
+    applyBtn.disabled = uploadBusy;
   }
 
   function acceptParsed(name, { columns, rows }) {
@@ -349,8 +359,8 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   }
 
   urlButton.addEventListener("click", async () => {
-    urlButton.disabled = true;
-    sourceStatus.textContent = "Fetching public CSV…";
+    if (uploadBusy) return;
+    setUploadBusy(true, "Loading public CSV…");
     errorEl.hidden = true;
     try {
       const text = await fetchCsvText(sourceUrl.value);
@@ -360,26 +370,28 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     } catch (err) {
       sourceStatus.textContent = "";
       showError(err.message);
-    } finally { urlButton.disabled = false; }
+    } finally { if (pop.isConnected) setUploadBusy(false, sourceStatus.textContent); }
   });
 
   pasteButton.addEventListener("click", async () => {
-    pasteButton.disabled = true;
-    sourceStatus.textContent = "Validating pasted table…";
+    if (uploadBusy) return;
+    setUploadBusy(true, "Loading pasted table…");
     errorEl.hidden = true;
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 0));
+      if (!pop.isConnected) return;
       acceptParsed("Pasted table", parsePastedTable(pasteArea.value));
       sourceStatus.textContent = "Pasted table ready. Review the preview, then apply it to this tile.";
     } catch (err) {
       sourceStatus.textContent = "";
       showError(err.message);
-    } finally { pasteButton.disabled = false; }
+    } finally { if (pop.isConnected) setUploadBusy(false, sourceStatus.textContent); }
   });
 
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
-    if (!file) return;
+    if (!file || uploadBusy) return;
+    setUploadBusy(true, `Reading ${file.name}…`);
     errorEl.hidden = true;
     try {
       const { columns, rows } = await readUpload(file,pop);
@@ -389,27 +401,38 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       state.fileName = null;
       state.columns = null;
       state.rawRows = null;
+      state.normalized = null;
       fileNameEl.hidden = true;
-      showError(err.message);
+      if (pop.isConnected) showError(err.message);
+    } finally {
+      fileInput.value = "";
+      if (pop.isConnected) setUploadBusy(false);
     }
-    fileInput.value = "";
   });
 
   applyBtn.addEventListener("click", async () => {
-    if (!state.normalized || !state.fileName) return;
-    const { id } = saveDataset({
-      name: state.fileName,
-      columns: state.columns,
-      rows: state.normalized,
-      fieldKeys: entry.dynamicFields ? [...state.columns] : entry.fields.map((f) => f.key),
-      mapping: { ...state.mapping },
-      // Keep the pre-normalization parse too: the dashboard-wide default
-      // and the SQL tables work from the file's original columns.
-      raw: { columns: state.columns, rows: state.rawRows }
-    });
-    const persisted = await persistDataset(id);
-    onUpload({ id, name: state.fileName, persisted });
-    closeDataPopover();
+    if (uploadBusy || !state.normalized || !state.fileName) return;
+    const captured = structuredClone(state);
+    setUploadBusy(true, "Applying upload…");
+    applyBtn.textContent = "Applying…";
+    try {
+      const { id } = saveDataset({
+        name: captured.fileName,
+        columns: captured.columns,
+        rows: captured.normalized,
+        fieldKeys: entry.dynamicFields ? [...captured.columns] : entry.fields.map((f) => f.key),
+        mapping: captured.mapping,
+        raw: { columns: captured.columns, rows: captured.rawRows }
+      });
+      const persisted = await persistDataset(id);
+      if (!pop.isConnected) return;
+      onUpload({ id, name: captured.fileName, persisted });
+      closeDataPopover();
+    } catch (error) {
+      if (pop.isConnected) showError(error.message);
+    } finally {
+      if (pop.isConnected) { applyBtn.textContent = "Apply to tile"; setUploadBusy(false); }
+    }
   });
 
   // ── SQL panel: DuckDB-WASM queries over every registered table ──

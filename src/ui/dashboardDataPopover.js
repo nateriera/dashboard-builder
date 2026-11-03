@@ -47,7 +47,7 @@ function onDocKeyDown(e) {
  * @param onUpload({name, columns, rows, profile}) — user dropped a CSV/JSON (raw rows);
  *   the caller persists it and makes it the default
  */
-export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, onUpload }) {
+export function toggleDashboardPopover({ anchor, current, sampleKeys, bindingCounts = { following: 0, ownData: 0 }, onSelect, onUpload, onFailure }) {
   if (popEl && popAnchor === anchor) {
     closeDashboardPopover();
     return;
@@ -171,7 +171,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
       await onUpload({ name: file.name, columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
-      err.textContent = e && e.message ? e.message : String(e);
+      const message = e && e.message ? e.message : String(e);
+      err.textContent = message;
+      onFailure?.(message);
       err.hidden = false;
       dropText.textContent = "Drop a CSV here, or click to choose a file";
     }
@@ -194,7 +196,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
       await onUpload({ name: "URL CSV", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
-      err.textContent = e?.message || String(e);
+      const message = e?.message || String(e);
+      err.textContent = message;
+      onFailure?.(message);
       err.hidden = false;
       sourceStatus.textContent = "";
     } finally { urlButton.disabled = false; }
@@ -209,7 +213,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
       await onUpload({ name: "Pasted table", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
-      err.textContent = e?.message || String(e);
+      const message = e?.message || String(e);
+      err.textContent = message;
+      onFailure?.(message);
       err.hidden = false;
       sourceStatus.textContent = "";
     }

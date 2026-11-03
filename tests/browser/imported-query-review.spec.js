@@ -1,4 +1,5 @@
 import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './accept-import.js';
+import { acceptErroredTileExportConfirmation } from './accept-errored-export.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -28,7 +29,7 @@ async function ready(page) {
 
 async function watchExecution(page) {
   await page.addInitScript(() => { window.queryExecutions = []; });
-  await page.route('**/src/data/duckdb.js', async route => {
+  await page.route('**/src/data/duckdb.js*', async route => {
     const response = await route.fetch();
     const source = await response.text();
     let instrumented = source;
@@ -151,3 +152,4 @@ test('T1: imported queries stay blocked through page/filter/parameter changes, e
 
 acceptImportConfirmation(test);
 acceptExportSnapshotConfirmation(test);
+acceptErroredTileExportConfirmation(test);

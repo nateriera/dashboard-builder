@@ -141,8 +141,9 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
       });mappingBox.append(apply);box.append(mappingBox);status.textContent='Choose the matching columns, then apply the recipe.';
     });
     removeRecipe.addEventListener('click',()=>{
-      if(!select.value)return;
-      try{removeWranglingRecipe(select.value);render();}catch(error){status.textContent=error.message;}
+      const recipe=recipes.find(item=>item.id===select.value);if(!recipe)return;
+      if(!window.confirm(`Delete recipe “${recipe.name}”?`))return;
+      try{removeWranglingRecipe(recipe.id);render();}catch(error){status.textContent=error.message;}
     });
     save.addEventListener('click',()=>{
       try{

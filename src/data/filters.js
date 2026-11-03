@@ -42,7 +42,7 @@ export function validateFilters(input) {
   return input.map(filter => {
     if (!filter || typeof filter !== "object" || Array.isArray(filter) || !idPattern.test(filter.id || "") || !validField(filter.field)) throw new Error("Invalid filter.");
     const valueLimit = filter.source === 'crossfilter' && filter.op === 'is' ? LIMITS.rows : 200;
-    if (!Array.isArray(filter.values) || filter.values.length === 0 || filter.values.length > valueLimit || filter.values.some(value => !validValue(value))) throw new Error("Invalid filter values.");
+    if (!Array.isArray(filter.values) || filter.values.length > valueLimit || !filter.values.length && !["is","is-not"].includes(filter.op) || filter.values.some(value => !validValue(value))) throw new Error("Invalid filter values.");
     if (filter.op === "between") {
       if (filter.values.length !== 2 || filter.values.some(value => typeof value !== "number") || filter.values[0] > filter.values[1]) throw new Error("Invalid numeric filter range.");
     } else if (filter.op === "date-between") {

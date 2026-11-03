@@ -48,6 +48,10 @@ if (!payload) {
 }
 
 function renderExport(payload) {
+  payload.viewerDefaults ||= {
+    filters: JSON.parse(JSON.stringify(payload.filters || [])),
+    parameters: JSON.parse(JSON.stringify(payload.parameters || []))
+  };
   root.innerHTML = "";
 
   const head = document.createElement("header");
@@ -98,7 +102,17 @@ function renderExport(payload) {
     for(const view of payload.savedViews){const option=document.createElement('option');option.value=view.id;option.disabled=view.disabled===true;option.textContent=view.disabled===true?`${view.name} — Disabled: ${view.disabledReason}`:view.name;select.appendChild(option);}
     const apply=document.createElement('button');apply.type='button';apply.textContent='Apply view';
     apply.addEventListener('click',()=>{const view=payload.savedViews.find(item=>item.id===select.value);if(!view||view.disabled===true)return;
-      payload.filters=JSON.parse(JSON.stringify(view.filters));payload.currentPageId=view.currentPageId;payload.theme=view.theme;previewTheme(view.theme);renderExport(payload);});
+      payload.filters=JSON.parse(JSON.stringify(view.filters));
+      const values=new Map((view.parameters||[]).map(parameter=>[parameter.name,parameter.value]));
+      payload.parameters=(payload.parameters||[]).map(parameter=>values.has(parameter.name)?{...parameter,value:JSON.parse(JSON.stringify(values.get(parameter.name)))}:parameter);
+      const frozenNames=new Set((payload.frozenParameters||[]).map(parameter=>parameter.name));
+      for(const parameter of payload.parameters){const binding=parameter.bindings?.find(item=>item.kind==='filter');if(!binding||frozenNames.has(parameter.name))continue;
+        const filter=payload.filters.find(item=>item.id===binding.filterId);if(!filter)continue;
+        const value=parameter.value;
+        if(parameter.type==='number-range'||parameter.type==='date-range'){if(value?.from!=null&&value?.to!=null)filter.values=[value.from,value.to];}
+        else filter.values=parameter.type==='multi-select'?[...value]:[value];
+      }
+      payload.currentPageId=view.currentPageId;payload.theme=view.theme;previewTheme(view.theme);renderExport(payload);});
     label.appendChild(select);views.append(label,apply);root.appendChild(views);
   }
 
@@ -130,17 +144,72 @@ function renderExport(payload) {
   controls.appendChild(crossfilterList);
   let filters = (payload.filters || []).map(filter => ({ ...filter, values: [...filter.values] }));
   const editableFilters = filters.filter(filter => filter.source !== "crossfilter");
-  const defaults = editableFilters.map(filter => [...filter.values]);
+  const defaultFilters=new Map(payload.viewerDefaults.filters.map(filter=>[filter.id,filter]));
+  const defaults = editableFilters.map(filter => [...(defaultFilters.get(filter.id)?.values||filter.values)]);
+  const parameters = Array.isArray(payload.parameters) ? payload.parameters : [];
+  const frozenNames = new Set((payload.frozenParameters || []).map(parameter => parameter.name));
+  const boundFilterIds = new Set(parameters.flatMap(parameter=>parameter.bindings?.filter(item=>item.kind==='filter').map(item=>item.filterId)||[]));
+  const liveBindings = new Map(parameters.filter(parameter => !frozenNames.has(parameter.name)).flatMap(parameter => {
+    const binding=parameter.bindings?.find(item=>item.kind==='filter');
+    return binding ? [[binding.filterId,parameter]] : [];
+  }));
+  const parameterDefaults = new Map(payload.viewerDefaults.parameters.map(parameter=>[parameter.name,JSON.parse(JSON.stringify(parameter.value))]));
   const filterBindings = [];
   let inspection=null;
   for (const [index, filter] of editableFilters.entries()) {
+    const parameter=liveBindings.get(filter.id);
     const field = filter.targets?.[0]?.field || filter.field;
     const label = document.createElement("label");
     label.className = "export-filter";
     const name = document.createElement("span");
     name.textContent = field;
     label.appendChild(name);
-    if (filter.op === "between" || filter.op === "date-between") {
+    if(parameter){
+      label.classList.add('export-parameter-control');
+      const controlLabel=document.createElement('span');controlLabel.textContent=parameter.name;label.appendChild(controlLabel);
+      const parameterControls=[];
+      const parameterValues=parameter.type==='number-range'||parameter.type==='date-range'
+        ? (parameter.value?.from==null||parameter.value?.to==null?null:[parameter.value.from,parameter.value.to])
+        : parameter.type==='multi-select'?[...(parameter.value||[])]:[parameter.value];
+      const expected=parameter.type==='multi-select'?[...(parameterValues||[])].sort():parameterValues;
+      const actual=parameter.type==='multi-select'?[...filter.values].sort():filter.values;
+      const bindingConflict=!expected||expected.length!==actual.length||expected.some((value,index)=>!Object.is(value,actual[index]));
+      const warning=document.createElement('span');warning.className='export-binding-conflict';warning.setAttribute('role','alert');warning.hidden=!bindingConflict;warning.textContent=`Binding conflict: ${parameter.name} and ${field} have different values.`;label.appendChild(warning);
+      const updateWarning=()=>{
+        const current=parameter.type==='number-range'||parameter.type==='date-range'?(parameter.value?.from==null||parameter.value?.to==null?null:[parameter.value.from,parameter.value.to]):parameter.type==='multi-select'?[...parameter.value].sort():[parameter.value];
+        if(!current){warning.hidden=false;warning.textContent=`Binding conflict: ${parameter.name} needs both range bounds; ${field} was left unchanged.`;return;}
+        const currentFilterValues=parameter.type==='multi-select'?[...filter.values].sort():filter.values;
+        warning.hidden=current.length===currentFilterValues.length&&current.every((value,index)=>Object.is(value,currentFilterValues[index]));
+        warning.textContent=`Binding conflict: ${parameter.name} and ${field} have different values.`;
+      };
+      const setValue=value=>{
+        parameter.value=value;
+        if(parameter.type==='number-range'||parameter.type==='date-range'){
+          if(value?.from==null||value?.to==null){warning.hidden=false;warning.textContent=`Binding conflict: ${parameter.name} needs both range bounds; ${field} was left unchanged.`;return;}
+          filter.values=[value.from,value.to];
+        }else filter.values=parameter.type==='multi-select'?[...value]:[value];
+        updateWarning();
+        schedulePaint();
+      };
+      const control=(tag,type,aria)=>{const input=document.createElement(tag);if(type)input.type=type;input.setAttribute('aria-label',aria);label.appendChild(input);parameterControls.push(input);return input;};
+      if(parameter.type==='number-range'||parameter.type==='date-range'){
+        const date=parameter.type==='date-range';
+        for(const slot of ['from','to']){const input=control('input',date?'date':'number',`${parameter.name} ${slot}`);if(!date)input.step='any';input.value=parameter.value?.[slot]??'';input.addEventListener('input',()=>setValue({...parameter.value,[slot]:input.value===''?null:date?input.value:Number(input.value)}));}
+      }else if(parameter.type==='boolean'){
+        const input=control('input','checkbox',parameter.name);input.checked=parameter.value===true;input.addEventListener('change',()=>setValue(input.checked));
+      }else if(parameter.type==='single-select'||parameter.type==='multi-select'){
+        const select=control('select',null,parameter.name);select.multiple=parameter.type==='multi-select';
+        const options=[...(parameter.options||[])],staleValues=new Set(parameter.staleValues||[]);for(const stale of staleValues)if(!options.includes(stale))options.push(stale);
+        if(parameter.type==='single-select'&&!options.includes(parameter.value)){options.push(parameter.value);staleValues.add(parameter.value);}
+        for(const value of options){const option=document.createElement('option');option.value=value;option.textContent=staleValues.has(value)?`${value} (stale)`:value;option.selected=parameter.type==='single-select'?value===parameter.value:(parameter.value||[]).includes(value);select.appendChild(option);}
+        select.addEventListener('change',()=>setValue(parameter.type==='single-select'?select.value:[...select.selectedOptions].map(option=>option.value)));
+      }else{
+        const input=control('input',parameter.type==='number'?'number':'text',parameter.name);input.value=parameter.value??'';
+        if(parameter.type==='number'){if(parameter.min!==undefined)input.min=String(parameter.min);if(parameter.max!==undefined)input.max=String(parameter.max);input.step=parameter.integer?String(parameter.step??1):parameter.step===undefined?'any':String(parameter.step);}
+        input.addEventListener('input',()=>setValue(parameter.type==='number'?Number(input.value):input.value));
+      }
+        filterBindings.push({filter,parameter,parameterControls,updateWarning});
+    } else if (filter.op === "between" || filter.op === "date-between") {
       const date = filter.op === "date-between";
       let presetControl=null;
       if (date && filter.relativePreset) {
@@ -253,7 +322,7 @@ function renderExport(payload) {
       } else if (t.rows) {
         try {
           const mode=t.tileOptions?.crossfilterMode||'filter';
-          const activeFilters = filters.filter(filter => filter.values.length > 0 && (filter.source!=='crossfilter'||filter.sourceTile===t.id||mode==='filter'));
+          const activeFilters = filters.filter(filter => (filter.values.length > 0 || filter.op==='is'&&boundFilterIds.has(filter.id)) && (filter.source!=='crossfilter'||filter.sourceTile===t.id||mode==='filter'));
           const filtered = applyFilters(t.rows, activeFilters, { sourceTile: t.id, pageId:t.pageId });
           const sortable = ['bar','column','dot','stackedBar','stackedColumn'].includes(t.type);
           const data = sortable && t.tileOptions?.topN != null
@@ -412,10 +481,18 @@ function renderExport(payload) {
   }
   clear.addEventListener("click", () => {
     editableFilters.forEach((filter, index) => { filter.values = [...defaults[index]]; });
+    for(const parameter of parameters)if(parameterDefaults.has(parameter.name))parameter.value=JSON.parse(JSON.stringify(parameterDefaults.get(parameter.name)));
     filters = filters.filter(filter => filter.source !== 'crossfilter');
     inspection = null;
     for (const binding of filterBindings) {
-      if (binding.select) {
+      if (binding.parameterControls) {
+        const value=binding.parameter.value, type=binding.parameter.type;
+        if(type==='boolean')binding.parameterControls[0].checked=value===true;
+        else if(type==='single-select'||type==='multi-select')[...binding.parameterControls[0].options].forEach(option=>option.selected=type==='single-select'?option.value===value:(value||[]).includes(option.value));
+        else if(type==='number-range'||type==='date-range')binding.parameterControls.forEach((input,index)=>input.value=value?.[index===0?'from':'to']??'');
+        else binding.parameterControls[0].value=value??'';
+        binding.updateWarning?.();
+      } else if (binding.select) {
         [...binding.select.options].forEach(option => { option.selected = binding.filter.values.some(value => Object.is(value, JSON.parse(option.value))); });
       } else {
         binding.inputs.forEach((input, slot) => { input.value = binding.filter.values[slot] ?? ""; });

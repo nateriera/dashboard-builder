@@ -18,7 +18,7 @@ export function validateDetachedParameterConsumers(input) {
 }
 
 /** Enumerate parameter consumers using the same parsers used at execution. */
-export function parameterConsumers(name, queries = [], savedViews = []) {
+export function parameterConsumers(name, queries = [], savedViews = [], filters = [], parameters = []) {
   const consumers = [];
   for (const query of queries) {
     if (!query || typeof query.sql !== 'string') continue;
@@ -35,9 +35,14 @@ export function parameterConsumers(name, queries = [], savedViews = []) {
       consumers.push({ kind: 'savedView', id: view.id, label: `Saved view “${view.name}”` });
     }
   }
+  const parameter=parameters.find(item=>item.name===name);
+  for(const binding of parameter?.bindings||[])if(binding.kind==='filter'){
+    const filter=filters.find(item=>item.id===binding.filterId);
+    consumers.push({kind:'filter',id:binding.filterId,label:`Filter “${filter?.field||binding.filterId}”`});
+  }
   return consumers;
 }
 
 export function parameterConsumerKindLabel(kind) {
-  return ({ querySql: 'query SQL', chain: 'transform chain', savedView: 'saved view' })[kind] || kind;
+  return ({ querySql: 'query SQL', chain: 'transform chain', savedView: 'saved view', filter:'filter' })[kind] || kind;
 }

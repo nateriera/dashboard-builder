@@ -5,6 +5,7 @@ import { enumerateParameterOptions, validateParameters } from "../data/parameter
 import { DATASETS, DATASET_LABELS } from "../tiles/registry.js";
 import { getDataset, listDatasets } from "../data/store.js";
 import { parameterConsumers, parameterConsumerKindLabel } from "../data/parameterConsumers.js";
+import { bindingCompatibilityError, bindingConflict, bindingFilterValues, parameterFilterBinding, parameterValueFromFilter, validateParameterBindings } from "../data/parameterBindings.js";
 
 let popover = null;
 let anchor = null;
@@ -73,12 +74,39 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
   releaseFocus=focusDialog(pop,anchor);
 
   const emitFilters=next=>{
-    currentFilters=validateFilters(next);
+    const previous=currentFilters;
+    const normalized=validateFilters(next);
+    validateParameterBindings(currentParameters,normalized,filterFieldInfos);
+    currentFilters=normalized;
     onFiltersChange(currentFilters);
+    const updated=currentParameters.map(parameter=>{
+      const binding=parameterFilterBinding(parameter);if(!binding)return parameter;
+      const before=previous.find(filter=>filter.id===binding.filterId),after=currentFilters.find(filter=>filter.id===binding.filterId);
+      if(!before||!after||JSON.stringify(before.values)===JSON.stringify(after.values))return parameter;
+      const result=parameterValueFromFilter(parameter,after);
+      return result.conflict?parameter:{...parameter,value:result.value};
+    });
+    if(updated.some((parameter,index)=>JSON.stringify(parameter.value)!==JSON.stringify(currentParameters[index].value))){currentParameters=validateParameters(updated);onParametersChange(currentParameters);}
   };
   const emitParameters=next=>{
-    currentParameters=validateParameters(next);
+    const previous=currentParameters;
+    const validated=validateParameters(next);
+    validateParameterBindings(validated,currentFilters,filterFieldInfos);
+    currentParameters=validated;
     onParametersChange(currentParameters);
+    const filtersNext=currentFilters.map(filter=>{
+      const parameter=currentParameters.find(item=>parameterFilterBinding(item)?.filterId===filter.id);
+      const old=previous.find(item=>item.name===parameter?.name);
+      if(!parameter||!old||JSON.stringify(old.value)===JSON.stringify(parameter.value)||parameterFilterBinding(old)?.filterId!==filter.id)return filter;
+      const values=bindingFilterValues(parameter);
+      return values===null?filter:{...filter,values};
+    });
+    if(filtersNext.some((filter,index)=>JSON.stringify(filter.values)!==JSON.stringify(currentFilters[index].values))){currentFilters=validateFilters(filtersNext);onFiltersChange(currentFilters);}
+  };
+  const boundParameter=filterId=>currentParameters.find(parameter=>parameterFilterBinding(parameter)?.filterId===filterId)||null;
+  const filterFieldInfos=filter=>{
+    const targets=filter.targets||filterTiles.filter(tile=>(!filter.pageId||tile.pageId===filter.pageId)&&tile.fields.some(field=>field.field===filter.field)).map(tile=>({tileId:tile.id,field:filter.field}));
+    return targets.map(target=>{const tile=filterTiles.find(item=>item.id===target.tileId);const field=tile?.fields.find(item=>item.field===target.field);return field?{...field,field:target.field,checkable:field.checkable!==false}:null;}).filter(Boolean);
   };
   const filterDescription=filter=>{
     if(filter.op==='between') return `${filter.field} between ${filter.values[0]} and ${filter.values[1]}`;
@@ -109,11 +137,18 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
       const chip=element("div",filter.source==='crossfilter'?'dashboard-filter-chip crossfilter-chip':'dashboard-filter-chip');
       if(filter.source==='crossfilter') chip.setAttribute("data-crossfilter-chip","true");
       const scopeName=filter.source==='crossfilter'?'selection':filter.scope==='page'?'page':filter.scope==='charts'||filter.targets?'selected charts':'dashboard';
-      const caption=element("span","",`${filterDescription(filter)} · ${scopeName}`);
+      const bound=boundParameter(filter.id);
+      const conflict=bound?bindingConflict(bound,filter):null;
+      const caption=element("span","",`${filterDescription(filter)} · ${scopeName}${bound?` · bound to parameter ${bound.name}`:''}`);
       const remove=element("button","filter-remove","×");remove.type="button";remove.title=`Remove ${filter.field} filter`;remove.setAttribute("aria-label",`Remove ${filter.field} filter`);
-      remove.addEventListener("click",()=>{emitFilters(currentFilters.filter(item=>item.id!==filter.id));renderFiltersPanel();});
+      remove.addEventListener("click",()=>{
+        if(bound&&!window.confirm(`Filter “${filter.field}” is bound to parameter ${bound.name}. Remove the filter and unbind the parameter?`))return;
+        if(bound)emitParameters(currentParameters.map(item=>item.name===bound.name?{...item,bindings:undefined}:item));
+        emitFilters(currentFilters.filter(item=>item.id!==filter.id));renderFiltersPanel();
+      });
       chip.append(caption,remove);list.append(chip);
-      if(filter.source!=='crossfilter'&&['is','is-not'].includes(filter.op)){
+      if(conflict){const status=element('p','parameter-binding-conflict',conflict);status.setAttribute('role','alert');chip.append(status);}
+      if(filter.source!=='crossfilter'){
         const edit=element('button','filter-edit','Edit');edit.type='button';edit.setAttribute('aria-label',`Edit ${filter.field} filter`);
         edit.addEventListener('click',()=>{editingFilterId=filter.id;addFilterOpen=true;renderFiltersPanel();});chip.append(edit);
       }
@@ -182,7 +217,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
     const cancel=element("button","filter-cancel","Cancel");cancel.type="button";cancel.addEventListener("click",()=>{addFilterOpen=false;renderFiltersPanel();});
     const apply=element("button","filter-apply","Apply filter");apply.type="button";apply.disabled=true;
     actions.append(cancel,apply);form.append(actions);
-    let selectedTile=null,selectedField=null,selectedOperator="is",selectedValues=[],selectedTargets=[],targetsTouched=false,selectedRelativePreset=null;
+    let selectedTile=null,selectedField=null,selectedOperator=existing?.op||null,operatorTouched=false,selectedValues=[],selectedTargets=[],targetsTouched=false,selectedRelativePreset=null;
 
     const showError=message=>{error.textContent=message;error.hidden=!message;};
     const renderControls=()=>{
@@ -197,7 +232,16 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
       selectedField=selectedTile?.fields.find(option=>option.field===fieldSelect.value)||null;
       selectedValues=[];selectedTargets=[];selectedRelativePreset=null;targetWrap.replaceChildren();apply.disabled=true;
       if(!selectedField)return;
-      if(selectedField.type==='number'||selectedField.type==='date'){
+      const rangeType=selectedField.type==='number'||selectedField.type==='date';
+      if(!operatorTouched)selectedOperator=existing?.field===selectedField.field?existing.op:(rangeType?(selectedField.type==='date'?'date-between':'between'):'is');
+      if(rangeType){
+        const operator=element('select','filter-operator');operator.setAttribute('aria-label','Filter match');
+        const options=selectedField.type==='number'?[['is','Is'],['is-not','Is not'],['between','Between']]:[['is','Is'],['is-not','Is not'],['date-between','Between dates']];
+        for(const [value,label] of options){const option=element('option','',label);option.value=value;operator.append(option);}
+        operator.value=selectedOperator||(selectedField.type==='date'?'date-between':'between');selectedOperator=operator.value;
+        operator.addEventListener('change',()=>{selectedOperator=operator.value;operatorTouched=true;renderControls();});controls.append(operator);
+      }
+      if(rangeType&&['between','date-between'].includes(selectedOperator)){
         let preset=null;
         if(selectedField.type==='date'){
           preset=element('select','filter-date-preset');preset.setAttribute('aria-label','Date range preset');
@@ -216,10 +260,12 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
         range.append(min,max);controls.append(range);
         const update=()=>{selectedRelativePreset=null;if(preset)preset.value='';selectedValues=[min.value,max.value];updateApplyState();};
         min.addEventListener("input",update);max.addEventListener("input",update);
+      }else if(rangeType){
+        const value=element('input','filter-single-value');value.type=selectedField.type==='date'?'date':'number';if(value.type==='number')value.step='any';value.setAttribute('aria-label',selectedField.type==='date'?'Date value':'Number value');value.addEventListener('input',()=>{selectedValues=[value.type==='number'?Number(value.value):value.value];updateApplyState();});controls.append(value);
       }else{
         const operator=element("select","filter-operator");operator.setAttribute("aria-label","Filter match");
         for(const [value,text] of [["is","Is"],["is-not","Is not"]]){const option=element("option","",text);option.value=value;operator.append(option);}
-        operator.value=selectedOperator;operator.addEventListener("change",()=>{selectedOperator=operator.value;});controls.append(operator);
+        operator.value=selectedOperator||'is';selectedOperator=operator.value;operator.addEventListener("change",()=>{selectedOperator=operator.value;});controls.append(operator);
         const values=element("div","filter-values");
         for(const value of selectedField.values){
           const label=element("label","filter-value");const checkbox=element("input","");checkbox.type="checkbox";checkbox.value=JSON.stringify(value);
@@ -247,22 +293,25 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
     }
     function updateApplyState(){
       const type=selectedField?.type;
+      const scalar=['is','is-not'].includes(selectedOperator);
       const ordered=type==='number'?Number(selectedValues[0])<=Number(selectedValues[1]):selectedValues[0]<=selectedValues[1];
-      const validValues=type==='category'?selectedValues.length>0:selectedValues.length===2&&selectedValues.every(value=>value!=='')&&(type!=='number'||selectedValues.every(value=>Number.isFinite(Number(value))))&&ordered;
+      const validValues=type==='category'?selectedValues.length>0:scalar?selectedValues.length===1&&selectedValues[0]!==''&&(type!=='number'||Number.isFinite(Number(selectedValues[0]))):selectedValues.length===2&&selectedValues.every(value=>value!=='')&&(type!=='number'||selectedValues.every(value=>Number.isFinite(Number(value))))&&ordered;
       apply.disabled=!selectedField||!validValues||(scopeSelect.value==='charts'&&!selectedTargets.length);
     }
     scopeSelect.addEventListener('change',()=>{pageSelect.hidden=scopeSelect.value!=='page';targetWrap.hidden=scopeSelect.value!=='charts';updateApplyState();});
     pageSelect.addEventListener('change',updateApplyState);
-    sourceTileSelect.addEventListener('change',()=>{selectedTile=null;fieldSelect.value='';renderControls();});
-    fieldSelect.addEventListener("change",renderControls);
+    sourceTileSelect.addEventListener('change',()=>{selectedTile=null;fieldSelect.value='';operatorTouched=false;renderControls();});
+    fieldSelect.addEventListener("change",()=>{operatorTouched=false;renderControls();});
     if(filterTiles.length){sourceTileSelect.value=filterTiles[0].id;renderControls();}
     if(existing){
-      const source=filterTiles.find(tile=>tile.fields.some(field=>field.field===existing.field&&field.type==='category'));
+      const source=filterTiles.find(tile=>tile.fields.some(field=>field.field===existing.field));
       if(source){
         sourceTileSelect.value=source.id;selectedTile=null;renderControls();
         fieldSelect.value=existing.field;renderControls();
         selectedValues=[...existing.values];selectedOperator=existing.op;
-        controls.querySelector('.filter-operator').value=selectedOperator;
+        const operator=controls.querySelector('.filter-operator');if(operator)operator.value=selectedOperator;
+        const single=controls.querySelector('.filter-single-value');if(single)single.value=String(existing.values[0]??'');
+        const bounds=controls.querySelectorAll('.filter-min,.filter-max');if(bounds.length===2)bounds.forEach((input,index)=>input.value=existing.values[index]??'');
         for(const checkbox of controls.querySelectorAll('input[type="checkbox"]')) checkbox.checked=selectedValues.some(value=>Object.is(value,JSON.parse(checkbox.value)));
         selectedTargets=existing.targets?.map(target=>({...target}))||defaultTargets(source.id,selectedField);
         renderConnectionEditors(targetWrap,selectedField.type,selectedTargets,targets=>{selectedTargets=targets;targetsTouched=true;updateApplyState();});
@@ -276,10 +325,14 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
       let filter;
       if(scopeSelect.value==='charts'&&!selectedTargets.length){showError('Connect this filter to at least one chart.');return;}
       const scopeOptions=scopeSelect.value==='page'?{scope:'page',pageId:pageSelect.value}:scopeSelect.value==='charts'?{scope:'charts',targets:selectedTargets}:{scope:'dashboard'};
-      if(selectedField.type==='number'){
+      if(selectedField.type==='number'&&['is','is-not'].includes(selectedOperator)){
+        filter={id:existing?.id||newId('filter'),field:selectedField.field,op:selectedOperator,values:[Number(selectedValues[0])],...scopeOptions};
+      }else if(selectedField.type==='number'){
         const [min,max]=selectedValues.map(Number);
         if(!Number.isFinite(min)||!Number.isFinite(max)||min>max){showError("Enter a valid minimum and maximum.");return;}
         filter={id:existing?.id||newId('filter'),field:selectedField.field,op:'between',values:[min,max],...scopeOptions};
+      }else if(selectedField.type==='date'&&['is','is-not'].includes(selectedOperator)){
+        filter={id:existing?.id||newId('filter'),field:selectedField.field,op:selectedOperator,values:[selectedValues[0]],...scopeOptions};
       }else if(selectedField.type==='date'){
         filter={id:existing?.id||newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...(selectedRelativePreset?{relativePreset:selectedRelativePreset}:{}),...scopeOptions};
       }else filter={id:existing?.id||newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues,...scopeOptions};
@@ -372,7 +425,9 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
       const editor=element('div','parameter-editor');
       const updateValue=value=>updateParameter(parameter.name,{value},row);
       if(parameter.type==='number'){
-        const label=element('label','parameter-value-label','Value');const value=element('input','parameter-value');value.type='number';value.value=String(parameter.value);value.step=parameter.step===undefined?'any':String(parameter.step);value.setAttribute('aria-label',`Value for ${parameter.name}`);value.addEventListener('change',()=>updateValue(Number(value.value)));label.append(value);editor.append(label);
+        const label=element('label','parameter-value-label','Value');const value=element('input','parameter-value');value.type='number';value.value=String(parameter.value);value.step=parameter.integer?String(parameter.step??1):parameter.step===undefined?'any':String(parameter.step);value.setAttribute('aria-label',`Value for ${parameter.name}`);value.addEventListener('change',()=>updateValue(Number(value.value)));label.append(value);
+        if(parameter.min!==undefined&&parameter.max!==undefined){const slider=element('input','parameter-slider');slider.type='range';slider.min=String(parameter.min);slider.max=String(parameter.max);slider.step=parameter.integer?String(parameter.step??1):parameter.step===undefined?'any':String(parameter.step);slider.value=String(parameter.value);slider.setAttribute('aria-label',`Slider for ${parameter.name}`);slider.addEventListener('input',()=>{value.value=slider.value;});slider.addEventListener('change',()=>updateValue(Number(slider.value)));value.addEventListener('input',()=>{const numeric=Number(value.value);if(Number.isFinite(numeric)&&numeric>=parameter.min&&numeric<=parameter.max)slider.value=String(numeric);});label.append(slider);}
+        editor.append(label);
         const settings=element('div','parameter-number-settings');for(const key of ['min','max']){const bound=element('label','parameter-value-label',key==='min'?'Minimum':'Maximum');const input=element('input',`parameter-${key}`);input.type='number';input.step='any';input.value=parameter[key]===undefined?'':String(parameter[key]);input.setAttribute('aria-label',`${key==='min'?'Minimum':'Maximum'} for ${parameter.name}`);input.addEventListener('change',()=>updateParameter(parameter.name,{[key]:input.value===''?undefined:Number(input.value)},row));bound.append(input);settings.append(bound);}const stepLabel=element('label','parameter-value-label','Step');const step=element('input','parameter-step');step.type='number';step.min='0';step.step='any';step.value=parameter.step===undefined?'':String(parameter.step);step.placeholder='Any';step.setAttribute('aria-label',`Step for ${parameter.name}`);step.addEventListener('change',()=>updateParameter(parameter.name,{step:step.value===''?undefined:Number(step.value)},row));stepLabel.append(step);settings.append(stepLabel);
         const integerLabel=element('label','parameter-check-label');const integer=element('input','parameter-integer');integer.type='checkbox';integer.checked=parameter.integer===true;integer.setAttribute('aria-label',`Integer values for ${parameter.name}`);integer.addEventListener('change',()=>updateParameter(parameter.name,{integer:integer.checked},row));integerLabel.append(integer,document.createTextNode(' Integer values'));settings.append(integerLabel);editor.append(settings);
       } else if(parameter.type==='text'){
@@ -392,11 +447,31 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
         const source=sourceControls(editor,parameter,(result,error)=>{if(error){showParameterError(row,error);return;}const nextValue=parameter.type==='single-select'?parameter.value:parameter.value;updateParameter(parameter.name,{source:result.source,options:result.options,...(result.overflow?{overflow:result.overflow}:{overflow:undefined}),value:nextValue},row);});
       }
       row.append(editor);
+      const bindingBox=element('div','parameter-binding-editor');
+      const bindingLabel=element('label','parameter-value-label','Filter binding');
+      const bindingSelect=element('select','parameter-filter-binding');bindingSelect.setAttribute('aria-label',`Filter binding for ${parameter.name}`);
+      const none=element('option','','Not bound');none.value='';bindingSelect.append(none);
+      const activeBinding=parameterFilterBinding(parameter);
+      for(const filter of currentFilters.filter(item=>item.source!=='crossfilter')){
+        const owner=currentParameters.find(item=>item.name!==parameter.name&&parameterFilterBinding(item)?.filterId===filter.id);
+        const option=element('option','',`${filter.field} · ${filter.op}${owner?` (bound to ${owner.name})`:''}`);option.value=filter.id;option.disabled=!!owner;bindingSelect.append(option);
+      }
+      bindingSelect.value=activeBinding?.filterId||'';
+      bindingSelect.addEventListener('change',()=>{
+        const filter=currentFilters.find(item=>item.id===bindingSelect.value);
+        if(!filter){updateParameter(parameter.name,{bindings:undefined},row);return;}
+        const reason=bindingCompatibilityError(parameter,filter,filterFieldInfos(filter));
+        if(reason){bindingSelect.value=activeBinding?.filterId||'';showParameterError(row,reason);return;}
+        updateParameter(parameter.name,{bindings:[{kind:'filter',filterId:filter.id}]},row);
+      });
+      bindingLabel.append(bindingSelect);bindingBox.append(bindingLabel);
+      if(activeBinding){const activeFilter=currentFilters.find(item=>item.id===activeBinding.filterId);const conflict=bindingConflict(parameter,activeFilter);if(conflict){const status=element('p','parameter-binding-conflict',conflict);status.setAttribute('role','alert');bindingBox.append(status);}else bindingBox.append(element('p','parameter-binding-status',`Bound to “${activeFilter?.field||activeBinding.filterId}”.`));}
+      row.append(bindingBox);
       const remove=element('button','parameter-delete','Delete');remove.type='button';remove.setAttribute('aria-label',`Delete parameter ${parameter.name}`);remove.addEventListener('click',()=>requestParameterOperation(parameter.name,null,row,'delete'));row.append(remove);
       name.addEventListener('change',()=>updateParameter(parameter.name,{name:name.value},row));
       type.addEventListener('change',()=>{
         const target=type.value;let value=parameter.value;
-        if(parameterConsumers(parameter.name,currentQueries,currentViews).length){type.value=parameter.type;requestParameterOperation(parameter.name,{name:parameter.name,type:target,value},row,'change type');return;}
+        if(parameterConsumers(parameter.name,currentQueries,currentViews,currentFilters,currentParameters).length){type.value=parameter.type;requestParameterOperation(parameter.name,{name:parameter.name,type:target,value},row,'change type');return;}
         if(target==='select')return;
         if(target==='single-select'||target==='multi-select'){
           const pending=row.querySelector('.parameter-pending-select')||element('div','parameter-pending-select');
@@ -438,7 +513,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
   }
 
   function requestParameterOperation(name,changes,row,operation) {
-    const consumers=parameterConsumers(name,currentQueries,currentViews);
+    const consumers=parameterConsumers(name,currentQueries,currentViews,currentFilters,currentParameters);
     if(!consumers.length){
       try{
         emitParameters(changes===null?currentParameters.filter(parameter=>parameter.name!==name):currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter));
@@ -457,9 +532,9 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
       const detach=element('button','parameter-detach-consumers',`Detach ${parameterConsumerKindLabel(kind)} consumers`);detach.type='button';
       detach.addEventListener('click',()=>{
         try{
-          const updated=onDetachParameterConsumers?.(name,kind,group)||{};
-          currentQueries=updated.queries||currentQueries;currentViews=updated.savedViews||currentViews;
-          const remaining=parameterConsumers(name,currentQueries,currentViews);
+          if(kind==='filter')emitParameters(currentParameters.map(parameter=>parameter.name===name?{...parameter,bindings:undefined}:parameter));
+          else {const updated=onDetachParameterConsumers?.(name,kind,group)||{};currentQueries=updated.queries||currentQueries;currentViews=updated.savedViews||currentViews;}
+          const remaining=parameterConsumers(name,currentQueries,currentViews,currentFilters,currentParameters);
           if(!remaining.length){
             emitParameters(changes===null?currentParameters.filter(parameter=>parameter.name!==name):currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter));
             renderParametersPanel();

@@ -38,8 +38,17 @@ export function validateParameters(input) {
   return input.map(parameter => {
     if (!object(parameter) || typeof parameter.name !== 'string' || !namePattern.test(parameter.name) || names.has(parameter.name)) throw new Error('Invalid or duplicate parameter name.');
     names.add(parameter.name);
+    let bindings;
+    if (parameter.bindings !== undefined) {
+      if (!Array.isArray(parameter.bindings) || parameter.bindings.length > 1) throw new Error(`Invalid bindings for parameter ${parameter.name}.`);
+      bindings = parameter.bindings.map(binding => {
+        if (!object(binding) || Object.keys(binding).some(key=>key!=='kind'&&key!=='filterId') || binding.kind!=='filter' || typeof binding.filterId!=='string' || !/^[A-Za-z0-9_-]{1,100}$/.test(binding.filterId)) throw new Error(`Invalid filter binding for parameter ${parameter.name}.`);
+        return { kind:'filter', filterId:binding.filterId };
+      });
+    }
+    const withBindings=result=>bindings===undefined?result:{...result,bindings};
     if (parameter.type === 'number') {
-      shape(parameter, ['name','type','value','min','max','step','integer'], `number parameter ${parameter.name}`);
+      shape(parameter, ['name','type','value','min','max','step','integer','bindings'], `number parameter ${parameter.name}`);
       if (typeof parameter.value !== 'number' || !Number.isFinite(parameter.value)) throw new Error(`Invalid numeric parameter ${parameter.name}.`);
       const result = { name: parameter.name, type: 'number', value: parameter.value };
       for (const key of ['min', 'max']) {
@@ -54,21 +63,21 @@ export function validateParameters(input) {
       if (parameter.integer !== undefined) result.integer = parameter.integer;
       if ((result.min !== undefined && result.max !== undefined && result.min > result.max) || (result.min !== undefined && result.value < result.min) || (result.max !== undefined && result.value > result.max)) throw new Error(`Parameter ${parameter.name} is outside its range.`);
       if (result.integer && (!Number.isInteger(result.value) || result.step !== undefined && !Number.isInteger(result.step))) throw new Error(`Parameter ${parameter.name} must use integral values and step.`);
-      return result;
+      return withBindings(result);
     }
-    if (parameter.type === 'text' && typeof parameter.value === 'string' && parameter.value.length <= 10000) { shape(parameter,['name','type','value'],`text parameter ${parameter.name}`); return { name: parameter.name, type: 'text', value: parameter.value }; }
-    if (parameter.type === 'boolean' && typeof parameter.value === 'boolean') { shape(parameter,['name','type','value'],`boolean parameter ${parameter.name}`); return { name: parameter.name, type: 'boolean', value: parameter.value }; }
-    if (parameter.type === 'date' && scalarDate(parameter.value)) { shape(parameter,['name','type','value'],`date parameter ${parameter.name}`); return { name: parameter.name, type: 'date', value: parameter.value }; }
+    if (parameter.type === 'text' && typeof parameter.value === 'string' && parameter.value.length <= 10000) { shape(parameter,['name','type','value','bindings'],`text parameter ${parameter.name}`); return withBindings({ name: parameter.name, type: 'text', value: parameter.value }); }
+    if (parameter.type === 'boolean' && typeof parameter.value === 'boolean') { shape(parameter,['name','type','value','bindings'],`boolean parameter ${parameter.name}`); return withBindings({ name: parameter.name, type: 'boolean', value: parameter.value }); }
+    if (parameter.type === 'date' && scalarDate(parameter.value)) { shape(parameter,['name','type','value','bindings'],`date parameter ${parameter.name}`); return withBindings({ name: parameter.name, type: 'date', value: parameter.value }); }
     if (parameter.type === 'date-range' || parameter.type === 'number-range') {
-      shape(parameter,['name','type','value'],`${parameter.type} parameter ${parameter.name}`);
+      shape(parameter,['name','type','value','bindings'],`${parameter.type} parameter ${parameter.name}`);
       const isDate = parameter.type === 'date-range', value = parameter.value;
       if (!object(value) || Object.keys(value).some(key => !['from', 'to'].includes(key)) || !own(value, 'from') || !own(value, 'to')) throw new Error(`Invalid ${parameter.type} parameter ${parameter.name}.`);
       const valid = bound => bound === null || (isDate ? scalarDate(bound) : typeof bound === 'number' && Number.isFinite(bound));
       if (!valid(value.from) || !valid(value.to) || value.from === null && value.to === null || value.from !== null && value.to !== null && value.from > value.to) throw new Error(`Invalid ${parameter.type} bounds for ${parameter.name}.`);
-      return { name: parameter.name, type: parameter.type, value: { from: value.from, to: value.to } };
+      return withBindings({ name: parameter.name, type: parameter.type, value: { from: value.from, to: value.to } });
     }
     if (parameter.type === 'single-select' || parameter.type === 'multi-select') {
-      shape(parameter,['name','type','value','source','options','overflow','stale','staleValues'],`${parameter.type} parameter ${parameter.name}`);
+      shape(parameter,['name','type','value','source','options','overflow','stale','staleValues','bindings'],`${parameter.type} parameter ${parameter.name}`);
       const single = parameter.type === 'single-select';
       const valueValid = single ? typeof parameter.value === 'string' : Array.isArray(parameter.value) && parameter.value.length <= 200 && parameter.value.every(value => typeof value === 'string') && new Set(parameter.value).size === parameter.value.length;
       if (!valueValid || !object(parameter.source) || Object.keys(parameter.source).some(key => !['dataset', 'column'].includes(key)) || typeof parameter.source.dataset !== 'string' || typeof parameter.source.column !== 'string' || !parameter.source.column || parameter.source.column.length > 200 || !Array.isArray(parameter.options) || parameter.options.length > 200 || parameter.options.some(value => typeof value !== 'string') || new Set(parameter.options).size !== parameter.options.length) throw new Error(`Invalid ${parameter.type} parameter ${parameter.name}.`);
@@ -80,7 +89,7 @@ export function validateParameters(input) {
       if ((single && parameter.stale !== undefined && typeof parameter.stale !== 'boolean') || (!single && parameter.staleValues !== undefined && (!Array.isArray(parameter.staleValues) || parameter.staleValues.length > 200 || parameter.staleValues.some(value => typeof value !== 'string')))) throw new Error(`Invalid stale select state for ${parameter.name}.`);
       const options = [...parameter.options], optionSet = new Set(options);
       const stale = single ? !optionSet.has(parameter.value) : parameter.value.filter(value => !optionSet.has(value));
-      return { name: parameter.name, type: parameter.type, value: single ? parameter.value : [...parameter.value], source: { dataset: parameter.source.dataset, column: parameter.source.column }, options, ...(overflow ? { overflow } : {}), ...(single ? { stale } : { staleValues: stale }) };
+      return withBindings({ name: parameter.name, type: parameter.type, value: single ? parameter.value : [...parameter.value], source: { dataset: parameter.source.dataset, column: parameter.source.column }, options, ...(overflow ? { overflow } : {}), ...(single ? { stale } : { staleValues: stale }) });
     }
     throw new Error(`Invalid parameter ${parameter.name}: unknown type ${String(parameter.type)}.`);
   });

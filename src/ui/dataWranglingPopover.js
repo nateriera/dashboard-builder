@@ -17,6 +17,7 @@ export function closeWranglingPopover() {
   open.unsubscribe?.(); open.transform?.dispose(); open.focus?.(); open.position?.(); open.element.remove(); open = null;
   document.removeEventListener("pointerdown", pointerDown, true); document.removeEventListener("keydown", keyDown);
 }
+export function refreshWranglingPopover() { open?.refresh?.(); }
 function pointerDown(event) { if (open && !open.element.contains(event.target) && !open.anchor.contains(event.target)) closeWranglingPopover(); }
 function keyDown(event) { if (event.key === "Escape") closeWranglingPopover(); }
 const el = (tag, text, cls) => { const node = document.createElement(tag); if (text != null) node.textContent = text; if (cls) node.className = cls; return node; };
@@ -58,10 +59,15 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
   let module;
   let initialising = true;
   const state = { columns: [], types: {}, groups: [], aggs: [], formula: "", name: "", result: null, sql: null, previewToken: null, dirty: true, busy: false, error: "" };
-  const table = isUploadRef(meta.dataset) ? uploadTableName(uploadId(meta.dataset)) : meta.dataset == null && dashboard?.table ? dashboard.table : sampleTableName(meta.dataset || entry.datasets[0]);
-  const query = isQueryRef(meta.dataset) ? getQuery(queryId(meta.dataset)) : null;
-  state.table = table; state.sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
-  state.sourceSql = wranglingSourceSql(query);
+  function sourceContext() {
+    const query = isQueryRef(meta.dataset) ? getQuery(queryId(meta.dataset)) : null;
+    const table = isUploadRef(meta.dataset) ? uploadTableName(uploadId(meta.dataset)) : meta.dataset == null && dashboard?.table ? dashboard.table : sampleTableName(meta.dataset || entry.datasets[0]);
+    return { query, table };
+  }
+  const initialSource = sourceContext();
+  state.table = initialSource.query ? null : initialSource.table;
+  state.sourceDependencies = initialSource.query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
+  state.sourceSql = wranglingSourceSql(initialSource.query);
   function currentConfig() {
     return { table: state.table, sourceSql: state.sourceSql, groups: state.groups, aggregations: state.aggs,
       formula: state.formula, name: state.name, columns: state.columns, types: state.types, parameters: getParameters() };
@@ -238,38 +244,75 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
     const saved = saveQuery({ sql: state.sql, dependencies: state.sourceDependencies, columns: state.result.columns, fieldKeys: entry.dynamicFields ? [...state.result.columns] : entry.fields.map(field => field.key), mapping });
     onQuery?.(saved); closeWranglingPopover();
   }
-  open.unsubscribe = subscribeDatasetChanges(() => invalidate());
-  void (async () => {
+  let refreshSequence = 0;
+  let schemaReady = false;
+  async function refreshSchema() {
+    const sequence = ++refreshSequence;
     try {
-      const query = isQueryRef(meta.dataset) ? getQuery(queryId(meta.dataset)) : null;
+      if (!module) module = await import("../data/duckdb.js");
+      await module.ensureTables();
+      if (!pop.isConnected || sequence !== refreshSequence) return;
+      const { query, table } = sourceContext();
       if (query && !query.trusted) throw new Error('Review this imported query in the SQL tab: Run it, then Apply before using data wrangling.');
-      module = await import("../data/duckdb.js"); await module.ensureTables(); if (!pop.isConnected) return;
-      state.sourceSql = wranglingSourceSql(query); state.table = query ? null : table;
-      state.sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
+      const sourceSql = wranglingSourceSql(query);
+      const sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
       const transformSource=query?.chain?.source;
-      const schemaSource=transformSource?.sql||(!transformSource?state.sourceSql:null);
+      const schemaSource=transformSource?.sql||(!transformSource?sourceSql:null);
       const schemaTable=transformSource?.table||table;
       const schemaSql = schemaSource ? `SELECT * FROM (${wranglingSourceSql({sql:schemaSource})}) AS wrangle_source LIMIT 0` : `SELECT * FROM ${quoteIdentifier(schemaTable)} LIMIT 0`;
       const schema = await module.runQueryDetailed(substituteParameters(schemaSql, structuredClone(getParameters())));
-      if(!pop.isConnected)return;
-      const source=transformSource?{...transformSource,schema:{columns:schema.columns,types:schema.types}}:{...(state.sourceSql?{sql:state.sourceSql}:{table}),dependencies:state.sourceDependencies,schema:{columns:schema.columns,types:schema.types},order:state.sourceSql?null:{kind:'sourceOrdinal'}};
+      if(!pop.isConnected || sequence !== refreshSequence)return;
+      const source=transformSource?{...transformSource,schema:{columns:schema.columns,types:schema.types}}:{...(sourceSql?{sql:sourceSql}:{table}),dependencies:sourceDependencies,schema:{columns:schema.columns,types:schema.types},order:sourceSql?null:{kind:'sourceOrdinal'}};
       const editableChain=query?.chain?{...structuredClone(query.chain),source}:null;
-      transformEditor=createTransformEditor({panel:transformPanel,entry,source,chain:editableChain,getParameters,onQuery,onClose:closeWranglingPopover,module});open.transform=transformEditor;
-      const output=query?.chain?compileTransformChain(query.chain):schema;
+      if (!transformEditor) {
+        transformEditor=createTransformEditor({panel:transformPanel,entry,source,chain:editableChain,getParameters,onQuery,onClose:closeWranglingPopover,module});open.transform=transformEditor;
+      } else transformEditor.updateSource(source);
+      let output = schema;
+      let transformError = "";
+      if (query?.chain) {
+        try { output = compileTransformChain({ ...query.chain, source }); }
+        catch (error) { transformError = error?.message || String(error); }
+      }
+      const previousColumns = state.columns;
+      state.table = query ? null : table;
+      state.sourceSql = sourceSql;
+      state.sourceDependencies = sourceDependencies;
       state.columns=output.columns;state.types=output.types;
-      if (state.columns.length) {
+      if (!schemaReady && state.columns.length) {
         state.groups = [{ column: state.columns[0], bin: null }];
         const numeric = state.columns.find(name => aggregationOptions(state.types[name]).includes('SUM'));
         if (numeric) state.aggs = [{ column: numeric, operation: 'SUM', name: `Sum of ${numeric}` }];
+      } else if (schemaReady) {
+        const currentColumns = new Set(state.columns);
+        state.groups = state.groups.filter(group => currentColumns.has(group.column));
+        if (!state.groups.length && state.columns.length) state.groups = [{ column: state.columns[0], bin: null }];
+        state.groups = state.groups.map(group => /DATE|TIME/i.test(state.types[group.column] || '') ? group : { ...group, bin: null });
+        state.aggs = state.aggs.filter(agg => currentColumns.has(agg.column) && aggregationOptions(state.types[agg.column]).includes(agg.operation));
+        if (!state.aggs.length) {
+          const numeric = state.columns.find(name => aggregationOptions(state.types[name]).includes('SUM'));
+          if (numeric) state.aggs = [{ column: numeric, operation: 'SUM', name: `Sum of ${numeric}` }];
+        }
+        const references = formulaReferencedColumns(state.formula, previousColumns);
+        if (references.some(column => !currentColumns.has(column))) state.formula = '';
       }
+      schemaReady = true;
       initialising = false;
+      state.error = transformError;
       render();
     } catch (error) {
+      if (!pop.isConnected || sequence !== refreshSequence) return;
       initialising = false;
       state.error = error?.message || String(error);
+      state.columns = [];
+      state.types = {};
+      state.groups = [];
+      state.aggs = [];
       transformPanel.replaceChildren();
       const alert=el('p',state.error,'data-error');alert.setAttribute('role','alert');transformPanel.append(alert);
       render();
     }
-  })();
+  }
+  open.refresh = () => { invalidate(); initialising = true; render(); void refreshSchema(); };
+  open.unsubscribe = subscribeDatasetChanges(open.refresh);
+  void refreshSchema();
 }

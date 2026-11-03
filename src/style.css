@@ -2696,6 +2696,16 @@ body.present .tile-toolbar { display: none; }
   color: var(--slate-600);
   font-size: 13px;
 }
+.guided-build-error {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 7%, var(--white));
+  color: var(--danger);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.guided-build-error[hidden] { display: none; }
 .guided-actions {
   display: flex;
   justify-content: flex-end;

@@ -114,12 +114,12 @@ test('GA-1 editor: missing chart output mapping blocks Apply until both required
 });
 
 async function holdRealPreview(page,{exposeParameters=false}={}) {
-  if(exposeParameters)await page.route('**/src/main.js',async route=>{
+  if(exposeParameters)await page.route('**/src/main.js*',async route=>{
     const response=await route.fetch(),source=await response.text();
     expect(source).toContain('getParameters: () => parameters');
     await route.fulfill({response,body:source.replaceAll('getParameters: () => parameters','getParameters: () => (globalThis.chainEditorParameters = parameters)')});
   });
-  await page.route('**/src/data/duckdb.js',async route=>{
+  await page.route('**/src/data/duckdb.js*',async route=>{
     const response=await route.fetch(),source=await response.text();
     const declaration='export async function previewTransformChain(';
     expect(source).toContain(declaration);

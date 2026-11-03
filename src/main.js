@@ -52,7 +52,7 @@ import { openTemplateGallery, closeTemplateGallery } from "./ui/templateGallery.
 import { openGuidedStart, closeGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
 import { toggleFiltersPopover, closeFiltersPopover } from "./ui/filtersPopover.js";
-import { closeWranglingPopover } from "./ui/dataWranglingPopover.js";
+import { closeWranglingPopover, refreshWranglingPopover } from "./ui/dataWranglingPopover.js";
 import { chartData } from "./ui/chartData.js";
 import { profileRows } from './data/profile.js';
 import { timeBrushPoints as brushPoints, timeBrushSelection } from './charts/timeMarks.js';
@@ -263,7 +263,7 @@ function buildTileContent(type, meta) {
       anchor: dataBtn,
       type,
       meta,
-      dashboard: { name: dashboardDefaultName(), table: dashboardTableName() },
+      dashboard: { get name() { return dashboardDefaultName(); }, get table() { return dashboardTableName(); } },
       getParameters: () => parameters,
       onDashboard: () => {
         meta.dataset = null;
@@ -271,6 +271,7 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
+        refreshWranglingPopover();
       },
       onSample: (key) => {
         meta.dataset = key;
@@ -278,6 +279,7 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
+        refreshWranglingPopover();
       },
       onUpload: ({ id, name, persisted }) => {
         meta.dataset = `upload:${id}`;
@@ -285,6 +287,7 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
+        refreshWranglingPopover();
         setStatus(
           persisted
             ? `Loaded ${name}`
@@ -299,6 +302,7 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
+        refreshWranglingPopover();
         setStatus(`SQL query applied — ${name}` + (persisted ? "" : " — session only; export JSON for backup."));
       }
     });
@@ -1340,23 +1344,27 @@ function applyDashboardDefault(dd, statusMsg) {
   refreshDashboardButton();
   refreshAllDataLabels();
   renderAllTiles();
+  refreshWranglingPopover();
   scheduleAutosave();
   if (statusMsg) setStatus(statusMsg);
 }
 async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
   if (serializeLayout().tiles.length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
+  let step = "Preparing uploaded data";
   try {
     const original = getDataset(id);
     const raw = original?.raw || (original ? { columns: original.columns, rows: original.rows } : null);
     if (!raw) throw new Error("The uploaded file is no longer available.");
     const multi = suggestions.length > 1;
+    step = "Normalizing suggested chart fields";
     const prepared = suggestions.map((suggestion) => ({
       suggestion,
       entry: TILE_TYPES[suggestion.type],
       rows: normalizeRows(TILE_TYPES[suggestion.type], raw.rows, suggestion.mapping).rows
     }));
     const chartDatasets = [];
-    for (const { suggestion, entry, rows } of prepared) {
+    for (const [index, { suggestion, entry, rows }] of prepared.entries()) {
+      step = `Saving chart dataset ${index + 1} of ${prepared.length}`;
       const dataset = saveDataset({
         name,
         columns: raw.columns,
@@ -1365,9 +1373,11 @@ async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
         mapping: { ...suggestion.mapping },
         raw
       });
+      step = `Persisting chart dataset ${index + 1} of ${prepared.length}`;
       const durable = await persistDataset(dataset.id);
       chartDatasets.push({ id: dataset.id, durable });
     }
+    step = "Validating the replacement dashboard";
     const candidate = validateLayout({
       app: "dashboard-builder",
       version: 3,
@@ -1392,14 +1402,16 @@ async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
         };
       })
     });
+    step = "Replacing the current dashboard";
     replaceLayout(candidate, { fit: true });
     scheduleAutosave();
     const allDurable = persisted && chartDatasets.every((dataset) => dataset.durable);
     setStatus(`Built ${suggestions.length} suggested chart${suggestions.length === 1 ? "" : "s"} from ${name}.` + (allDurable ? "" : " Some upload data is session only; export JSON for a backup."));
     return true;
   } catch (error) {
-    setStatus(`Suggested dashboard failed: ${error.message}`);
-    return false;
+    const message = `Guided build failed during ${step}: ${error.message}`;
+    setStatus(message);
+    return { error: message };
   }
 }
 if (btnData) {

@@ -117,6 +117,7 @@ const grid = GridStack.init(
     column: 12,
     cellHeight: ROW_HEIGHT,
     animate: false,
+    float: true,
     margin: 12,
     // Drag tiles by their toolbar so chart tooltips/legends stay clickable.
     draggable: { handle: ".tile-toolbar" },
@@ -131,12 +132,14 @@ const grid = GridStack.init(
 let arrangementSession = null;
 let arrangementAnnouncementTimer = null;
 let pendingArrangementAnnouncement = "";
+let protectArrangementAnnouncement = false;
 
 function flushArrangementAnnouncement() {
   clearTimeout(arrangementAnnouncementTimer);
   arrangementAnnouncementTimer = null;
   if (!pendingArrangementAnnouncement) return;
   setStatus(pendingArrangementAnnouncement);
+  protectArrangementAnnouncement = true;
   pendingArrangementAnnouncement = "";
 }
 
@@ -145,6 +148,16 @@ function queueArrangementAnnouncement(message) {
   clearTimeout(arrangementAnnouncementTimer);
   arrangementAnnouncementTimer = setTimeout(flushArrangementAnnouncement, 120);
 }
+
+function noteUserAction(event) {
+  const arrowDuringArrangement = event.type === "keydown" && arrangementSession && /^Arrow/.test(event.key);
+  if (pendingArrangementAnnouncement && !arrowDuringArrangement) flushArrangementAnnouncement();
+  protectArrangementAnnouncement = false;
+}
+
+document.addEventListener("pointerdown", noteUserAction, true);
+document.addEventListener("keydown", noteUserAction, true);
+document.addEventListener("click", noteUserAction, true);
 
 function finishArrangement({ restore = false, focus = true, announce = true } = {}) {
   const session = arrangementSession;
@@ -1144,12 +1157,14 @@ function fitTileNow(el) {
 
 // ── Layout serialization ─────────────────────────────────────────────────
 function serializeLayout() {
+  const liveNodes = new Map(grid.getGridItems().map(el => [el.gridstackNode?.id, el.gridstackNode]));
   const activeTiles = grid.save(false).map((n) => {
     const meta = tileMeta.get(n.id) || {};
+    const node = liveNodes.get(n.id);
     return { id:n.id, type:meta.type, title:meta.title, source:meta.source, dataset:meta.dataset,
       binding:TILE_TYPES[meta.type]?.noData?{mode:'none'}:meta.dataset==null?{mode:'dashboard'}:{mode:'explicit',ref:meta.dataset},
       sizing:meta.sizing, tileOptions:meta.tileOptions, drillValues:meta.drillValues ?? null,
-      pageId:currentPageId, x:n.x,y:n.y,w:n.w,h:n.h };
+      pageId:currentPageId, x:n.x,y:n.y,w:n.w ?? node?.w ?? 1,h:n.h ?? node?.h ?? 1 };
   });
   const tiles = pages.flatMap(page => page.id === currentPageId ? activeTiles : pageTileCache.get(page.id) || []);
   return {
@@ -1254,7 +1269,7 @@ function scheduleAutosave() {
   saveTimer = setTimeout(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
-      setStatus("Autosaved " + new Date().toLocaleTimeString());
+      if (!protectArrangementAnnouncement) setStatus("Autosaved " + new Date().toLocaleTimeString());
     } catch {
       setPersistenceWarning("Autosave failed: storage unavailable");
     }

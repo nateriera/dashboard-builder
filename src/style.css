@@ -425,8 +425,11 @@ body.present .tile-toolbar { display: none; }
 /* UX-5: keep tile arrangement discoverable and show the active keyboard target. */
 .tile-arrange-btn {
   flex: 0 0 auto;
-  min-height: 32px;
+  height: 28px;
+  min-height: 28px;
   padding: 4px 8px;
+  line-height: 18px;
+  box-sizing: border-box;
   border: 1px solid var(--slate-200);
   border-radius: 6px;
   background: var(--white);

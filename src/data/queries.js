@@ -7,6 +7,7 @@
 
 import { isQueryRef, queryId } from "./sql.js";
 import { checkedChainFields } from './queryChain.js';
+import { validateDetachedParameterConsumers } from './parameterConsumers.js';
 
 export { isQueryRef, queryId };
 
@@ -31,7 +32,7 @@ function readAll() {
 function writeAll(next) {
   const items = {};
   for (const [id, q] of memory) {
-    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted, ...(q.chain?{chain:q.chain,parameterDependencies:q.parameterDependencies}:{}) };
+    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted, ...(q.chain?{chain:q.chain,parameterDependencies:q.parameterDependencies}:{}), ...(q.detachedParameterConsumers?.length?{detachedParameterConsumers:q.detachedParameterConsumers}:{}) };
   }
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({ next, items }));
@@ -77,6 +78,19 @@ export function getQuery(id) {
   return memory.get(id) || null;
 }
 
+export function listQueries() {
+  return structuredClone([...memory.values()]);
+}
+
+/** Keep the raw binding intact but persist that the owner explicitly detached it. */
+export function detachQueryParameterConsumer(id, kind, name) {
+  const query = memory.get(id);
+  if (!query || !['querySql', 'chain'].includes(kind) || typeof name !== 'string') return false;
+  const entries = [...(query.detachedParameterConsumers || []), { kind, name }];
+  query.detachedParameterConsumers = validateDetachedParameterConsumers(entries.filter((item,index,all)=>all.findIndex(other=>other.kind===item.kind&&other.name===item.name)===index));
+  return writeAll(readAll().next);
+}
+
 export function hasQuery(id) {
   return memory.has(id);
 }
@@ -103,7 +117,7 @@ export function pruneQueries(refs) {
 export function loadPersistedQueries() {
   const all = readAll();
   let loaded = 0;
-  const records=Object.entries(all.items).filter(([,e])=>e&&typeof e.sql==='string').map(([id,e])=>[id,{...e,...checkedChainFields(e)}]);
+  const records=Object.entries(all.items).filter(([,e])=>e&&typeof e.sql==='string').map(([id,e])=>[id,{...e,...checkedChainFields(e),...(e.detachedParameterConsumers!==undefined?{detachedParameterConsumers:validateDetachedParameterConsumers(e.detachedParameterConsumers)}:{})}]);
   for (const [id, e] of records) {
     memory.set(id, {
       id,
@@ -114,7 +128,8 @@ export function loadPersistedQueries() {
       columns: Array.isArray(e.columns) ? e.columns : [],
       fieldKeys: Array.isArray(e.fieldKeys) ? e.fieldKeys : [],
       mapping: e.mapping && typeof e.mapping === "object" ? e.mapping : {},
-      ...(e.chain?checkedChainFields(e):{})
+      ...(e.chain?checkedChainFields(e):{}),
+      ...(e.detachedParameterConsumers!==undefined?{detachedParameterConsumers:validateDetachedParameterConsumers(e.detachedParameterConsumers)}: {})
     });
     loaded++;
   }
@@ -128,7 +143,7 @@ export function inlineQueries(refs) {
     if (!isQueryRef(ref)) continue;
     const q = memory.get(queryId(ref));
     if (!q) continue;
-    inlined[q.id] = structuredClone({ name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted, ...(q.chain?{chain:q.chain,parameterDependencies:q.parameterDependencies}:{}) });
+    inlined[q.id] = structuredClone({ name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted, ...(q.chain?{chain:q.chain,parameterDependencies:q.parameterDependencies}:{}), ...(q.detachedParameterConsumers?.length?{detachedParameterConsumers:q.detachedParameterConsumers}:{}) });
   }
   return inlined;
 }
@@ -140,7 +155,7 @@ export function rollbackQueries(snapshot) {
 }
 export function restoreQueries(obj) {
   if (!obj) return 0;
-  const validated=Object.entries(obj).map(([id,e])=>[id,{...structuredClone(e),...checkedChainFields(e)}]);
+  const validated=Object.entries(obj).map(([id,e])=>[id,{...structuredClone(e),...checkedChainFields(e),...(e.detachedParameterConsumers!==undefined?{detachedParameterConsumers:validateDetachedParameterConsumers(e.detachedParameterConsumers)}:{})}]);
   const pending = validated.filter(([id]) => !memory.has(id));
   for (const [id,e] of pending) memory.set(id,{ ...e,id,trusted:false });
   // The import coordinator commits localStorage together with the layout.

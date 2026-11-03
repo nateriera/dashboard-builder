@@ -11,11 +11,13 @@ export function partitionExportViews(views, parameters) {
   for (const view of views) {
     const saved = new Map((view.parameters || []).map(parameter => [parameter.name, parameter.value]));
     const changed = [...new Set([...current.keys(), ...saved.keys()])].filter(name => !current.has(name) || !saved.has(name) || !Object.is(current.get(name), saved.get(name)));
-    if (!changed.length) {
+    const broken = view.brokenParameters || [];
+    if (!changed.length && !broken.length) {
       included.push(view);
       viewerViews.push({ ...view, disabled: false, disabledReason: null });
     } else {
-      const reason = 'Different parameter values: ' + changed.map(name => `${name} (saved ${display(saved,name)}; exported ${display(current,name)})`).join(', ') + '.';
+      const differences = changed.map(name => `${name} (saved ${display(saved,name)}; exported ${display(current,name)})`);
+      const reason = [differences.length ? 'Different parameter values: ' + differences.join(', ') + '.' : '', broken.length ? `Missing detached parameter bindings: ${broken.join(', ')}.` : ''].filter(Boolean).join(' ');
       excluded.push({ name: view.name, reason });
       viewerViews.push({ ...view, disabled: true, disabledReason: reason });
     }

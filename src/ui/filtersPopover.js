@@ -1,6 +1,7 @@
 import { anchorPopover } from "./anchoredPopover.js";
 import { dateRangeForPreset, validateFilters } from "../data/filters.js";
 import { validateParameters } from "../data/parameters.js";
+import { parameterConsumers, parameterConsumerKindLabel } from "../data/parameterConsumers.js";
 
 let popover = null;
 let anchor = null;
@@ -34,11 +35,13 @@ export function toggleFiltersPopover(options) {
   openFiltersPopover(options);
 }
 
-function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [], pages = [], tileTitle, onFiltersChange, onParametersChange }) {
+function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [], pages = [], queries = [], savedViews = [], tileTitle, onFiltersChange, onParametersChange, onDetachParameterConsumers }) {
   anchor=nextAnchor;
   const filterTiles=tiles;
   let currentFilters=validateFilters(filters);
   let currentParameters=validateParameters(parameters);
+  let currentQueries=queries;
+  let currentViews=savedViews;
   let activeTab="filters";
   let addFilterOpen=false;
   let editingFilterId=null;
@@ -318,6 +321,10 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       const nameLabel=element("label","parameter-name-label","Name");
       const name=element("input","parameter-name");name.type="text";name.value=parameter.name;name.maxLength=64;name.setAttribute("aria-label",`Rename parameter ${parameter.name}`);
       nameLabel.append(name);row.append(nameLabel);
+      const typeLabel=element("label","parameter-type-label","Type");
+      const type=element("select","parameter-type");type.setAttribute("aria-label",`Type for ${parameter.name}`);
+      for(const [value,label] of [["number","Number"],["text","Text"]]){const option=element("option","",label);option.value=value;type.append(option);}
+      type.value=parameter.type;typeLabel.append(type);row.append(typeLabel);
       const valueLabel=element("label","parameter-value-label",parameter.type==='number'?'Value':'Text value');
       let value;
       if(parameter.type==='number'&&parameter.min!==undefined&&parameter.max!==undefined){
@@ -333,8 +340,16 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       }
       row.append(valueLabel);
       const remove=element("button","parameter-delete","Delete");remove.type="button";remove.setAttribute("aria-label",`Delete parameter ${parameter.name}`);
-      remove.addEventListener("click",()=>{emitParameters(currentParameters.filter(item=>item.name!==parameter.name));renderParametersPanel();});
+      remove.addEventListener("click",()=>requestParameterOperation(parameter.name,null,row,'delete'));
       name.addEventListener("change",()=>updateParameter(parameter.name,{name:name.value},row));
+      type.addEventListener("change",()=>{
+        let value;
+        if(type.value==='text')value=String(parameter.value);
+        else if(String(parameter.value).trim()!==''&&Number.isFinite(Number(parameter.value)))value=Number(parameter.value);
+        else {type.value=parameter.type;showParameterError(row,`Enter a finite numeric value before changing ${parameter.name} to Number.`);return;}
+        updateParameter(parameter.name,{type:type.value,value},row);
+        if(parameterConsumers(parameter.name,currentQueries,currentViews).length)type.value=parameter.type;
+      });
       row.append(remove);list.append(row);
     }
     panel.append(list);
@@ -344,10 +359,50 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
   }
 
   function updateParameter(name,changes,row) {
+    const original=currentParameters.find(parameter=>parameter.name===name);
+    if(original&&changes.name===name&&changes.type===undefined)return;
+    if(Object.hasOwn(changes,'name')||Object.hasOwn(changes,'type'))return requestParameterOperation(name,changes,row,Object.hasOwn(changes,'name')?'rename':'change type');
+    try{emitParameters(currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter));renderParametersPanel();}
+    catch(err){showParameterError(row,err.message);}
+  }
+
+  function showParameterError(row,message) {
     const error=row.querySelector('.filters-form-error')||element('p','filters-form-error');
-    const next=currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter);
-    try{emitParameters(next);renderParametersPanel();}
-    catch(err){error.textContent=err.message;error.hidden=false;if(!error.isConnected)row.append(error);}
+    error.textContent=message;error.hidden=false;if(!error.isConnected)row.append(error);
+  }
+
+  function requestParameterOperation(name,changes,row,operation) {
+    const consumers=parameterConsumers(name,currentQueries,currentViews);
+    if(!consumers.length){
+      try{
+        emitParameters(changes===null?currentParameters.filter(parameter=>parameter.name!==name):currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter));
+        renderParametersPanel();
+      }catch(err){showParameterError(row,err.message);}
+      return;
+    }
+    const warning=element('div','parameter-consumer-warning');
+    warning.setAttribute('role','alert');
+    const action=operation==='change type'?'change the type of':operation;
+    warning.append(element('p','',`Cannot ${action} parameter “${name}” while consumers exist.`));
+    for(const consumer of consumers)warning.append(element('p','parameter-consumer-name',consumer.label));
+    const groups=new Map();
+    for(const consumer of consumers){if(!groups.has(consumer.kind))groups.set(consumer.kind,[]);groups.get(consumer.kind).push(consumer);}
+    for(const [kind,group] of groups){
+      const detach=element('button','parameter-detach-consumers',`Detach ${parameterConsumerKindLabel(kind)} consumers`);detach.type='button';
+      detach.addEventListener('click',()=>{
+        try{
+          const updated=onDetachParameterConsumers?.(name,kind,group)||{};
+          currentQueries=updated.queries||currentQueries;currentViews=updated.savedViews||currentViews;
+          const remaining=parameterConsumers(name,currentQueries,currentViews);
+          if(!remaining.length){
+            emitParameters(changes===null?currentParameters.filter(parameter=>parameter.name!==name):currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter));
+            renderParametersPanel();
+          }else requestParameterOperation(name,changes,row,operation);
+        }catch(err){showParameterError(row,err.message);}
+      });
+      warning.append(detach);
+    }
+    row.querySelector('.parameter-consumer-warning')?.remove();row.append(warning);
   }
 
   function buildParameterForm() {

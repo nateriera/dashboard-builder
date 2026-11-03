@@ -533,7 +533,9 @@ test('Phase 2 SQL parameters define, substitute, re-run, export, and report miss
 
   popover = await openFilters(page, 'Parameters');
   await popover.getByRole('button', { name: 'Delete parameter owner' }).click();
-  await expect(tileEl.locator('.tile-error')).toContainText('Unknown SQL parameter "owner"', { timeout: 90000 });
+  await expect(popover.locator('.parameter-consumer-warning')).toContainText('Cannot delete parameter');
+  await popover.getByRole('button', { name: 'Detach query SQL consumers' }).click();
+  await expect(tileEl.locator('.tile-error')).toContainText('Parameter "owner" has an explicitly detached query SQL binding.', { timeout: 90000 });
 });
 
 test('Phase 2 reference lines render zero and negative values with a label', async ({ page }) => {

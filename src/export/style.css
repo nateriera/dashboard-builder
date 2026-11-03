@@ -108,7 +108,7 @@ body {
 .export-crossfilters button { min-height: 30px; border-color: var(--slate-300); background: var(--slate-50); color: var(--slate-700); }
 .chart-data-tools { display: flex; gap: 8px; margin: 8px 0; }
 .chart-data-tools input { min-width: 160px; flex: 1; }
-.chart-data th button { border: 0; padding: 3px 5px; background: transparent; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+.chart-data th button { border: 0; padding: 3px 5px; background: transparent; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 :focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
 
 /* Row height includes the gutters, matching GridStack's physical geometry. */
@@ -148,12 +148,12 @@ body {
 
 .export-tile-error-title {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 14px;
   margin-bottom: 4px;
 }
 
 .export-tile-error-msg {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--slate-500);
 }
 

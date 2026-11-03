@@ -662,7 +662,7 @@ export const chartStyles = html`<style>
 .db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.55; padding: 10px 4px; }
 .db-heatmap-legend { margin: 2px 6% 4px 12%; }
 .db-heatmap-ramp { height: 9px; border-radius: 2px; }
-.db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 11px; margin-top: 3px; }
+.db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 12px; margin-top: 3px; }
 :focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
   .db-card {
     background: var(--white);
@@ -706,7 +706,7 @@ export const chartStyles = html`<style>
     margin-top: 16px;
   }
   .tile-chart .db-card { padding: 16px; margin: 0; }
-  .tile-chart .db-chart-title { font-size: 18px; line-height: 1.3; }
+  .tile-chart .db-chart-title { font-size: 19px; line-height: 1.3; }
   .db-chart-head:empty { display: none; }
   .db-chart-body { min-width: 0; }
   .db-chart-body svg { max-width: 100%; }
@@ -741,7 +741,7 @@ export const chartStyles = html`<style>
     letter-spacing: 0.04em;
     color: var(--slate-500);
   }
-  .db-kpi-delta { font-family: var(--font-mono); font-size: 13px; margin-top: 8px; }
+  .db-kpi-delta { font-family: var(--font-mono); font-size: 14px; margin-top: 8px; }
   .db-delta-good { color: var(--success); }
   .db-delta-bad { color: var(--danger); }
   .db-donut { display: flex; flex-direction: column; align-items: center; }
@@ -751,7 +751,7 @@ export const chartStyles = html`<style>
   }
   .db-legend-item {
     display: inline-flex; align-items: center;
-    font-family: var(--font-body); font-size: 13px; color: var(--slate-600);
+    font-family: var(--font-body); font-size: 14px; color: var(--slate-600);
   }
   .db-legend-item .db-fig { margin-left: 4px; white-space: nowrap; }
   .db-legend-compact { display: grid; align-self: stretch; gap: 4px; margin-top: 8px; }

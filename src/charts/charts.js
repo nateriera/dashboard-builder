@@ -387,10 +387,14 @@ export function stackedColumnChart(data, { mode = "stacked", width = 640, height
   return themedPlot(theme, {width,height,marginBottom:48,x:{label:null,tickRotate:data.length>8?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(data,Plot.stackY({z:"series"},{x:"label",y:"value",fill:"series",tip:true,...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})})),Plot.ruleY([0],{stroke:t.border})]});
 }
 
-export function histogramChart(data, { value = "value", bins = 20, width = 640, height, xLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
-  const result=histogramBins(data,value,bins),counts=result.bins.map(bin=>bin.count);
-  const plot=themedPlot(theme,{width,height,marginLeft:56,x:{label:xLabel??null},y:{label:"Count",grid:true,tickFormat:fmtInt.format.bind(fmtInt),domain:domainWithReference(counts,referenceValue,null,true)},marks:[Plot.rectY(result.bins,{x1:"x0",x2:"x1",y:"count",tip:true,ariaLabel:d=>`${d.count} values from ${d.x0} to ${d.x1}`}),Plot.ruleY([0],{stroke:theme.chart.border}),...referenceMarks("y",referenceValue,referenceLabel,theme,{x:axisMaximum(data,value),y:Number(referenceValue)})]});
-  const root=document.createElement("div");root.className="db-histogram";root.dataset.binCount=String(result.bins.length);root.dataset.degenerate=String(result.degenerate);root.append(plot);
+export function histogramChart(data, { value = "value", bins = 20, preBinned = false, width = 640, height, xLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
+  const result=preBinned
+    ? {bins:data.map(row=>({x0:Number(row.start),x1:Number(row.end),count:Number(row[value]),key:row.key})).filter(bin=>Number.isFinite(bin.x0)&&Number.isFinite(bin.x1)&&Number.isFinite(bin.count)),degenerate:false}
+    : histogramBins(data,value,bins);
+  const counts=result.bins.map(bin=>bin.count);
+  const xMaximum=preBinned?Math.max(...result.bins.map(bin=>bin.x1),0):axisMaximum(data,value);
+  const plot=themedPlot(theme,{width,height,marginLeft:56,x:{label:xLabel??null},y:{label:"Count",grid:true,tickFormat:fmtInt.format.bind(fmtInt),domain:domainWithReference(counts,referenceValue,null,true)},marks:[Plot.rectY(result.bins,{x1:"x0",x2:"x1",y:"count",tip:true,ariaLabel:d=>`${d.count} values from ${d.x0} to ${d.x1}`}),Plot.ruleY([0],{stroke:theme.chart.border}),...referenceMarks("y",referenceValue,referenceLabel,theme,{x:xMaximum,y:Number(referenceValue)})]});
+  const root=document.createElement("div");root.className="db-histogram";root.dataset.binCount=String(result.bins.length);root.dataset.degenerate=String(result.degenerate);root.dataset.counts=JSON.stringify(counts);root.dataset.preBinned=String(preBinned);root.append(plot);
   if(result.degenerate){const label=document.createElement("p");label.className="db-histogram-degenerate";label.textContent="Degenerate range — one bin centered on the value (width 1).";root.append(label);}
   return root;
 }

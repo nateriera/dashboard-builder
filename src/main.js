@@ -186,9 +186,9 @@ function resolveUploadRows(dataset) {
 // Mirrors renderTile/renderQueryTile's data logic; returns {rows} or {error}
 // without touching the DOM or mutating tile metadata.
 async function resolveExportRows(meta, entry) {
-  const withRawRows = rows => {
+  const withRawRows = (rows,preBinnedHistogram=false) => {
     const clean = materializeExportRows(rows, sourceRowsFor(rows));
-    return { ...prepareTileRows(meta, clean.rows), rawRows: clean.rows, sourceRows: clean.sourceRows, dropped: droppedCount(rows), blanked: clean.blanked };
+    return { ...prepareTileRows(meta, clean.rows), rawRows: clean.rows, sourceRows: clean.sourceRows, dropped: droppedCount(rows), blanked: clean.blanked, preBinnedHistogram };
   };
   if (entry.noData) return { rows: [] };
   if (isQueryRef(meta.dataset)) {
@@ -199,7 +199,7 @@ async function resolveExportRows(meta, entry) {
     try {
       const { getCachedRows, runTileQuery } = await import("./data/duckdb.js");
       const rows = getCachedRows(qid, q, entry, parameters) || (await runTileQuery(qid, q, entry, parameters));
-      return withRawRows(rows);
+      return withRawRows(rows,q.chain?.steps?.at(-1)?.op==='histogram');
     } catch (err) {
       return { error: `Query failed: ${err && err.message ? err.message : err}` };
     }
@@ -860,7 +860,8 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   const options = () => ({
     title: meta.title,
     source: meta.source,
-    tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present"), crossfilterField: entry.crossfilterField
+    tileOptions: meta.tileOptions, sizing: meta.sizing, hideTitle: !document.body.classList.contains("present"), crossfilterField: entry.crossfilterField,
+    preBinnedHistogram:q?.chain?.steps?.at(-1)?.op==='histogram'
   });
   const paintRows = rows => {
     reportDropped(meta.id, droppedCount(rows));
@@ -1530,6 +1531,7 @@ async function exportHtml() {
         w: savedTile.w,
         h: savedTile.h,
         tileOptions: meta.tileOptions || {},
+        preBinnedHistogram:resolved.preBinnedHistogram===true,
         rows: resolved.error ? null : resolved.rawRows || resolved.rows || null,
         sourceRows: resolved.error ? null : resolved.sourceRows || null,
         error: resolved.error || null,

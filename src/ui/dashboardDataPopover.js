@@ -76,8 +76,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, bindingCou
 
   const note = document.createElement("div");
   note.className = "data-sql-note";
-  note.textContent =
-    "One dataset for every chart. Tiles with their own data keep it; new tiles follow this.";
+  const following = bindingCounts.following || 0;
+  const ownData = bindingCounts.ownData || 0;
+  note.textContent = `Right now, ${following} ${following === 1 ? "tile follows" : "tiles follow"} dashboard data and ${ownData} ${ownData === 1 ? "uses" : "use"} their own data. Changing dashboard data updates the ${following === 1 ? "following tile" : `${following} following tiles`}; ${ownData ? `the ${ownData} tile${ownData === 1 ? "" : "s"} with their own data stay unchanged` : "tiles with their own data stay unchanged"}. New tiles follow dashboard data.`;
   body.appendChild(note);
 
   const isCurrent = (kind, ref) =>

@@ -1217,8 +1217,15 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
 
   item.append(label, desc);
   item.addEventListener("click", () => {
-    addTile(type, { fit: true });
+    const widget = addTile(type, { fit: true });
     scheduleAutosave();
+    if (widget) requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!widget.isConnected) return;
+      widget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      const title = widget.querySelector(".tile-title:not([hidden])");
+      if (title) title.focus({ preventScroll: true });
+      else { widget.tabIndex = -1; widget.focus({ preventScroll: true }); }
+    }));
   });
   paletteEl.appendChild(item);
   paletteItems.push(item);

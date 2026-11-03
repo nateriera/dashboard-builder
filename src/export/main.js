@@ -243,7 +243,8 @@ function renderExport(payload) {
               title: t.title,
               source: t.source,
               tileOptions: t.tileOptions || {}, sizing: window.matchMedia('print').matches ? 'auto' : 'manual',
-              crossfilterField: t.crossfilterField || null
+              crossfilterField: t.crossfilterField || null,
+              preBinnedHistogram:t.preBinnedHistogram===true
             }
           });
           wireOfflineTimeBrush(chartEl, t, entry, filters);

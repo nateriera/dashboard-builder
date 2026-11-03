@@ -4,6 +4,7 @@ import { THEMES } from '../themes/themes.js';
 import { LIMITS, assertRows } from './limits.js';
 import { validateFilters } from './filters.js';
 import { validateParameters } from './parameters.js';
+import { checkedChainFields } from './queryChain.js';
 
 const own = (o,k) => Object.hasOwn(o,k);
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -52,7 +53,7 @@ function records(v, kind) {
       const sql = text(e.sql, 'SQL', 100000);
       const dependencies = e.dependencies === undefined ? null : e.dependencies;
       if (dependencies !== null && (!Array.isArray(dependencies) || dependencies.some(r => ref(r, false) === null))) fail('Invalid query dependencies.');
-      out[id] = { name, sql, columns, fieldKeys, mapping: map, dependencies };
+      out[id] = { name, sql, columns, fieldKeys, mapping: map, dependencies, ...checkedChainFields(e) };
     }
   }
   return out;
@@ -174,6 +175,7 @@ export function validateLayout(input) {
   if (filters.some(filter => filter.scope === 'page' && !pageIds.has(filter.pageId))) fail('Page-scoped filter references a missing page.');
   if (filters.some(filter => filter.targets?.some(target => !tileIds.has(target.tileId)))) fail('Filter connection references a missing tile.');
   const parameters = validateParameters(data.parameters);
+  for(const query of Object.values(queries)) if(query.chain) checkedChainFields(query,{parameters});
   const savedViews = data.savedViews === undefined ? [] : data.savedViews;
   if (!Array.isArray(savedViews) || savedViews.length > 50) fail('Invalid saved views.');
   const viewIds = new Set();

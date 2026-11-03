@@ -8,6 +8,7 @@ export function wranglingSourceSql(query) {
 
 /** Identity of the SQL configuration and parameter values used by a preview. */
 export function wranglingConfigToken(kind, config) {
+  if(kind==='transform') return JSON.stringify({kind,chain:config.chain,parameters:config.parameters||[],revision:config.revision??null});
   return JSON.stringify({
     kind, table: config.table ?? null, sourceSql: config.sourceSql ?? null,
     ...(kind === 'pivot' ? {

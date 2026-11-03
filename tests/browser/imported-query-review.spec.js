@@ -117,7 +117,7 @@ test('T1: imported queries stay blocked through page/filter/parameter changes, e
   await expect(page.locator('.data-panel:visible .data-apply')).toBeDisabled();
   await expect(page.locator('.data-sql-run')).toBeEnabled({timeout:90000});
   await expectNoExecution(page);
-  await page.getByRole('button', {name:'Pivot', exact:true}).click();
+  await page.getByRole('button', {name:'Group & summarize', exact:true}).click();
   await expect(page.locator('.wrangling-popover [role="alert"]').first()).toContainText('Run it, then Apply');
   await expectNoExecution(page);
   await page.locator('.wrangling-popover').getByRole('button', {name:'Close', exact:true}).click();

@@ -92,3 +92,21 @@ test('tile upload disables Apply while loading and never binds after dismissal',
   await expect.poll(() => page.evaluate(() => window.ux2Done)).toBe(true);
   await expect(tile.locator('.tile-data-btn')).toHaveText(sourceBefore);
 });
+
+test('dashboard upload rejection stays visible and preserves the previous dashboard data', async ({page}) => {
+  await page.route('**/src/main.js', async route => {
+    const response = await route.fetch();
+    const source = (await response.text()).replace('const persisted = await persistDataset(id);', 'await Promise.reject(new Error("Injected upload failure")); const persisted = await persistDataset(id);');
+    await route.fulfill({response,body:source});
+  });
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  const original = await page.locator('#btn-data').textContent();
+  await page.locator('#btn-data').click();
+  const pop = page.getByRole('dialog',{name:'Dashboard data'});
+  await pop.getByLabel('Paste tabular data').fill('region\tvalue\nWest\t12');
+  await pop.getByRole('button',{name:'Import pasted data'}).click();
+  await expect(pop.locator('.data-error')).toContainText('Injected upload failure');
+  await expect(page.locator('#status')).toContainText('Injected upload failure');
+  await expect(page.locator('.guided-dialog')).toHaveCount(0);
+  await expect(page.locator('#btn-data')).toHaveText(original);
+});

@@ -165,7 +165,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     try {
       const { columns, rows, profile } = await readUpload(file,pop);
       if (!pop.isConnected) return;
-      onUpload({ name: file.name, columns, rows, profile });
+      await onUpload({ name: file.name, columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
       err.textContent = e && e.message ? e.message : String(e);
@@ -188,7 +188,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
       if (!pop.isConnected) return;
       const { columns, rows } = parseFile("data.csv", text);
       const profile = profileRows(columns, rows);
-      onUpload({ name: "URL CSV", columns, rows, profile });
+      await onUpload({ name: "URL CSV", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
       err.textContent = e?.message || String(e);
@@ -197,13 +197,13 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     } finally { urlButton.disabled = false; }
   });
 
-  pasteButton.addEventListener("click", () => {
+  pasteButton.addEventListener("click", async () => {
     err.hidden = true;
     sourceStatus.textContent = "Validating pasted table…";
     try {
       const { columns, rows } = parsePastedTable(pasteArea.value);
       const profile = profileRows(columns, rows);
-      onUpload({ name: "Pasted table", columns, rows, profile });
+      await onUpload({ name: "Pasted table", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
       err.textContent = e?.message || String(e);

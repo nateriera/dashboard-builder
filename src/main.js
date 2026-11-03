@@ -1390,31 +1390,36 @@ if (btnData) {
         setStatus(`Dashboard data: ${dashboardDefaultName()}`);
       },
       onUpload: async ({ name, columns, rows, profile }) => {
-        profile ??= profileRows(columns, rows);
-        const { id } = saveDataset({
-          name,
-          columns,
-          rows,
-          fieldKeys: [],
-          mapping: {},
-          raw: { columns, rows }
-        });
-        const persisted = await persistDataset(id);
-        openGuidedStart({
-          id,
-          name,
-          profile,
-          onUseData: () => applyDashboardDefault(
-            { kind: "dataset", ref: `upload:${id}` },
-            persisted
-              ? `Dashboard data: ${name}`
-              : `Dashboard data: ${name} — browser storage unavailable, kept for this session only.`
-          ),
-          onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
-          onKeep: () => setStatus(persisted
-            ? `Upload saved: ${name}. Current dashboard kept.`
-            : `Upload available for this session only: ${name}. Current dashboard kept.`)
-        });
+        try {
+          profile ??= profileRows(columns, rows);
+          const { id } = saveDataset({
+            name,
+            columns,
+            rows,
+            fieldKeys: [],
+            mapping: {},
+            raw: { columns, rows }
+          });
+          const persisted = await persistDataset(id);
+          openGuidedStart({
+            id,
+            name,
+            profile,
+            onUseData: () => applyDashboardDefault(
+              { kind: "dataset", ref: `upload:${id}` },
+              persisted
+                ? `Dashboard data: ${name}`
+                : `Dashboard data: ${name} — browser storage unavailable, kept for this session only.`
+            ),
+            onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
+            onKeep: () => setStatus(persisted
+              ? `Upload saved: ${name}. Current dashboard kept.`
+              : `Upload available for this session only: ${name}. Current dashboard kept.`)
+          });
+        } catch (error) {
+          setStatus(`Dashboard upload failed: ${error.message || error}`);
+          throw error;
+        }
       }
     });
   });

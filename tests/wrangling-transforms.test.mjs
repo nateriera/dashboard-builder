@@ -31,7 +31,7 @@ test('chain validation rejects malformed versions, ambiguous sources, duplicate 
     {...chain(),source:{...source(),sql:'SELECT 1'}},
     {...chain(),source:{...source(),table:{param:'tableName'}}},
     chain([group('same'),group('same')]),
-    chain([{id:'gate-b',op:'cumulative',params:{field:'amount'}}])
+    chain([{id:'gate-b',op:'pivot',params:{rows:['team']}}])
   ];
   for(const input of invalid) assert.throws(()=>validateTransformChain(input));
 });

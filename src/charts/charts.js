@@ -619,7 +619,7 @@ export function kpiRow(cards) {
   return html`<div class="db-kpi-row">
     ${cards.map(
       (c) => html`<div class="db-kpi">
-        <div class="db-kpi-value">${c.value}</div>
+        <div class="db-kpi-value">${c.value == null ? '—' : c.value}</div>
         <div class="db-kpi-label">${c.label}</div>
         ${c.delta
           ? html`<div class="db-kpi-delta ${deltaClass(c.deltaDir, c.invert)}">${c.delta}</div>`

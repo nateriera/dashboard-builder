@@ -229,13 +229,13 @@ body.present .first-run-hint { display: none; }
   margin-bottom: 8px;
   cursor: grab;
   background: var(--white);
-  /* one accent moment: periwinkle left edge on hover */
-  border-left: 3px solid transparent;
+
+
 }
 
 .palette-item:hover {
-  border-left-color: var(--periwinkle);
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+
+  background: var(--paper);
 }
 
 .palette-item:active { cursor: grabbing; }
@@ -1314,7 +1314,7 @@ body.present .tile-toolbar { display: none; }
 .guided-empty {
   margin: 0;
   padding: 12px;
-  border-left: 3px solid var(--periwinkle);
+
   background: var(--paper);
   color: var(--slate-600);
   font-size: 13px;
@@ -1387,7 +1387,5 @@ body.present .tile-toolbar { display: none; }
 .parameter-example { display: block; margin: 0 0 10px; padding: 8px; border-radius: 5px; background: var(--paper); font-size: 11px; overflow-wrap: anywhere; white-space: normal; }
 .parameter-form input[type=text] { width: 100%; }
 .tile-empty { display: flex; align-items: center; min-height: 90px; padding: 16px; border: 1px solid var(--slate-200); border-radius: 8px; background: var(--white); color: var(--slate-600); font-size: 13px; }
-.tile-filter-status { margin: 8px 12px 0; padding: 6px 9px; border-left: 3px solid var(--dusk); background: color-mix(in srgb, var(--dusk) 7%, var(--white)); color: var(--slate-600); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
-.tile-filter-status[data-state="ignored"], .tile-filter-status[data-state="unmapped"] { border-left-color: var(--warning); }
-.tile-filter-status[data-state="highlight"] { border-left-color: var(--success); }
+.tile-filter-status { margin: 8px 12px 0; padding: 6px 9px; background: color-mix(in srgb, var(--dusk) 7%, var(--white)); color: var(--dusk); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .dashboard-filters-popover { width: min(390px, calc(100vw - 16px)); } .dashboard-parameter { grid-template-columns: 1fr auto; } .dashboard-parameter .parameter-value-label { grid-column: 1 / -1; } }

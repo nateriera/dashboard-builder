@@ -1,7 +1,9 @@
 import { anchorPopover } from "./anchoredPopover.js";
 import { focusDialog } from "./focus.js";
 import { dateRangeForPreset, validateFilters } from "../data/filters.js";
-import { validateParameters } from "../data/parameters.js";
+import { enumerateParameterOptions, validateParameters } from "../data/parameters.js";
+import { DATASETS, DATASET_LABELS } from "../tiles/registry.js";
+import { getDataset, listDatasets } from "../data/store.js";
 import { parameterConsumers, parameterConsumerKindLabel } from "../data/parameterConsumers.js";
 
 let popover = null;
@@ -38,7 +40,7 @@ export function toggleFiltersPopover(options) {
   openFiltersPopover(options);
 }
 
-function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [], pages = [], queries = [], savedViews = [], tileTitle, onFiltersChange, onParametersChange, onDetachParameterConsumers }) {
+function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDataset, tiles = [], pages = [], queries = [], savedViews = [], tileTitle, onFiltersChange, onParametersChange, onDetachParameterConsumers }) {
   anchor=nextAnchor;
   const filterTiles=tiles;
   let currentFilters=validateFilters(filters);
@@ -67,7 +69,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
   pop.append(head,tabs,panel);
   document.body.append(pop);
   popover=pop;
-  releaseAnchor=anchorPopover(pop,anchor);
+  releaseAnchor=anchorPopover(pop,anchor,{preferBelow:true,minTop:Math.max(0,(document.querySelector('#app-header')?.getBoundingClientRect().bottom||0)+6)});
   releaseFocus=focusDialog(pop,anchor);
 
   const emitFilters=next=>{
@@ -311,54 +313,114 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
     }
   }
 
+  const parameterTypes=[["number","Number"],["text","Text"],["boolean","Boolean"],["date","Date"],["date-range","Date range"],["number-range","Number range"],["single-select","Single select"],["multi-select","Multiple select"]];
+  function parameterColumns(dataset) {
+    if (!dataset) return [];
+    if (dataset.startsWith('upload:')) return getDataset(dataset.slice(7))?.columns || [];
+    return DATASETS[dataset] ? [...new Set(DATASETS[dataset].flatMap(row=>Object.keys(row)))] : [];
+  }
+  function parameterRows(dataset) {
+    if (!dataset) return [];
+    if (dataset.startsWith('upload:')) { const item=getDataset(dataset.slice(7)); return item?.raw?.rows || item?.rows || []; }
+    return DATASETS[dataset] || [];
+  }
+  function datasetChoices() {
+    const choices=[...Object.keys(DATASETS).map(id=>({id,label:DATASET_LABELS[id]||id})),...listDatasets().map(item=>({id:`upload:${item.id}`,label:`${item.name} (uploaded)`}))];
+    return choices.filter(item=>!(defaultDataset?.kind==='dataset'&&item.id===defaultDataset.ref));
+  }
+  function sourceControls(container, parameter, onRefresh, labelPrefix='') {
+    const wrap=element('div','parameter-source-controls');
+    const datasets=datasetChoices();
+    const datasetLabel=element('label','parameter-value-label',`${labelPrefix}Dataset`);
+    const dataset=element('select','parameter-source-dataset');dataset.setAttribute('aria-label',`${labelPrefix}Source dataset`);
+    const placeholder=element('option','','Choose a dataset');placeholder.value='';dataset.append(placeholder);
+    for(const item of datasets){const option=element('option','',item.label);option.value=item.id;dataset.append(option);}
+    dataset.value=parameter.source?.dataset||'';datasetLabel.append(dataset);wrap.append(datasetLabel);
+    const columnLabel=element('label','parameter-value-label',`${labelPrefix}Column`);
+    const column=element('select','parameter-source-column');column.setAttribute('aria-label',`${labelPrefix}Source column`);
+    const empty=element('option','','Choose a column');empty.value='';column.append(empty);
+    for(const key of parameterColumns(dataset.value)){const option=element('option','',key);option.value=key;column.append(option);}
+    column.value=parameter.source?.column||'';columnLabel.append(column);wrap.append(columnLabel);
+    const selected={...parameter,source:parameter.source?{...parameter.source}:{dataset:dataset.value,column:column.value}};
+    dataset.addEventListener('change',()=>{selected.source={dataset:dataset.value,column:''};while(column.options.length>1)column.remove(1);for(const key of parameterColumns(dataset.value)){const option=element('option','',key);option.value=key;column.append(option);}column.value='';});
+    column.addEventListener('change',()=>{selected.source={dataset:dataset.value,column:column.value};});
+    const refresh=element('button','filter-add parameter-refresh-options','Refresh options');refresh.type='button';
+    refresh.addEventListener('click',()=>{
+      if(!dataset.value||!column.value){onRefresh(null,'Choose an explicit dataset and column before refreshing options.');return;}
+      try { const enumerated=enumerateParameterOptions(parameterRows(dataset.value),column.value);onRefresh({source:{dataset:dataset.value,column:column.value},...enumerated},null);preview.replaceChildren(element('p','',`${enumerated.options.length} stored option${enumerated.options.length===1?'':'s'}${enumerated.overflow?` of ${enumerated.overflow.distinctCount} distinct values (200 shown)`:(enumerated.options.length===200?' (maximum 200)':'')}.`));const chips=element('div','parameter-option-chips');for(const item of enumerated.options.slice(0,12))chips.append(element('span','parameter-option-chip',item));if(enumerated.options.length>12)chips.append(element('span','parameter-option-chip',`+${enumerated.options.length-12} more`));preview.append(chips); }
+      catch(error){onRefresh(null,error.message);}
+    });
+    wrap.append(refresh);container.append(wrap);
+    const preview=element('div','parameter-option-preview');
+    if(parameter.options?.length){preview.append(element('p','',`${parameter.options.length} stored option${parameter.options.length===1?'':'s'}${parameter.overflow?` of ${parameter.overflow.distinctCount} distinct values (200 shown)`:(parameter.options.length===200?' (maximum 200)':'')}.`));const chips=element('div','parameter-option-chips');for(const item of parameter.options.slice(0,12))chips.append(element('span','parameter-option-chip',item));if(parameter.options.length>12)chips.append(element('span','parameter-option-chip',`+${parameter.options.length-12} more`));preview.append(chips);}
+    else preview.append(element('p','','No options stored. Choose a source and refresh options.'));
+    container.append(preview);
+    return {dataset,column};
+  }
   function renderParametersPanel() {
     activeTab="parameters";
     filtersTab.classList.remove("active");parametersTab.classList.add("active");
     filtersTab.setAttribute("aria-selected","false");parametersTab.setAttribute("aria-selected","true");
-    panel.id="dashboard-parameters-panel";panel.className="data-panel dashboard-parameters-panel";
-    panel.replaceChildren();
-    panel.append(element("p","filters-help","Use {{name}} in SQL. Numbers are inserted as numbers; text is safely quoted."));
-    const example=element("code","parameter-example","SELECT *, value * {{growth}} AS projected FROM categorical");panel.append(example);
+    panel.id="dashboard-parameters-panel";panel.className="data-panel dashboard-parameters-panel";panel.replaceChildren();
+    panel.append(element("p","filters-help","Use {{name}} in SQL. Numbers and booleans are inserted as literals; dates and selected text are quoted."));
+    panel.append(element("code","parameter-example","SELECT *, value * {{growth}} AS projected FROM categorical"));
     const list=element("div","dashboard-parameter-list");
     for(const parameter of currentParameters){
       const row=element("div","dashboard-parameter");
-      const nameLabel=element("label","parameter-name-label","Name");
-      const name=element("input","parameter-name");name.type="text";name.value=parameter.name;name.maxLength=64;name.setAttribute("aria-label",`Rename parameter ${parameter.name}`);
-      nameLabel.append(name);row.append(nameLabel);
-      const typeLabel=element("label","parameter-type-label","Type");
-      const type=element("select","parameter-type");type.setAttribute("aria-label",`Type for ${parameter.name}`);
-      for(const [value,label] of [["number","Number"],["text","Text"]]){const option=element("option","",label);option.value=value;type.append(option);}
-      type.value=parameter.type;typeLabel.append(type);row.append(typeLabel);
-      const valueLabel=element("label","parameter-value-label",parameter.type==='number'?'Value':'Text value');
-      let value;
-      if(parameter.type==='number'&&parameter.min!==undefined&&parameter.max!==undefined){
-        value=element("input","parameter-slider");value.type="range";value.min=String(parameter.min);value.max=String(parameter.max);value.step="any";value.value=String(parameter.value);value.setAttribute("aria-label",`Value for ${parameter.name}`);
-        const output=element("output","parameter-output",String(parameter.value));
-        value.addEventListener("input",()=>{output.value=value.value;output.textContent=value.value;});
-        value.addEventListener("change",()=>updateParameter(parameter.name,{value:Number(value.value)},row));
-        valueLabel.append(value,output);
-      }else{
-        value=element("input","parameter-value");value.type=parameter.type==='number'?'number':'text';value.value=String(parameter.value);value.maxLength=10000;if(parameter.type==='number')value.step="any";value.setAttribute("aria-label",`Value for ${parameter.name}`);
-        value.addEventListener("change",()=>updateParameter(parameter.name,{value:parameter.type==='number'?Number(value.value):value.value},row));
-        valueLabel.append(value);
+      const nameLabel=element("label","parameter-name-label","Name");const name=element("input","parameter-name");name.type='text';name.value=parameter.name;name.maxLength=64;name.setAttribute('aria-label',`Rename parameter ${parameter.name}`);nameLabel.append(name);row.append(nameLabel);
+      const typeLabel=element("label","parameter-type-label","Type");const type=element("select","parameter-type");type.setAttribute('aria-label',`Type for ${parameter.name}`);for(const [v,label] of parameterTypes){const option=element('option','',label);option.value=v;type.append(option);}type.value=parameter.type;typeLabel.append(type);row.append(typeLabel);
+      const editor=element('div','parameter-editor');
+      const updateValue=value=>updateParameter(parameter.name,{value},row);
+      if(parameter.type==='number'){
+        const label=element('label','parameter-value-label','Value');const value=element('input','parameter-value');value.type='number';value.value=String(parameter.value);value.step=parameter.step===undefined?'any':String(parameter.step);value.setAttribute('aria-label',`Value for ${parameter.name}`);value.addEventListener('change',()=>updateValue(Number(value.value)));label.append(value);editor.append(label);
+        const settings=element('div','parameter-number-settings');for(const key of ['min','max']){const bound=element('label','parameter-value-label',key==='min'?'Minimum':'Maximum');const input=element('input',`parameter-${key}`);input.type='number';input.step='any';input.value=parameter[key]===undefined?'':String(parameter[key]);input.setAttribute('aria-label',`${key==='min'?'Minimum':'Maximum'} for ${parameter.name}`);input.addEventListener('change',()=>updateParameter(parameter.name,{[key]:input.value===''?undefined:Number(input.value)},row));bound.append(input);settings.append(bound);}const stepLabel=element('label','parameter-value-label','Step');const step=element('input','parameter-step');step.type='number';step.min='0';step.step='any';step.value=parameter.step===undefined?'':String(parameter.step);step.placeholder='Any';step.setAttribute('aria-label',`Step for ${parameter.name}`);step.addEventListener('change',()=>updateParameter(parameter.name,{step:step.value===''?undefined:Number(step.value)},row));stepLabel.append(step);settings.append(stepLabel);
+        const integerLabel=element('label','parameter-check-label');const integer=element('input','parameter-integer');integer.type='checkbox';integer.checked=parameter.integer===true;integer.setAttribute('aria-label',`Integer values for ${parameter.name}`);integer.addEventListener('change',()=>updateParameter(parameter.name,{integer:integer.checked},row));integerLabel.append(integer,document.createTextNode(' Integer values'));settings.append(integerLabel);editor.append(settings);
+      } else if(parameter.type==='text'){
+        const label=element('label','parameter-value-label','Text value');const value=element('input','parameter-value');value.type='text';value.value=parameter.value;value.maxLength=10000;value.setAttribute('aria-label',`Value for ${parameter.name}`);value.addEventListener('change',()=>updateValue(value.value));label.append(value);editor.append(label);
+      } else if(parameter.type==='boolean'){
+        const label=element('label','parameter-check-label');const value=element('input','parameter-value');value.type='checkbox';value.checked=parameter.value;value.setAttribute('aria-label',`Value for ${parameter.name}`);value.addEventListener('change',()=>updateValue(value.checked));label.append(value,document.createTextNode(' Enabled'));editor.append(label);
+      } else if(parameter.type==='date'){
+        const label=element('label','parameter-value-label','Date');const value=element('input','parameter-value');value.type='date';value.value=parameter.value;value.setAttribute('aria-label',`Value for ${parameter.name}`);value.addEventListener('change',()=>updateValue(value.value));label.append(value);editor.append(label);
+      } else if(parameter.type==='date-range'||parameter.type==='number-range'){
+        const date=parameter.type==='date-range';const bounds=element('div','parameter-range-bounds');
+        for(const [key,title] of [['from','Lower'],['to','Upper']]){const group=element('div','parameter-bound');const label=element('label','parameter-value-label',`${title} bound`);const value=element('input','parameter-bound-value');value.type=date?'date':'number';if(!date)value.step='any';value.value=parameter.value[key]===null?'':String(parameter.value[key]);value.disabled=parameter.value[key]===null;value.setAttribute('aria-label',`${title} bound for ${parameter.name}`);const openLabel=element('label','parameter-check-label');const open=element('input','parameter-open-bound');open.type='checkbox';open.checked=parameter.value[key]===null;open.setAttribute('aria-label',`No ${key==='from'?'lower':'upper'} bound for ${parameter.name}`);open.addEventListener('change',()=>{const next={...parameter.value,[key]:open.checked?null:(date?'':Number(value.value))};if(!open.checked&&!date&&value.value===''){showParameterError(row,`Enter the ${title.toLowerCase()} bound or leave it open.`);return;}updateValue(next);});value.addEventListener('change',()=>updateValue({...parameter.value,[key]:date?value.value:Number(value.value)}));label.append(value);openLabel.append(open,document.createTextNode(` No ${key==='from'?'lower':'upper'} bound`));group.append(label,openLabel);bounds.append(group);}
+        editor.append(bounds);
+      } else {
+        const select=element('select','parameter-select-value');select.setAttribute('aria-label',`Value for ${parameter.name}`);
+        const selected=parameter.type==='single-select'?[parameter.value]:parameter.value;const all=[...parameter.options,...selected.filter(value=>!parameter.options.includes(value))];for(const item of all){const option=element('option','',`${item}${parameter.options.includes(item)?'':' (stale)'}`);option.value=item;select.append(option);}select.multiple=parameter.type==='multi-select';if(select.multiple){for(const option of select.options)option.selected=selected.includes(option.value);}else select.value=parameter.value;select.addEventListener('change',()=>updateValue(select.multiple?[...select.selectedOptions].map(option=>option.value):select.value));editor.append(select);
+        const stale=parameter.type==='single-select'?parameter.stale:parameter.staleValues.length>0;if(stale)editor.append(element('p','parameter-stale-flag',parameter.type==='single-select'?`“${parameter.value}” is stale and is preserved.`:`${parameter.staleValues.length} selected value${parameter.staleValues.length===1?'':'s'} are stale and preserved: ${parameter.staleValues.join(', ')}`));
+        const source=sourceControls(editor,parameter,(result,error)=>{if(error){showParameterError(row,error);return;}const nextValue=parameter.type==='single-select'?parameter.value:parameter.value;updateParameter(parameter.name,{source:result.source,options:result.options,...(result.overflow?{overflow:result.overflow}:{overflow:undefined}),value:nextValue},row);});
       }
-      row.append(valueLabel);
-      const remove=element("button","parameter-delete","Delete");remove.type="button";remove.setAttribute("aria-label",`Delete parameter ${parameter.name}`);
-      remove.addEventListener("click",()=>requestParameterOperation(parameter.name,null,row,'delete'));
-      name.addEventListener("change",()=>updateParameter(parameter.name,{name:name.value},row));
-      type.addEventListener("change",()=>{
-        let value;
-        if(type.value==='text')value=String(parameter.value);
-        else if(String(parameter.value).trim()!==''&&Number.isFinite(Number(parameter.value)))value=Number(parameter.value);
-        else {type.value=parameter.type;showParameterError(row,`Enter a finite numeric value before changing ${parameter.name} to Number.`);return;}
-        updateParameter(parameter.name,{type:type.value,value},row);
-        if(parameterConsumers(parameter.name,currentQueries,currentViews).length)type.value=parameter.type;
+      row.append(editor);
+      const remove=element('button','parameter-delete','Delete');remove.type='button';remove.setAttribute('aria-label',`Delete parameter ${parameter.name}`);remove.addEventListener('click',()=>requestParameterOperation(parameter.name,null,row,'delete'));row.append(remove);
+      name.addEventListener('change',()=>updateParameter(parameter.name,{name:name.value},row));
+      type.addEventListener('change',()=>{
+        const target=type.value;let value=parameter.value;
+        if(parameterConsumers(parameter.name,currentQueries,currentViews).length){type.value=parameter.type;requestParameterOperation(parameter.name,{name:parameter.name,type:target,value},row,'change type');return;}
+        if(target==='select')return;
+        if(target==='single-select'||target==='multi-select'){
+          const pending=row.querySelector('.parameter-pending-select')||element('div','parameter-pending-select');
+          pending.replaceChildren(element('p','filters-help','Choose an explicit source, then refresh to store its options and change this parameter type.'));
+          sourceControls(pending,{source:{dataset:'',column:''},options:[]},(result,error)=>{
+            if(error){showParameterError(row,error);return;}
+            const changes={name:parameter.name,type:target,value:target==='single-select'?(result.options[0]??''):[],source:result.source,options:result.options,...(result.overflow?{overflow:result.overflow}:{})};
+            requestParameterOperation(parameter.name,changes,row,'change type');
+          },'Select ');
+          row.append(pending);return;
+        }
+        if(target==='text')value=String(parameter.value);
+        else if(target==='number'){if(!Number.isFinite(Number(parameter.value))||String(parameter.value).trim()===''){type.value=parameter.type;showParameterError(row,`Enter a finite numeric value before changing ${parameter.name} to Number.`);return;}value=Number(parameter.value);}
+        else if(target==='boolean'){if(typeof value!=='boolean'){if(value==='true'||value==='false')value=value==='true';else if(value===0||value===1)value=Boolean(value);else{type.value=parameter.type;showParameterError(row,`Set ${parameter.name} to true or false before changing its type.`);return;}}}
+        else if(target==='date'){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)){type.value=parameter.type;showParameterError(row,`Enter a YYYY-MM-DD value before changing ${parameter.name} to Date.`);return;}}
+        else if(target==='number-range'||target==='date-range'){const isDate=target==='date-range';if(parameter.type==='number-range'||parameter.type==='date-range'){}else if(isDate&&typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value))value={from:value,to:value};else if(!isDate&&Number.isFinite(Number(value)))value={from:Number(value),to:Number(value)};else{type.value=parameter.type;showParameterError(row,`Enter a compatible ${isDate?'date':'number'} value before changing ${parameter.name} to a range.`);return;}}
+        const changes={name:parameter.name,type:target,value};
+        if(target==='number'&&parameter.type==='number')for(const key of ['min','max','step','integer'])if(parameter[key]!==undefined)changes[key]=parameter[key];
+        updateParameter(parameter.name,changes,row);
       });
-      row.append(remove);list.append(row);
+      list.append(row);
     }
     panel.append(list);
-    const add=element("button","filter-add parameter-add","Add parameter");add.type="button";add.addEventListener("click",()=>{addParameterOpen=!addParameterOpen;renderParametersPanel();});
-    panel.append(add);
+    const add=element('button','filter-add parameter-add','Add parameter');add.type='button';add.addEventListener('click',()=>{addParameterOpen=!addParameterOpen;renderParametersPanel();});panel.append(add);
     if(addParameterOpen)panel.append(buildParameterForm());
   }
 
@@ -367,7 +429,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
     if(original&&changes.name===name&&changes.type===undefined)return;
     if(Object.hasOwn(changes,'name')||Object.hasOwn(changes,'type'))return requestParameterOperation(name,changes,row,Object.hasOwn(changes,'name')?'rename':'change type');
     try{emitParameters(currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter));renderParametersPanel();}
-    catch(err){showParameterError(row,err.message);}
+    catch(err){if(changes.type&&original)row.querySelector('.parameter-type').value=original.type;showParameterError(row,err.message);}
   }
 
   function showParameterError(row,message) {
@@ -381,7 +443,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       try{
         emitParameters(changes===null?currentParameters.filter(parameter=>parameter.name!==name):currentParameters.map(parameter=>parameter.name===name?{...parameter,...changes}:parameter));
         renderParametersPanel();
-      }catch(err){showParameterError(row,err.message);}
+      }catch(err){if(changes?.type)row.querySelector('.parameter-type').value=currentParameters.find(parameter=>parameter.name===name)?.type||'';showParameterError(row,err.message);}
       return;
     }
     const warning=element('div','parameter-consumer-warning');
@@ -410,31 +472,33 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
   }
 
   function buildParameterForm() {
-    const form=element("div","filter-form parameter-form");form.append(element("strong","","New parameter"));
-    const nameLabel=element("label","","Name");const name=element("input","");name.type="text";name.value=`parameter${currentParameters.length+1}`;name.maxLength=64;name.setAttribute("aria-label","New parameter name");nameLabel.append(name);form.append(nameLabel);
-    const typeLabel=element("label","","Type");const type=element("select","");type.setAttribute("aria-label","New parameter type");
-    for(const [value,text]of [["number","Number"],["text","Text"]]){const option=element("option","",text);option.value=value;type.append(option);}typeLabel.append(type);form.append(typeLabel);
-    const valueLabel=element("label","","Value");const value=element("input","");value.type="number";value.value="1";value.step="any";value.setAttribute("aria-label","New parameter value");valueLabel.append(value);form.append(valueLabel);
-    const range=element("div","filter-number-range");const min=element("input","");min.type="number";min.step="any";min.placeholder="Minimum";min.setAttribute("aria-label","Parameter minimum");const max=element("input","");max.type="number";max.step="any";max.placeholder="Maximum";max.setAttribute("aria-label","Parameter maximum");range.append(min,max);form.append(range);
-    type.addEventListener("change",()=>{const number=type.value==='number';value.type=number?'number':'text';value.value=number?'1':'';valueLabel.firstChild.textContent=number?'Value':'Text value';range.hidden=!number;});
-    const error=element("p","filters-form-error");error.hidden=true;form.append(error);
-    const actions=element("div","filter-form-actions");const cancel=element("button","filter-cancel","Cancel");cancel.type="button";cancel.addEventListener("click",()=>{addParameterOpen=false;renderParametersPanel();});
-    const create=element("button","filter-apply","Create parameter");create.type="button";create.addEventListener("click",()=>{
-      const candidate={name:name.value.trim(),type:type.value,value:type.value==='number'?Number(value.value):value.value};
-      if(type.value==='number'){
-        if(min.value!=='')candidate.min=Number(min.value);
-        if(max.value!=='')candidate.max=Number(max.value);
-      }
-      try{emitParameters([...currentParameters,candidate]);addParameterOpen=false;renderParametersPanel();}
-      catch(err){error.textContent=err.message;error.hidden=false;}
-    });
-    actions.append(cancel,create);form.append(actions);range.hidden=false;return form;
+    const form=element('div','filter-form parameter-form');form.append(element('strong','','New parameter'));
+    const nameLabel=element('label','','Name');const name=element('input','');name.type='text';name.value=`parameter${currentParameters.length+1}`;name.maxLength=64;name.setAttribute('aria-label','New parameter name');nameLabel.append(name);form.append(nameLabel);
+    const typeLabel=element('label','','Type');const type=element('select','');type.setAttribute('aria-label','New parameter type');for(const [v,label] of parameterTypes){const option=element('option','',label);option.value=v;type.append(option);}typeLabel.append(type);form.append(typeLabel);
+    const editor=element('div','parameter-editor');form.append(editor);const error=element('p','filters-form-error');error.hidden=true;form.append(error);
+    let draft={type:'number',value:1};
+    const draw=()=>{editor.replaceChildren();draft={type:type.value,...(type.value==='number'?{value:1}:type.value==='text'?{value:''}:type.value==='boolean'?{value:false}:type.value==='date'?{value:new Date().toISOString().slice(0,10)}:type.value==='date-range'?{value:{from:null,to:new Date().toISOString().slice(0,10)}}:type.value==='number-range'?{value:{from:null,to:1}}:type.value==='single-select'?{value:'',source:{dataset:'',column:''},options:[]}:{value:[],source:{dataset:'',column:''},options:[]})};
+      if(draft.type==='number'||draft.type==='text'||draft.type==='date'){const label=element('label','parameter-value-label',draft.type==='text'?'Text value':'Value');const input=element('input','');input.type=draft.type==='number'?'number':draft.type==='date'?'date':'text';input.value=String(draft.value);input.step='any';input.setAttribute('aria-label','New parameter value');input.addEventListener('input',()=>draft.value=draft.type==='number'?Number(input.value):input.value);label.append(input);editor.append(label);if(draft.type==='number'){for(const key of ['min','max']){const bound=element('label','parameter-value-label',key==='min'?'Minimum':'Maximum');const field=element('input','');field.type='number';field.step='any';field.setAttribute('aria-label',key==='min'?'Parameter minimum':'Parameter maximum');field.addEventListener('input',()=>draft[key]=field.value===''?undefined:Number(field.value));bound.append(field);editor.append(bound);}const stepLabel=element('label','parameter-value-label','Step');const step=element('input','');step.type='number';step.min='0';step.step='any';step.setAttribute('aria-label','Parameter step');step.addEventListener('input',()=>draft.step=step.value===''?undefined:Number(step.value));stepLabel.append(step);editor.append(stepLabel);const check=element('label','parameter-check-label');const integer=element('input','');integer.type='checkbox';integer.setAttribute('aria-label','Integer values');integer.addEventListener('change',()=>draft.integer=integer.checked);check.append(integer,document.createTextNode(' Integer values'));editor.append(check);}}
+      else if(draft.type==='boolean'){const label=element('label','parameter-check-label');const input=element('input','');input.type='checkbox';input.setAttribute('aria-label','New parameter value');input.addEventListener('change',()=>draft.value=input.checked);label.append(input,document.createTextNode(' Enabled'));editor.append(label);}
+      else if(draft.type.endsWith('range')){const date=draft.type==='date-range';for(const [key,title]of [['from','Lower'],['to','Upper']]){const bound=element('div','parameter-bound');const label=element('label','parameter-value-label',`${title} bound`);const input=element('input','');input.type=date?'date':'number';input.step='any';input.setAttribute('aria-label',`${title} bound`);input.addEventListener('input',()=>draft.value[key]=date?input.value:Number(input.value));label.append(input);const open=element('input','');open.type='checkbox';open.checked=key==='from';open.setAttribute('aria-label',`No ${key==='from'?'lower':'upper'} bound`);if(open.checked)input.disabled=true;open.addEventListener('change',()=>{draft.value[key]=open.checked?null:(date?input.value:Number(input.value));input.disabled=open.checked;});label.append(open,document.createTextNode(` No ${key==='from'?'lower':'upper'} bound`));bound.append(label);editor.append(bound);}}
+      else {const result=sourceControls(editor,draft,(enumerated,reason)=>{if(reason){error.textContent=reason;error.hidden=false;return;}draft={...draft,source:enumerated.source,options:enumerated.options,...(enumerated.overflow?{overflow:enumerated.overflow}:{})};error.textContent='Options refreshed and stored.';error.hidden=false;},'Select ');}
+    };
+    type.addEventListener('change',draw);draw();
+    const actions=element('div','filter-form-actions');const cancel=element('button','filter-cancel','Cancel');cancel.type='button';cancel.addEventListener('click',()=>{addParameterOpen=false;renderParametersPanel();});const create=element('button','filter-apply','Create parameter');create.type='button';create.addEventListener('click',()=>{
+      const candidate={name:name.value.trim(),...draft};if(candidate.type==='single-select'||candidate.type==='multi-select'){if(!candidate.source?.dataset||!candidate.source?.column){error.textContent='Choose an explicit dataset and column, then refresh options before creating this select parameter.';error.hidden=false;return;}candidate.value=candidate.type==='single-select'?(candidate.options[0]??''):[];}
+      try{emitParameters([...currentParameters,candidate]);addParameterOpen=false;renderParametersPanel();}catch(err){error.textContent=err.message;error.hidden=false;}
+    });actions.append(cancel,create);form.append(actions);return form;
   }
 
   filtersTab.addEventListener("click",renderFiltersPanel);
   parametersTab.addEventListener("click",renderParametersPanel);
   renderFiltersPanel();
-  outsideHandler=e=>{if(popover&&!popover.contains(e.target)&&!anchor?.contains(e.target))closeFiltersPopover();};
+  outsideHandler=e=>{
+    if(!popover)return;
+    const rect=anchor?.getBoundingClientRect();
+    const hitAnchor=rect&&e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom;
+    if((!popover.contains(e.target)&&!anchor?.contains(e.target))||(hitAnchor&&e.target!==anchor))closeFiltersPopover();
+  };
   keyHandler=e=>{if(e.key==='Escape')closeFiltersPopover();};
   document.addEventListener("pointerdown",outsideHandler);
   document.addEventListener("keydown",keyHandler);

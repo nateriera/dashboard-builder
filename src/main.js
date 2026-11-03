@@ -1331,6 +1331,7 @@ if (btnFilters) {
       anchor:btnFilters,
       filters,
       parameters,
+      defaultDataset:dashboardDefault,
       tiles:dashboardFilterTiles(),
       pages,
       queries:listQueries(),

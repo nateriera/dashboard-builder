@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -51,7 +52,7 @@ test('GA-1: saved chain survives reload, HTML import, review and re-edit without
   expect(payload.layout.queries[id].sql).toContain('{{factor}}');
   expect(payload.layout.queries[id].parameterDependencies).toEqual(['factor']);
 
-  const context=await browser.newContext();
+  const context=await browser.newContext(); await configureImportContext(context);
   try {
     const imported=await context.newPage();await ready(imported);
     const passiveHtml=html.replace('</body>','<script>window.importedHtmlExecuted=true</script></body>');
@@ -126,7 +127,7 @@ test('GA-1: handwritten SQL survives reload, HTML export/import and review witho
   await expect(page.locator('.db-data-table')).toContainText('Manual');
   const html=await exportHtml(page),record=payloadOf(html).layout.queries[id];
   expect(record.sql).toBe(sql);expect(record).not.toHaveProperty('chain');
-  const context=await browser.newContext();
+  const context=await browser.newContext(); await configureImportContext(context);
   try {
     const imported=await context.newPage();await ready(imported);
     await imported.locator('#file-import').setInputFiles({name:'sql-only.html',mimeType:'text/html',buffer:Buffer.from(html)});
@@ -156,3 +157,5 @@ test('GA-1: a malformed stored chain reports a blocked load and retains its dura
   expect(await page.evaluate(key=>localStorage.getItem(key),queryKey)).toBe(corrupt);
   await expect(page.locator('.grid-stack-item[gs-id="editable-chain"]')).toHaveCount(1);
 });
+
+acceptImportConfirmation(test);

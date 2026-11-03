@@ -392,7 +392,7 @@ export const TILE_TYPES = {
     label: "Histogram", description: "Distribution of numeric values", fields:[{key:"value",label:"Numeric value",numeric:true}],
     datasets:["scatter"], defaultDataset:"scatter", defaultSize:{w:6,h:7}, defaultTitle:"Value distribution",
     controls:[{type:"number",key:"binCount",label:"Bins",default:20,min:5,max:100,step:1},...referenceControls],
-    render(el,{data,options}) { const rows=data.map(d=>({...d,value:d.value??d.y??d.x})); mount(el,(width,height)=>histogramChart(rows,{value:"value",bins:Math.min(100,Math.max(5,Math.round(+options.tileOptions?.binCount||20))),width,height,xLabel:options.tileOptions?.xLabel||null,referenceValue:options.tileOptions?.referenceValue,referenceLabel:options.tileOptions?.referenceLabel}),options); }
+    render(el,{data,options}) { const rows=data.map(d=>({...d,value:d.value??d.y??d.x})); mount(el,(width,height)=>histogramChart(rows,{value:"value",preBinned:options.preBinnedHistogram===true,bins:Math.min(100,Math.max(5,Math.round(+options.tileOptions?.binCount||20))),width,height,xLabel:options.tileOptions?.xLabel||null,referenceValue:options.tileOptions?.referenceValue,referenceLabel:options.tileOptions?.referenceLabel}),options); }
   },
 
   boxplot: {

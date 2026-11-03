@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 
 const fixtureSql=`SELECT i AS sequence,
@@ -47,7 +48,7 @@ const preview=editor=>editor.getByRole('button',{name:'Preview transforms',exact
 test('GA-1 editor: unordered GroupBy is disabled with a reason, and explicit order enables full counts and provenance',async({page})=>{
   const editor=await openEditor(page);
   const offered=await editor.getByLabel('New transform operation',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value).filter(Boolean));
-  expect(offered).toEqual(['groupBy','bucket','between','top','movingAvg','stats','cumulative','change','periodPair']);
+  expect(offered).toEqual(['groupBy','bucket','between','top','movingAvg','stats','cumulative','change','periodPair','pivot','histogram','ratio']);
   await addGroup(editor,1);
   await expect(editor.getByLabel('Step 1 operation',{exact:true})).toHaveValue('groupBy');
   await expect(editor.locator('.transform-step')).toContainText(/deterministic|incoming order|source order/i);
@@ -177,3 +178,5 @@ test('GA-1 editor: existing parameter picker keeps references raw and a value ch
   expect(saved.sql).toContain('{{grain}}');
   expect(saved.parameterDependencies).toContain('grain');
 });
+
+acceptImportConfirmation(test);

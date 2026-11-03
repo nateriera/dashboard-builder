@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -28,7 +29,7 @@ test('S6: donut Other selects its folded original records in the composer and of
   await importLayout(page,layout);
   const downloading = page.waitForEvent('download'); await page.locator('#btn-export-html').click();
   const html = await fs.readFile(await (await downloading).path(),'utf8');
-  const context = await browser.newContext();
+  const context = await browser.newContext(); await configureImportContext(context);
   try {
     await context.setOffline(true); const offline = await context.newPage();
     await offline.setContent(html,{waitUntil:'load'});
@@ -118,7 +119,7 @@ test('S10: HTML export names parameter-mismatched views before saving, supports 
   const payload=JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
   expect(payload.savedViews.map(view=>view.name)).toEqual(['Matching growth 2']);
   expect(payload.tiles[0].rows).toEqual([{label:'Revenue',value:20}]);
-  const context=await browser.newContext();
+  const context=await browser.newContext(); await configureImportContext(context);
   try {
     await context.setOffline(true);const offline=await context.newPage();await offline.setContent(html,{waitUntil:'load'});
     await offline.getByLabel('Saved dashboard view',{exact:true}).selectOption('matching');
@@ -127,3 +128,5 @@ test('S10: HTML export names parameter-mismatched views before saving, supports 
     expect(await offline.getByLabel('Saved dashboard view',{exact:true}).locator('option:not([value=""])').allTextContents()).toEqual(['Matching growth 2']);
   } finally {await context.close();}
 });
+
+acceptImportConfirmation(test);

@@ -127,13 +127,19 @@ export async function previewTransformChain(input, parameters = [], { sampleOnly
     const changed=chain.source.schema.columns.find(column=>family(chain.source.schema.types[column])!==family(schema.types[column]));
     if(JSON.stringify(chain.source.schema.columns)!==JSON.stringify(schema.columns)||changed) throw new Error(`Transform source schema changed${changed?` (${changed}: ${chain.source.schema.types[changed]} → ${schema.types[changed]||'missing'})`:''}. Open Transform and preview again.`);
   }
-  const plan=compileTransformChain(chain,{parameters});
+  const canonicalPlan=compileTransformChain(chain,{parameters});
   const run=async sql=>{
     const executionSql=sql.replaceAll(APP_LOCAL_DATE_MARKER,`DATE '${appLocalDate(now)}'`);
     const result=await runQueryDetailed(substituteParameters(executionSql,parameters));
     if(result.revision!==revision||datasetVersion()!==revision) throw new Error('Datasets changed during transform preview. Run again.');
     return result;
   };
+  const pivotCategories={};
+  for(const step of canonicalPlan.steps) if(step.op==='pivot'&&!step.disabled&&step.pivotCategorySql) {
+    const categories=await run(step.pivotCategorySql);
+    pivotCategories[step.id]=categories.rows.slice(0,25).map(row=>({value:row.value,label:row.label,firstSeen:row.firstSeen}));
+  }
+  const plan=Object.keys(pivotCategories).length?compileTransformChain(chain,{parameters,pivotCategories}):canonicalPlan;
   const steps=[];
   let blocked=false;
   for(const step of plan.steps) {
@@ -145,19 +151,20 @@ export async function previewTransformChain(input, parameters = [], { sampleOnly
     if(step.disabled||reason){steps.push({...step,disabled:true,reason,rowsIn:null,rowsOut:null,exclusions:{},provenance:[]});blocked=true;continue;}
     const result=await run(step.diagnosticsSql),counts=result.rows[0];
     const provenance=Object.entries(counts).filter(([key])=>key.startsWith('excluded:aggregate:')).map(([key,count])=>({kind:'aggregate',name:key.slice(19),count}));
+    for(const [key,count] of Object.entries(counts)) if(key.startsWith('excluded:ratio:')) provenance.push({kind:`ratio:${key.slice('excluded:ratio:'.length)}`,count});
     if(step.op==='bucket') provenance.push({kind:'invalidDates',count:counts['excluded:invalidDates']});
     if(step.op==='periodPair') provenance.push({kind:'invalidDates',count:counts['excluded:invalidDates']});
     if(step.op==='cumulative') provenance.push({kind:'cumulativeInvalids',name:step.params.field,count:counts['excluded:invalidValues']});
     if(step.op==='change') for(const cause of ['previousZero','previousInvalid','currentInvalid']) provenance.push({kind:`change:${cause}`,name:step.params.outputName,count:counts[`excluded:change:${cause}`]});
-    if(['between','top','movingAvg','stats'].includes(step.op)) provenance.push({kind:step.op==='movingAvg'?'invalidSamples':'invalidValues',name:step.params.field,count:counts['excluded:invalidValues']});
-    const exclusions=Object.fromEntries(provenance.map(item=>[item.kind==='aggregate'?item.name:item.kind==='invalidDates'?'invalidDates':item.kind.startsWith('change:')?item.kind:item.name,item.count]));
+    if(['between','top','movingAvg','stats','histogram'].includes(step.op)) provenance.push({kind:step.op==='movingAvg'?'invalidSamples':'invalidValues',name:step.params.field,count:counts['excluded:invalidValues']});
+    const exclusions=Object.fromEntries(provenance.map(item=>[item.kind==='aggregate'?item.name:item.kind==='invalidDates'?'invalidDates':item.kind.startsWith('change:')||item.kind.startsWith('ratio:')?item.kind:item.name,item.count]));
     steps.push({...step,rowsIn:counts.rowsIn,rowsOut:counts.rowsOut,exclusions,provenance});
   }
   const errors=[...plan.errors,...steps.filter(step=>step.disabled&&!plan.steps.find(item=>item.id===step.id)?.disabled).map(step=>`${step.id}: ${step.reason}`)];
   if(steps.at(-1)?.rowsOut>LIMITS.queryRows) errors.push(`Transform output exceeds the ${LIMITS.queryRows.toLocaleString()} row query budget.`);
-  if(errors.length)return {chain:plan.chain,sql:null,columns:plan.columns,types:plan.types,rows:[],steps,errors,revision};
+  if(errors.length)return {chain:plan.chain,sql:null,columns:plan.columns,types:plan.types,rows:[],steps,errors,revision,pivotCategories};
   const result=await run(sampleOnly?`SELECT * FROM (${plan.sql}) AS transform_preview LIMIT 5`:plan.sql);
-  return {...result,chain:plan.chain,sql:plan.sql,steps,errors:[],revision};
+  return {...result,chain:plan.chain,sql:canonicalPlan.sql,steps,errors:[],revision,pivotCategories};
 }
 
 /** Tables shown in the SQL tab: exact names, so queries need no guessing. */

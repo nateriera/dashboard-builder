@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -136,7 +137,7 @@ for (const type of ['line', 'area']) {
     await page.reload(); await expect(page.locator('#status')).toContainText('build');
     await expectOriginalRecords(target, selected);
 
-    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } }); await configureImportContext(context);
     try {
       await context.setOffline(true);
       const offline = await context.newPage();
@@ -151,3 +152,5 @@ for (const type of ['line', 'area']) {
     } finally { await context.close(); }
   });
 }
+
+acceptImportConfirmation(test);

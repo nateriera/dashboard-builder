@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 
 const tile = (id, type, dataset, y, tileOptions = {}) => ({
@@ -111,3 +112,5 @@ test('selected-mark table announces its source chart, field, and selected value'
   await expect(source.locator('.chart-drillthrough summary')).toContainText('Source');
   await expect(source.locator('.chart-drillthrough summary')).toContainText('label is Housing');
 });
+
+acceptImportConfirmation(test);

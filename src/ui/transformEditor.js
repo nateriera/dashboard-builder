@@ -14,8 +14,9 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
   let chain=structuredClone(initial||{version:1,source,steps:[],outputMapping:entry.dynamicFields?{}:guessMapping(entry,source.schema.columns)});
   let result=null,previewToken=null,busy=false,message='Preview is out of date; run again.';
   const token=()=>wranglingConfigToken('transform',{chain,parameters:getParameters(),revision:datasetVersion()});
+  const pivotOptions=()=>result?.pivotCategories?{pivotCategories:result.pivotCategories}:{};
   function analyse() {
-    try{return compileTransformChain(chain,{parameters:getParameters()});}
+    try{return compileTransformChain(chain,{parameters:getParameters(),...pivotOptions()});}
     catch(error){
       let first=0;
       for(const [index] of chain.steps.entries()) {
@@ -43,8 +44,8 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
     if(!multiple)node.value=value??'';
     node.addEventListener('change',()=>onChange(multiple?[...node.selectedOptions].map(option=>option.value):node.value));wrap.append(node);return wrap;
   }
-  function input(label,value,onChange,{type='text',step,min}={}) {
-    const wrap=element('label',label,'transform-control'),node=element('input');node.type=type;node.value=value??'';node.maxLength=200;if(step!==undefined)node.step=String(step);if(min!==undefined)node.min=String(min);node.setAttribute('aria-label',label);node.addEventListener('input',()=>onChange(type==='number'?(node.value===''?null:Number(node.value)):node.value));wrap.append(node);return wrap;
+  function input(label,value,onChange,{type='text',step,min,max}={}) {
+    const wrap=element('label',label,'transform-control'),node=element('input');node.type=type;node.value=value??'';node.maxLength=200;if(step!==undefined)node.step=String(step);if(min!==undefined)node.min=String(min);if(max!==undefined)node.max=String(max);node.setAttribute('aria-label',label);node.addEventListener('input',()=>onChange(type==='number'?(node.value===''?null:Number(node.value)):node.value));wrap.append(node);return wrap;
   }
   function defaults(op,columns,types) {
     const value=columns.find(column=>aggregationOptions(types[column]).includes('SUM'))||null;
@@ -60,6 +61,9 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
     if(op==='cumulative')return {field:value||columns[0],partitions:[]};
     if(op==='change')return {currentField:value||columns[0],previousField:value||columns[0],outputName:'change_pct'};
     if(op==='periodPair')return {dateField:date,categoryField:null,measureField:value||columns[0],aggregate:value?'SUM':'COUNT',currentWindow:{kind:'relative',days:30},previousWindow:null,outputCurrent:'current',outputPrevious:'previous'};
+    if(op==='pivot') {const categories=columns.filter(column=>!aggregationOptions(types[column]).includes('SUM'));return {rowFields:categories.slice(0,1),columnField:categories[1]||columns[0],measureField:value,aggregate:value?'SUM':'COUNT'};}
+    if(op==='histogram')return {field:value||columns[0],bins:20,min:null,max:null};
+    if(op==='ratio')return {numerator:{kind:'field',field:value||columns[0]},denominator:{kind:'field',field:columns.find(column=>column!==value&&aggregationOptions(types[column]).includes('SUM'))||value||columns[0]},partitions:[],percent:false,outputName:'ratio'};
     return {field:value||columns[0]};
   }
   function numericParameterNames(){return validateParameters(getParameters()).filter(parameter=>parameter.type==='number').map(parameter=>parameter.name);}
@@ -84,6 +88,15 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
       renderBound(box,index,`${label} end date`,window.end,'date',value=>{window.end=value;});
     }
   }
+  function renderRatioOperand(box,index,label,operand,columns,types,onChange) {
+    const numericColumns=columns.filter(column=>aggregationOptions(types[column]).includes('SUM'));
+    box.append(select(`Step ${index+1} ${label} kind`,[['field','Field'],['aggregate','Aggregate']],operand.kind,kind=>mutate(()=>onChange(kind==='field'?{kind,field:numericColumns[0]||columns[0]}:{kind,operation:'SUM',column:numericColumns[0]||null}))));
+    if(operand.kind==='field') box.append(select(`Step ${index+1} ${label} field`,numericColumns,operand.field,value=>mutate(()=>onChange({kind:'field',field:value}))));
+    else {
+      box.append(select(`Step ${index+1} ${label} aggregate`,['SUM','AVG','COUNT','MIN','MAX','COUNT DISTINCT'],operand.operation,value=>mutate(()=>onChange({kind:'aggregate',operation:value,column:value==='COUNT'?null:operand.column||(numericColumns[0]||columns[0]||null)}))));
+      if(operand.operation!=='COUNT')box.append(select(`Step ${index+1} ${label} aggregate field`,columns,operand.column||'',value=>mutate(()=>onChange({...operand,column:value||null})),{empty:true}));
+    }
+  }
   function renderAggregates(box,step,index,columns) {
     for(const [aggIndex,aggregate] of step.params.aggregations.entries()) {
       const label=`Step ${index+1} aggregation ${aggIndex+1}`,row=element('div',undefined,'transform-aggregate');
@@ -106,7 +119,7 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
     for(const [index,step] of chain.steps.entries()) {
       const metadata=plan.steps[index],columns=metadata?.inputColumns||chain.source.schema.columns;
       const box=element('fieldset',undefined,'transform-step');box.append(element('legend',`Step ${index+1}`));
-      box.append(select(`Step ${index+1} operation`,[['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats'],['cumulative','Cumulative'],['change','Change'],['periodPair','Paired periods']],step.op,op=>mutate(()=>{step.op=op;step.params=defaults(op,columns,index?plan.steps[index-1]?.types||plan.types:chain.source.schema.types);} )));
+      box.append(select(`Step ${index+1} operation`,[['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats'],['cumulative','Cumulative'],['change','Change'],['periodPair','Paired periods'],['pivot','Pivot'],['histogram','Histogram'],['ratio','Ratio (convenience extension)']],step.op,op=>mutate(()=>{step.op=op;step.params=defaults(op,columns,index?plan.steps[index-1]?.types||plan.types:chain.source.schema.types);} )));
       const actions=element('div',undefined,'transform-step-actions');
       for(const [down,label] of [[false,'up'],[true,'down']])actions.append(button(down?'Move down':'Move up',`Move step ${index+1} ${label}`,()=>mutate(()=>{const next=index+(down?1:-1);[chain.steps[index],chain.steps[next]]=[chain.steps[next],chain.steps[index]];}),down?index===chain.steps.length-1:index===0));
       actions.append(button('Remove step',`Remove step ${index+1}`,()=>mutate(()=>{chain.steps.splice(index,1);})));box.append(actions);
@@ -150,6 +163,23 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
         if(step.params.previousWindow)renderPeriodWindow(box,index,'previous',step.params.previousWindow,value=>{step.params.previousWindow=value;});
         box.append(input(`Step ${index+1} current output name`,step.params.outputCurrent,value=>mutate(()=>{step.params.outputCurrent=value;},false)));
         box.append(input(`Step ${index+1} previous output name`,step.params.outputPrevious,value=>mutate(()=>{step.params.outputPrevious=value;},false)));
+      } else if(step.op==='pivot') {
+        box.append(select(`Step ${index+1} row key fields`,columns,step.params.rowFields,fields=>mutate(()=>{step.params.rowFields=fields;}),{multiple:true}));
+        box.append(select(`Step ${index+1} column key field`,columns,step.params.columnField,value=>mutate(()=>{step.params.columnField=value;})));
+        box.append(select(`Step ${index+1} measure field`,columns,step.params.measureField||'',value=>mutate(()=>{step.params.measureField=value||null;}),{empty:true}));
+        box.append(select(`Step ${index+1} aggregate`,['SUM','AVG','COUNT','MIN','MAX','COUNT DISTINCT'],step.params.aggregate,value=>mutate(()=>{step.params.aggregate=value;if(value==='COUNT')step.params.measureField=null;})));
+      } else if(step.op==='histogram') {
+        const numericColumns=columns.filter(column=>aggregationOptions(plan.types?.[column]||chain.source.schema.types[column]).includes('SUM'));
+        box.append(select(`Step ${index+1} column`,numericColumns,step.params.field,value=>mutate(()=>{step.params.field=value;})));
+        box.append(input(`Step ${index+1} bins`,step.params.bins,value=>mutate(()=>{step.params.bins=value;}),{type:'number',step:1,min:1,max:500}));
+        box.append(input(`Step ${index+1} minimum`,step.params.min,value=>mutate(()=>{step.params.min=value;},false),{type:'number',step:'any'}));
+        box.append(input(`Step ${index+1} maximum`,step.params.max,value=>mutate(()=>{step.params.max=value;},false),{type:'number',step:'any'}));
+      } else if(step.op==='ratio') {
+        renderRatioOperand(box,index,'numerator',step.params.numerator,columns,metadata?.types||plan.types,value=>{step.params.numerator=value;});
+        renderRatioOperand(box,index,'denominator',step.params.denominator,columns,metadata?.types||plan.types,value=>{step.params.denominator=value;});
+        box.append(select(`Step ${index+1} partition fields`,columns,step.params.partitions,fields=>mutate(()=>{step.params.partitions=fields;}),{multiple:true}));
+        box.append(select(`Step ${index+1} percent scale`,[['false','Ratio'],['true','Percent']],String(step.params.percent),value=>mutate(()=>{step.params.percent=value==='true';})));
+        box.append(input(`Step ${index+1} output name`,step.params.outputName,value=>mutate(()=>{step.params.outputName=value;},false)));
       }
       if(step.op==='groupBy'||step.op==='bucket')renderAggregates(box,step,index,columns);
       const actual=result?.steps.find(item=>item.id===step.id);
@@ -158,11 +188,17 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
       const warning=actual?.warning||metadata?.warning;
       if(warning){const node=element('p','Warning: '+warning,'transform-warning data-warning');node.setAttribute('role','alert');box.append(node);}
       if(actual?.rowsIn!=null)box.append(element('p',`${actual.rowsIn.toLocaleString()} rows → ${actual.rowsOut.toLocaleString()} rows`,'transform-count'));
-      for(const count of actual?.provenance||[])box.append(element('p',count.kind==='invalidDates'?`${count.count.toLocaleString()} ${step.op==='periodPair'?'bad dates excluded from period windows':'bad dates dropped'}`:count.kind==='cumulativeInvalids'?`${count.count.toLocaleString()} invalid/missing contributions treated as 0 in ${count.name}`:count.kind.startsWith('change:')?`${count.count.toLocaleString()} ${count.kind.slice(7)} Change values render as null`:count.kind==='invalidSamples'?`${count.count.toLocaleString()} invalid/missing samples ignored in ${count.name}`:`${count.count.toLocaleString()} invalid/missing values excluded from ${count.name}`,'transform-provenance'));
+      for(const count of actual?.provenance||[])if(!count.kind.startsWith('ratio:'))box.append(element('p',count.kind==='invalidDates'?`${count.count.toLocaleString()} ${step.op==='periodPair'?'bad dates excluded from period windows':'bad dates dropped'}`:count.kind==='cumulativeInvalids'?`${count.count.toLocaleString()} invalid/missing contributions treated as 0 in ${count.name}`:count.kind.startsWith('change:')?`${count.count.toLocaleString()} ${count.kind.slice(7)} Change values render as null`:count.kind==='invalidSamples'?`${count.count.toLocaleString()} invalid/missing samples ignored in ${count.name}`:`${count.count.toLocaleString()} invalid/missing values excluded from ${count.name}`,'transform-provenance'));
+      if(actual?.provenance)for(const count of actual.provenance.filter(item=>item.kind.startsWith('ratio:')))box.append(element('p',`${count.count.toLocaleString()} ${count.kind==='ratio:denominatorZero'?'zero denominators':count.kind==='ratio:denominatorInvalid'?'missing/invalid denominators':'missing/invalid numerators'} produce null ratios`,'transform-provenance'));
+      if(actual?.outputMetadata?.categories) {
+        const details=element('details',undefined,'transform-pivot-metadata'),summary=element('summary','Pivot output column metadata');details.append(summary);
+        for(const category of actual.outputMetadata.categories)details.append(element('p',`${category.label==null?'(null)':String(category.label)} → ${category.column}`));
+        box.append(details);
+      }
       panel.append(box);
     }
     const add=element('div',undefined,'transform-add');
-    const operation=element('select');operation.setAttribute('aria-label','New transform operation');for(const [value,label] of [['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats'],['cumulative','Cumulative'],['change','Change'],['periodPair','Paired periods']]){const option=element('option',label);option.value=value;operation.append(option);}
+    const operation=element('select');operation.setAttribute('aria-label','New transform operation');for(const [value,label] of [['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats'],['cumulative','Cumulative'],['change','Change'],['periodPair','Paired periods'],['pivot','Pivot'],['histogram','Histogram'],['ratio','Ratio (convenience extension)']]){const option=element('option',label);option.value=value;operation.append(option);}
     add.append(operation,button('Add step',null,()=>mutate(()=>{chain.steps.push({id:stepId(),op:operation.value,params:defaults(operation.value,plan.columns,plan.types)});}),chain.steps.length>=30));panel.append(add);
     if(!entry.dynamicFields) {
       const mapping=element('div',undefined,'data-mapping');mapping.append(element('strong','Chart output mapping'));

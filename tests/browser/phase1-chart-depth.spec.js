@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -94,3 +95,5 @@ test('Phase 1 tiles bind samples, save annotations, export offline, and capture 
   await testInfo.attach('standalone-export',{body:html,contentType:'text/html'});
   await exported.close();
 });
+
+acceptImportConfirmation(test);

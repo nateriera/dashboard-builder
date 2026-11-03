@@ -28,7 +28,7 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   await page.keyboard.press('Shift+Tab');
   expect(await page.evaluate(()=>document.querySelector('.data-popover').contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Escape'); await expect(added.locator('.tile-data-btn')).toBeFocused();
-  await added.locator('.tile-remove').focus(); await page.keyboard.press('Enter'); await expect(page.locator('.tile')).toHaveCount(before);
+  await added.locator('.tile-remove').focus(); await page.keyboard.press('Enter'); await expect(added.getByRole('button',{name:'Cancel',exact:true})).toBeFocused(); await added.getByRole('button',{name:'Remove',exact:true}).click(); await expect(page.locator('.tile')).toHaveCount(before);
   const data=envelope([tile('categorical',{tileOptions:{xLabel:'USD'}})],{revenue:upload});
   data.defaultDataset={kind:'dataset',ref:'upload:revenue'};
   await importJSON(page,data); await expect(page.locator('#status')).toContainText('Imported');

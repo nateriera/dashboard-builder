@@ -310,9 +310,31 @@ function buildTileContent(type, meta) {
   removeBtn.title = "Remove tile";
   removeBtn.setAttribute("aria-label", "Remove tile");
   removeBtn.addEventListener("click", () => {
-    const widgetEl = tile.closest(".grid-stack-item");
-    if (widgetEl) grid.removeWidget(widgetEl);
-    document.querySelector(".palette-item")?.focus();
+    const name = meta.title?.trim() || entry.label || meta.type;
+    const actions = document.createElement("div");
+    actions.className = "tile-remove-confirm";
+    actions.setAttribute("role", "group");
+    actions.setAttribute("aria-label", `Remove tile ${name}?`);
+    const question = document.createElement("span");
+    question.className = "tpl-confirm-q";
+    question.textContent = `Remove tile “${name}”?`;
+    const cancel = document.createElement("button");
+    cancel.type = "button"; cancel.className = "tpl-confirm-no"; cancel.textContent = "Cancel";
+    const confirm = document.createElement("button");
+    confirm.type = "button"; confirm.className = "tpl-confirm-yes"; confirm.textContent = "Remove";
+    const dismiss = () => { actions.remove(); removeBtn.focus(); };
+    cancel.addEventListener("click", dismiss);
+    actions.addEventListener("keydown", event => { if (event.key === "Escape") { event.stopPropagation(); dismiss(); } });
+    confirm.addEventListener("click", () => {
+      const widgetEl = tile.closest(".grid-stack-item");
+      if (widgetEl) grid.removeWidget(widgetEl);
+      document.querySelector(".palette-item")?.focus();
+    });
+    actions.addEventListener("pointerdown", event => event.stopPropagation());
+    actions.addEventListener("mousedown", event => event.stopPropagation());
+    actions.append(question, cancel, confirm);
+    toolbar.append(actions);
+    cancel.focus();
   });
 
   const inspectSelected = document.createElement("button");

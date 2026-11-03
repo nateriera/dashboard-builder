@@ -110,3 +110,19 @@ test('dashboard upload rejection stays visible and preserves the previous dashbo
   await expect(page.locator('.guided-dialog')).toHaveCount(0);
   await expect(page.locator('#btn-data')).toHaveText(original);
 });
+
+test('removing a tile names it and respects cancel and confirm', async ({page}) => {
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  const tile = page.locator('.grid-stack-item').first();
+  const title = await tile.locator('.tile-title').inputValue();
+  const count = await page.locator('.grid-stack-item').count();
+  await tile.locator('.tile-remove').click();
+  const confirmation = tile.locator('.tile-remove-confirm');
+  await expect(confirmation).toContainText(title);
+  await expect(confirmation.getByRole('button',{name:'Cancel'})).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.grid-stack-item')).toHaveCount(count);
+  await tile.locator('.tile-remove').click();
+  await confirmation.getByRole('button',{name:'Remove',exact:true}).click();
+  await expect(page.locator('.grid-stack-item')).toHaveCount(count - 1);
+});

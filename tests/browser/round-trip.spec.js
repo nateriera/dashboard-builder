@@ -76,6 +76,7 @@ for (const scenario of removalCases) {
     await expect(page.locator('#status')).toContainText('Imported');
     expect(await page.evaluate(() => window.filterUpdateCalls)).toBe(0);
     await page.locator(`.grid-stack-item[gs-id="${scenario.remove}"] .tile-remove`).click();
+    await page.locator(`.grid-stack-item[gs-id="${scenario.remove}"] .tile-remove-confirm .tpl-confirm-yes`).click();
     const survivingIds = ids.filter(id => id !== scenario.remove).sort();
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).tiles.map(tile => tile.id).sort())).toEqual(survivingIds);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')));

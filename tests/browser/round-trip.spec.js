@@ -59,7 +59,7 @@ const removalCases = [
 for (const scenario of removalCases) {
   test(`R3: tile removal ${scenario.name} and survives reload`, async ({ page }) => {
     await page.addInitScript(() => { window.filterUpdateCalls = 0; });
-    await page.route('**/src/main.js', async route => {
+    await page.route('**/src/main.js*', async route => {
       const response = await route.fetch();
       const source = await response.text();
       const signature = 'function setFilters(next) {';

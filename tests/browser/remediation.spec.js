@@ -1,4 +1,5 @@
 import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
+import { acceptErroredTileExportConfirmation } from './accept-errored-export.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction, focusHeaderAction } from './header-actions.js';
@@ -85,7 +86,7 @@ test('R2/R7: missing references stay blocked; collision and invalid imports pres
 });
 async function jsonExportWithOmissions(page) { page.once('dialog',d=>d.accept()); return jsonExport(page); }
 test('R4: delayed SQL A after edit to B and mapping change never enables Apply', async ({page}) => {
-  await page.route('**/src/data/duckdb.js',async route=>{
+  await page.route('**/src/data/duckdb.js*',async route=>{
     const response=await route.fetch();
     const source=(await response.text()).replace('return coordinator.run(sql);','return new Promise(resolve => setTimeout(resolve, 300)).then(() => coordinator.run(sql));');
     await route.fulfill({response,body:source});
@@ -139,7 +140,7 @@ test('R5: unavailable IndexedDB retains legacy records across reload with visibl
     Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true});
     if(!localStorage.getItem('klaroDash.datasets.v1')) localStorage.setItem('klaroDash.datasets.v1',JSON.stringify({legacy:{name:'Legacy',columns:['label','value'],rows:[{label:'Recover',value:42}],mapping:{},fieldKeys:[]}}));
   });
-  await ready(page); await expect(page.locator('#status')).toContainText('original retained');
+  await ready(page); await expect(page.locator('#persistence-warning')).toContainText('retained');
   expect(await page.evaluate(()=>!!localStorage.getItem('klaroDash.datasets.v1'))).toBe(true);
   await page.reload(); await expect(page.getByRole('button',{name:'Retry data migration'})).toBeVisible();
   expect(await page.evaluate(async()=>{const {getDataset}=await import('/src/data/store.js');return getDataset('legacy').persisted;})).toBe(false);
@@ -198,3 +199,4 @@ test('R6/R9: worker upload, keyboard save/import/export and cancel remain operab
 });
 
 acceptImportConfirmation(test);
+acceptErroredTileExportConfirmation(test);

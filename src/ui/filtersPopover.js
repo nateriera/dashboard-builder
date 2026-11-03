@@ -1,10 +1,12 @@
 import { anchorPopover } from "./anchoredPopover.js";
+import { focusDialog } from "./focus.js";
 import { dateRangeForPreset, validateFilters } from "../data/filters.js";
 import { validateParameters } from "../data/parameters.js";
 
 let popover = null;
 let anchor = null;
 let releaseAnchor = null;
+let releaseFocus = null;
 let outsideHandler = null;
 let keyHandler = null;
 
@@ -23,6 +25,7 @@ function newId(prefix) {
 export function closeFiltersPopover() {
   if (!popover) return;
   releaseAnchor?.(); releaseAnchor=null;
+  releaseFocus?.(); releaseFocus=null;
   document.removeEventListener("pointerdown",outsideHandler);
   document.removeEventListener("keydown",keyHandler);
   popover.remove(); popover=null; anchor=null;
@@ -62,6 +65,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
   document.body.append(pop);
   popover=pop;
   releaseAnchor=anchorPopover(pop,anchor);
+  releaseFocus=focusDialog(pop,anchor);
 
   const emitFilters=next=>{
     currentFilters=validateFilters(next);

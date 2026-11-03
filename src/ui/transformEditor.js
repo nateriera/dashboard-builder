@@ -232,5 +232,24 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
   }
   const unsubscribe=subscribeDatasetChanges(()=>{invalidate();render();});
   render();
-  return {invalidate:()=>{invalidate();render();},replaceSource(next){chain={version:1,source:structuredClone(next),steps:[],outputMapping:{}};invalidate();render();},dispose:unsubscribe};
+  return {
+    invalidate:()=>{invalidate();render();},
+    replaceSource(next){chain={version:1,source:structuredClone(next),steps:[],outputMapping:{}};invalidate();render();},
+    updateSource(next){
+      const previousColumns=new Set(chain.source.schema.columns||[]), currentColumns=new Set(next.schema.columns||[]);
+      const prune=value=>{
+        if(typeof value==='string')return previousColumns.has(value)&&!currentColumns.has(value)?null:value;
+        if(Array.isArray(value))return value.map(prune).filter(item=>item!==null);
+        if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,prune(item)]).filter(([,item])=>item!==null));
+        return value;
+      };
+      chain={...chain,source:structuredClone(next),steps:prune(chain.steps)};
+      if(chain.source.order?.kind==='columns'){
+        chain.source.order.fields=chain.source.order.fields.filter(field=>currentColumns.has(field));
+        if(!chain.source.order.fields.length)chain.source.order=null;
+      }
+      invalidate();render();
+    },
+    dispose:unsubscribe
+  };
 }

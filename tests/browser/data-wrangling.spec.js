@@ -45,7 +45,7 @@ test('wrangling integrity: semicolon-terminated sources load async schema and re
 });
 
 async function holdPreviewCompletion(page) {
-  await page.route('**/src/data/duckdb.js', async route => {
+  await page.route('**/src/data/duckdb.js*', async route => {
     const response = await route.fetch();
     const source = await response.text();
     const original = 'export function runQueryDetailed(sql) { return coordinator.runDetailed(sql); }';

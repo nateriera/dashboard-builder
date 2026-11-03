@@ -1,4 +1,5 @@
 import { focusDialog } from "./focus.js";
+import { anchorPopover } from "./anchoredPopover.js";
 // Dashboard-wide default dataset popover: pick one CSV (or sample) that all
 // charts follow, instead of binding data tile by tile. Tiles with an explicit
 // per-tile dataset keep it; tiles on the default re-resolve on every render.
@@ -13,12 +14,14 @@ import { profileRows } from "../data/profile.js";
 import { listDatasets } from "../data/store.js";
 
 let releaseFocus = null;
+let releasePosition = null;
 let popEl = null;
 let popAnchor = null;
 
 export function closeDashboardPopover() {
   if (popEl) {
     releaseFocus?.(); releaseFocus = null;
+    releasePosition?.(); releasePosition = null;
     popEl.remove();
     popEl = null;
     popAnchor = null;
@@ -44,7 +47,7 @@ function onDocKeyDown(e) {
  * @param onUpload({name, columns, rows, profile}) — user dropped a CSV/JSON (raw rows);
  *   the caller persists it and makes it the default
  */
-export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, onUpload }) {
+export function toggleDashboardPopover({ anchor, current, sampleKeys, bindingCounts = { following: 0, ownData: 0 }, onSelect, onUpload, onFailure }) {
   if (popEl && popAnchor === anchor) {
     closeDashboardPopover();
     return;
@@ -73,8 +76,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
 
   const note = document.createElement("div");
   note.className = "data-sql-note";
-  note.textContent =
-    "One dataset for every chart. Tiles with their own data keep it; new tiles follow this.";
+  const following = bindingCounts.following || 0;
+  const ownData = bindingCounts.ownData || 0;
+  note.textContent = `Right now, ${following} ${following === 1 ? "tile follows" : "tiles follow"} dashboard data and ${ownData} ${ownData === 1 ? "uses" : "use"} their own data. Changing dashboard data updates the ${following === 1 ? "following tile" : `${following} following tiles`}; ${ownData ? `the ${ownData} tile${ownData === 1 ? "" : "s"} with their own data stay unchanged` : "tiles with their own data stay unchanged"}. New tiles follow dashboard data.`;
   body.appendChild(note);
 
   const isCurrent = (kind, ref) =>
@@ -168,7 +172,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
       await onUpload({ name: file.name, columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
-      err.textContent = e && e.message ? e.message : String(e);
+      const message = e && e.message ? e.message : String(e);
+      err.textContent = message;
+      onFailure?.(message);
       err.hidden = false;
       dropText.textContent = "Drop a CSV here, or click to choose a file";
     }
@@ -191,7 +197,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
       await onUpload({ name: "URL CSV", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
-      err.textContent = e?.message || String(e);
+      const message = e?.message || String(e);
+      err.textContent = message;
+      onFailure?.(message);
       err.hidden = false;
       sourceStatus.textContent = "";
     } finally { urlButton.disabled = false; }
@@ -206,7 +214,9 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
       await onUpload({ name: "Pasted table", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
-      err.textContent = e?.message || String(e);
+      const message = e?.message || String(e);
+      err.textContent = message;
+      onFailure?.(message);
       err.hidden = false;
       sourceStatus.textContent = "";
     }
@@ -225,18 +235,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
   pop.append(head, body);
   document.body.appendChild(pop);
 
-  const r = anchor.getBoundingClientRect();
-  const M = 8;
-  requestAnimationFrame(() => {
-    const pw = pop.offsetWidth;
-    const ph = pop.offsetHeight;
-    let left = Math.min(r.left, window.innerWidth - pw - M);
-    let top = r.bottom + 6;
-    if (top + ph > window.innerHeight - M) top = Math.max(M, r.top - ph - 6);
-    pop.style.left = Math.max(M, left) + "px";
-    pop.style.top = top + "px";
-    pop.style.visibility = "visible";
-  });
+  releasePosition = anchorPopover(pop, anchor);
 
   popEl = pop;
   releaseFocus = focusDialog(pop,anchor);

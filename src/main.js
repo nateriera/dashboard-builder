@@ -48,10 +48,11 @@ import { toggleDataPopover, closeDataPopover } from "./ui/dataPopover.js";
 import { paintQueryReview } from "./ui/queryReview.js";
 import { toggleDashboardPopover, closeDashboardPopover } from "./ui/dashboardDataPopover.js";
 import { toggleThemePopover, closeThemePopover } from "./ui/themePopover.js";
-import { openTemplateGallery } from "./ui/templateGallery.js";
-import { openGuidedStart } from "./ui/guidedStart.js";
+import { openTemplateGallery, closeTemplateGallery } from "./ui/templateGallery.js";
+import { openGuidedStart, closeGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
-import { toggleFiltersPopover } from "./ui/filtersPopover.js";
+import { toggleFiltersPopover, closeFiltersPopover } from "./ui/filtersPopover.js";
+import { closeWranglingPopover, refreshWranglingPopover } from "./ui/dataWranglingPopover.js";
 import { chartData } from "./ui/chartData.js";
 import { profileRows } from './data/profile.js';
 import { timeBrushPoints as brushPoints, timeBrushSelection } from './charts/timeMarks.js';
@@ -74,6 +75,7 @@ const FIRST_RUN_HINT_KEY = "dashbuilder.seenHint.v1";
 const BUILD = typeof __BUILD_TAG__ !== "undefined" ? __BUILD_TAG__ : "local";
 const gridEl = document.querySelector(".grid-stack");
 const statusEl = document.getElementById("status");
+const persistenceWarningEl = document.getElementById("persistence-warning");
 
 const normalizationDrops = new Map();
 let statusMessage = '';
@@ -87,6 +89,19 @@ function setStatus(msg, { dropped = null } = {}) {
   statusDroppedOverride = dropped;
   paintStatus();
 }
+function setPersistenceWarning(message) {
+  if (!persistenceWarningEl) return;
+  persistenceWarningEl.querySelector("[data-warning-message]").textContent = message;
+  persistenceWarningEl.hidden = false;
+}
+function reportUploadFailure(message) {
+  const text = `Dashboard upload failed: ${message}`;
+  if (/storage|persist|quota|indexeddb|local storage|save blocked/i.test(message)) setPersistenceWarning(text);
+  else setStatus(text);
+}
+document.getElementById("dismiss-persistence-warning")?.addEventListener("click", () => {
+  persistenceWarningEl.hidden = true;
+});
 function reportDropped(id, count) {
   if (count) normalizationDrops.set(id, count);
   else normalizationDrops.delete(id);
@@ -262,7 +277,7 @@ function buildTileContent(type, meta) {
       anchor: dataBtn,
       type,
       meta,
-      dashboard: { name: dashboardDefaultName(), table: dashboardTableName() },
+      dashboard: { get name() { return dashboardDefaultName(); }, get table() { return dashboardTableName(); } },
       getParameters: () => parameters,
       onDashboard: () => {
         meta.dataset = null;
@@ -270,6 +285,7 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
+        refreshWranglingPopover();
       },
       onSample: (key) => {
         meta.dataset = key;
@@ -277,6 +293,7 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
+        refreshWranglingPopover();
       },
       onUpload: ({ id, name, persisted }) => {
         meta.dataset = `upload:${id}`;
@@ -284,11 +301,9 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
-        setStatus(
-          persisted
-            ? `Loaded ${name}`
-            : `Loaded ${name} — browser storage unavailable, kept for this session only.`
-        );
+        refreshWranglingPopover();
+        setStatus(`Loaded ${name}`);
+        if (!persisted) setPersistenceWarning(`Upload “${name}” is available for this session only; browser storage is unavailable.`);
 
       },
       onQuery: ({ id, name, persisted }) => {
@@ -298,7 +313,9 @@ function buildTileContent(type, meta) {
         refreshDataLabel();
         renderTileById(meta.id);
         scheduleAutosave();
-        setStatus(`SQL query applied — ${name}` + (persisted ? "" : " — session only; export JSON for backup."));
+        refreshWranglingPopover();
+        setStatus(`SQL query applied — ${name}`);
+        if (!persisted) setPersistenceWarning(`SQL query “${name}” is available for this session only; export JSON for a backup.`);
       }
     });
   });
@@ -376,6 +393,11 @@ function buildTileContent(type, meta) {
   chartTypeSelect.addEventListener('change', () => {
     const nextType = chartTypeSelect.value;
     if (!compatibleChartTypes(meta).includes(nextType)) { chartTypeSelect.value = meta.type; return; }
+    const losses = chartOptionLosses(meta);
+    if (losses.length && !window.confirm(`Changing chart type resets: ${losses.join(", ")}. Continue?`)) {
+      chartTypeSelect.value = meta.type;
+      return;
+    }
     const widget = tile.closest('.grid-stack-item');
     const host = widget?.querySelector('.grid-stack-item-content');
     if (!widget || !host) return;
@@ -488,6 +510,31 @@ function buildTileContent(type, meta) {
 
   tile.append(toolbar, chart);
   return tile;
+}
+
+function chartOptionLosses(meta) {
+  const entry = TILE_TYPES[meta.type];
+  const defaults = new Map([
+    ["crossfilterMode", "filter"], ["clickAction", "filter-and-inspect"],
+    ["clickDestinationPageId", ""], ["crossfilterFieldMappings", {}],
+    ["xLabel", ""], ["yLabel", ""], ["referenceValue", ""], ["referenceLabel", ""]
+  ]);
+  const labels = new Map([
+    ["crossfilterMode", "cross-filter behavior"], ["clickAction", "click action"],
+    ["clickDestinationPageId", "click destination"], ["crossfilterFieldMappings", "cross-filter field mappings"],
+    ["xLabel", "horizontal axis label"], ["yLabel", "vertical axis label"],
+    ["referenceValue", "reference value"], ["referenceLabel", "reference label"]
+  ]);
+  for (const control of entry.controls || []) {
+    const fallback = control.type === "checkbox" ? false : "";
+    defaults.set(control.key, control.default ?? fallback);
+    labels.set(control.key, control.label);
+  }
+  const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+  return Object.entries(meta.tileOptions || {}).filter(([key, value]) => {
+    if (defaults.has(key)) return !equal(value, defaults.get(key));
+    return value != null && value !== "" && value !== false && !(Array.isArray(value) && !value.length);
+  }).map(([key]) => labels.get(key) || key.replace(/[A-Z]/g, letter => ` ${letter.toLowerCase()}`));
 }
 
 // Add a tile of `type` to the grid. Omit x/y for auto-placement.
@@ -1084,18 +1131,18 @@ function scheduleAutosave() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
       setStatus("Autosaved " + new Date().toLocaleTimeString());
     } catch {
-      setStatus("Autosave failed: storage unavailable");
+      setPersistenceWarning("Autosave failed: storage unavailable");
     }
   }, 400);
 }
 
 function saveNow() {
-  if (protectUnreadableSave) { setStatus("Save blocked to protect the unreadable dashboard."); return; }
+  if (protectUnreadableSave) { setPersistenceWarning("Save blocked to protect the unreadable dashboard."); return; }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
     setStatus("Saved " + new Date().toLocaleTimeString());
   } catch {
-    setStatus("Save failed: storage unavailable");
+    setPersistenceWarning("Save failed: storage unavailable");
   }
 }
 
@@ -1170,8 +1217,15 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
 
   item.append(label, desc);
   item.addEventListener("click", () => {
-    addTile(type, { fit: true });
+    const widget = addTile(type, { fit: true });
     scheduleAutosave();
+    if (widget) requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!widget.isConnected) return;
+      widget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      const title = widget.querySelector(".tile-title:not([hidden])");
+      if (title) title.focus({ preventScroll: true });
+      else { widget.tabIndex = -1; widget.focus({ preventScroll: true }); }
+    }));
   });
   paletteEl.appendChild(item);
   paletteItems.push(item);
@@ -1223,6 +1277,7 @@ document.getElementById('btn-save-view')?.addEventListener('click', () => {
   if (!name) return;
   if (name.length > 80) { setStatus('Saved view names are limited to 80 characters.'); return; }
   const existing = savedViews.find(view => view.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+  if (existing && !window.confirm(`Replace saved view “${existing.name}”?`)) return;
   const view = { id: existing?.id || `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name,
     theme: getThemeId(), currentPageId, filters: structuredClone(filters), parameters: structuredClone(parameters) };
   savedViews = [...savedViews.filter(item => item.id !== view.id), view];
@@ -1339,23 +1394,27 @@ function applyDashboardDefault(dd, statusMsg) {
   refreshDashboardButton();
   refreshAllDataLabels();
   renderAllTiles();
+  refreshWranglingPopover();
   scheduleAutosave();
   if (statusMsg) setStatus(statusMsg);
 }
 async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
   if (serializeLayout().tiles.length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
+  let step = "Preparing uploaded data";
   try {
     const original = getDataset(id);
     const raw = original?.raw || (original ? { columns: original.columns, rows: original.rows } : null);
     if (!raw) throw new Error("The uploaded file is no longer available.");
     const multi = suggestions.length > 1;
+    step = "Normalizing suggested chart fields";
     const prepared = suggestions.map((suggestion) => ({
       suggestion,
       entry: TILE_TYPES[suggestion.type],
       rows: normalizeRows(TILE_TYPES[suggestion.type], raw.rows, suggestion.mapping).rows
     }));
     const chartDatasets = [];
-    for (const { suggestion, entry, rows } of prepared) {
+    for (const [index, { suggestion, entry, rows }] of prepared.entries()) {
+      step = `Saving chart dataset ${index + 1} of ${prepared.length}`;
       const dataset = saveDataset({
         name,
         columns: raw.columns,
@@ -1364,9 +1423,11 @@ async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
         mapping: { ...suggestion.mapping },
         raw
       });
+      step = `Persisting chart dataset ${index + 1} of ${prepared.length}`;
       const durable = await persistDataset(dataset.id);
       chartDatasets.push({ id: dataset.id, durable });
     }
+    step = "Validating the replacement dashboard";
     const candidate = validateLayout({
       app: "dashboard-builder",
       version: 3,
@@ -1391,14 +1452,17 @@ async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
         };
       })
     });
+    step = "Replacing the current dashboard";
     replaceLayout(candidate, { fit: true });
     scheduleAutosave();
     const allDurable = persisted && chartDatasets.every((dataset) => dataset.durable);
-    setStatus(`Built ${suggestions.length} suggested chart${suggestions.length === 1 ? "" : "s"} from ${name}.` + (allDurable ? "" : " Some upload data is session only; export JSON for a backup."));
+    setStatus(`Built ${suggestions.length} suggested chart${suggestions.length === 1 ? "" : "s"} from ${name}.`);
+    if (!allDurable) setPersistenceWarning("Some guided-build upload data is available for this session only; export JSON for a backup.");
     return true;
   } catch (error) {
-    setStatus(`Suggested dashboard failed: ${error.message}`);
-    return false;
+    const message = `Guided build failed during ${step}: ${error.message}`;
+    setStatus(message);
+    return { error: message };
   }
 }
 if (btnData) {
@@ -1408,6 +1472,10 @@ if (btnData) {
       anchor: btnData,
       current: dashboardDefault,
       sampleKeys: Object.keys(DATASETS),
+      bindingCounts: (() => {
+        const tiles = serializeLayout().tiles.filter(tile => !TILE_TYPES[tile.type]?.noData);
+        return { following: tiles.filter(tile => tile.dataset == null).length, ownData: tiles.filter(tile => tile.dataset != null).length };
+      })(),
       onSelect: ({ kind, ref }) => {
         const dd = kind === "samples" ? { kind: "samples" } : { kind: "dataset", ref };
         applyDashboardDefault(dd);
@@ -1429,22 +1497,22 @@ if (btnData) {
             id,
             name,
             profile,
-            onUseData: () => applyDashboardDefault(
-              { kind: "dataset", ref: `upload:${id}` },
-              persisted
-                ? `Dashboard data: ${name}`
-                : `Dashboard data: ${name} — browser storage unavailable, kept for this session only.`
-            ),
+            onUseData: () => {
+              applyDashboardDefault({ kind: "dataset", ref: `upload:${id}` }, `Dashboard data: ${name}`);
+              if (!persisted) setPersistenceWarning(`Upload “${name}” is available for this session only; browser storage is unavailable.`);
+            },
             onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
-            onKeep: () => setStatus(persisted
-              ? `Upload saved: ${name}. Current dashboard kept.`
-              : `Upload available for this session only: ${name}. Current dashboard kept.`)
+            onKeep: () => {
+              setStatus(persisted ? `Upload saved: ${name}. Current dashboard kept.` : `Upload available for this session only: ${name}. Current dashboard kept.`);
+              if (!persisted) setPersistenceWarning(`Upload “${name}” is available for this session only; browser storage is unavailable.`);
+            }
           });
         } catch (error) {
-          setStatus(`Dashboard upload failed: ${error.message || error}`);
+          reportUploadFailure(error.message || String(error));
           throw error;
         }
-      }
+      },
+      onFailure: reportUploadFailure
     });
   });
 }
@@ -1492,14 +1560,28 @@ function inlineLayoutBackup(layout) {
   return {backup,skipped,blanked};
 }
 
+function visibleErroredTiles() {
+  return [...gridEl.querySelectorAll(".grid-stack-item")].filter(widget => widget.querySelector(".tile-error")).map(widget => {
+    const id = widget.getAttribute("gs-id") || widget.gridstackNode?.id;
+    const meta = tileMeta.get(id);
+    return { id, title: meta?.title || "Untitled tile" };
+  });
+}
+
 document.getElementById("btn-export").addEventListener("click", async () => {
   const {backup:layout,skipped,blanked}=inlineLayoutBackup(serializeLayout());
   const exportDrops = new Map(normalizationDrops);
+  const erroredTiles = new Map(visibleErroredTiles().map(tile => [tile.id, tile.title]));
   for (const t of layout.tiles.filter(t => isQueryRef(t.dataset))) {
     const resolved = await resolveExportRows(t,TILE_TYPES[t.type]);
     exportDrops.set(t.id, resolved.dropped || 0);
-    if (resolved.error && !skipped.some(s => s.startsWith(t.dataset))) skipped.push(t.dataset + ": " + resolved.error);
+    if (resolved.error) {
+      erroredTiles.set(t.id, t.title || "Untitled tile");
+      if (!skipped.some(s => s.startsWith(t.dataset))) skipped.push(t.dataset + ": " + resolved.error);
+    }
   }
+  const erroredNames = [...erroredTiles.values()];
+  if (erroredNames.length && !window.confirm(`These tiles are in an error state and will export without their data:\n${erroredNames.map(name => `- ${name}`).join("\n")}\nContinue exporting?`)) { setStatus("JSON export cancelled."); return; }
   layout.omittedDependencies = skipped;
   if (skipped.length && !window.confirm('This JSON will omit these dependencies:\n' + skipped.join('\n') + '\nExport with unavailable-data references retained?')) { setStatus('JSON export cancelled.'); return; }
   download(
@@ -1509,7 +1591,7 @@ document.getElementById("btn-export").addEventListener("click", async () => {
   setStatus(
     (skipped.length
       ? `Exported layout JSON (not inlined, over size limit: ${skipped.join(", ")})`
-      : "Exported layout JSON") + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''),
+      : "Exported layout JSON") + (erroredNames.length ? ` · errored tile data omitted: ${erroredNames.join(", ")}` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''),
     { dropped: [...exportDrops.values()].reduce((sum, count) => sum + count, 0) }
   );
 });
@@ -1563,12 +1645,14 @@ async function exportHtml() {
       return;
     }
     const tiles = [];
+    const erroredTiles = new Map(visibleErroredTiles().map(tile => [tile.id, tile.title]));
     let blanked = 0, dropped = 0;
     for (const savedTile of layout.tiles) {
       const meta = tileMeta.get(savedTile.id) || savedTile;
       const entry = TILE_TYPES[meta.type];
       if (!meta || !entry) continue;
       const resolved = await resolveExportRows(meta, entry);
+      if (resolved.error) erroredTiles.set(meta.id, meta.title || "Untitled tile");
       blanked += resolved.blanked || 0;
       dropped += resolved.dropped || 0;
       tiles.push({
@@ -1589,6 +1673,11 @@ async function exportHtml() {
         error: resolved.error || null,
         emptyMessage: null
       });
+    }
+    const erroredNames = [...erroredTiles.values()];
+    if (erroredNames.length && !window.confirm(`These tiles are in an error state and will export without their data:\n${erroredNames.map(name => `- ${name}`).join("\n")}\nContinue exporting?`)) {
+      setStatus('HTML export cancelled.');
+      return;
     }
 
     const {backup,skipped}=inlineLayoutBackup(layout);
@@ -1628,7 +1717,7 @@ async function exportHtml() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (skipped.length ? ` Editable backup has unavailable dependencies: ${skipped.join(', ')}.` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
+    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (skipped.length ? ` Editable backup has unavailable dependencies: ${skipped.join(', ')}.` : '') + (erroredNames.length ? ` · errored tile data omitted: ${erroredNames.join(", ")}` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
   } catch (err) {
     setStatus(`HTML export failed: ${err && err.message ? err.message : err}`);
   }
@@ -1723,7 +1812,14 @@ function setPresent(on) {
     closeDataPopover();
     closeDashboardPopover();
     closeThemePopover();
+    closeFiltersPopover();
+    closeWranglingPopover();
+    closeTemplateGallery();
+    closeGuidedStart();
+    gridEl.tabIndex = -1;
+    gridEl.focus({ preventScroll: true });
   } else {
+    btnPresent.focus();
     showFirstRunHint();
   }
   // Charts keep their rendered width; re-render in case chrome changes it.
@@ -1847,11 +1943,17 @@ function starterLayout() {
   }
   const issues = storageIssues();
   if (issues.length) {
-    setStatus(issues.join("; ") + ". Export JSON for backup or retry migration.");
+    setPersistenceWarning(issues.join("; ") + ". Export JSON for backup or retry migration.");
     const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "Retry data migration";
-    retry.onclick = async () => { await loadPersistedDatasets(); setStatus(storageIssues().join("; ") || "Migration verified."); };
+    retry.onclick = async () => {
+      await loadPersistedDatasets();
+      const remaining = storageIssues();
+      if (remaining.length) setPersistenceWarning(remaining.join("; ") + ". Export JSON for backup or retry migration.");
+      else setStatus("Migration verified.");
+    };
     statusEl.after(retry);
   }
   setStatus(`${[corruptMessage, queryLoadIssue].filter(Boolean).join(" ") || statusMessage} · build ${BUILD}`);
+  if (protectUnreadableSave) setPersistenceWarning(corruptMessage);
   showFirstRunHint();
 })();

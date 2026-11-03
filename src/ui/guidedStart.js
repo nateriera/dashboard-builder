@@ -41,7 +41,7 @@ function buildSuggestions(profile) {
   return suggestions.slice(0, 3);
 }
 
-function closeGuidedStart() {
+export function closeGuidedStart() {
   if (!activeDialog) return;
   const dialog = activeDialog;
   activeDialog = null;
@@ -175,6 +175,11 @@ export function openGuidedStart({ name, id, profile, onUseData, onApply, onKeep 
   } else {
     content.append(element("p", "guided-empty", "No chart suggestion met the conservative mapping rules. You can still use this file with the existing chart tools, templates, or SQL."));
   }
+  const buildError = element("p", "guided-build-error");
+  buildError.setAttribute("role", "alert");
+  buildError.tabIndex = -1;
+  buildError.hidden = true;
+  content.append(buildError);
 
   const footer = element("footer", "guided-actions");
   const keep = element("button", "guided-secondary", "Keep current dashboard");
@@ -186,6 +191,13 @@ export function openGuidedStart({ name, id, profile, onUseData, onApply, onKeep 
   const apply = element("button", "guided-primary", "Build selected charts");
   apply.type = "button";
   apply.disabled = choices.length === 0;
+  const controls = [...content.querySelectorAll("input, select, textarea"), close, keep, use, apply];
+  const initiallyDisabled = new Map(controls.map(control => [control, control.disabled]));
+  function finishApplying() {
+    applying = false;
+    for (const control of controls) control.disabled = initiallyDisabled.get(control);
+    apply.textContent = "Build selected charts";
+  }
   for (const { check } of choices) check.addEventListener("change", () => {
     apply.disabled = !choices.some((choice) => choice.check.checked);
   });
@@ -193,29 +205,28 @@ export function openGuidedStart({ name, id, profile, onUseData, onApply, onKeep 
     const selected = choices.filter((choice) => choice.check.checked).map((choice) => choice.suggestion);
     if (!selected.length) return;
     applying = true;
-    apply.disabled = true;
-    close.disabled = true;
-    keep.disabled = true;
-    use.disabled = true;
+    buildError.hidden = true;
+    buildError.textContent = "";
+    for (const control of controls) control.disabled = true;
     apply.textContent = "Building…";
     Promise.resolve(onApply({ id, name, suggestions: selected })).then((result) => {
+      if (result && typeof result === "object" && result.error) {
+        buildError.textContent = result.error;
+        buildError.hidden = false;
+        finishApplying();
+        buildError.focus();
+        return;
+      }
       if (result === false) {
-        applying = false;
-        apply.disabled = false;
-        close.disabled = false;
-        keep.disabled = false;
-        use.disabled = false;
-        apply.textContent = "Build selected charts";
+        finishApplying();
         return;
       }
       closeGuidedStart();
-    }).catch(() => {
-      applying = false;
-      apply.disabled = false;
-      close.disabled = false;
-      keep.disabled = false;
-      use.disabled = false;
-      apply.textContent = "Build selected charts";
+    }).catch((error) => {
+      buildError.textContent = `Build step failed: ${error?.message || String(error)}`;
+      buildError.hidden = false;
+      finishApplying();
+      buildError.focus();
     });
   });
   footer.append(keep, use, apply);

@@ -40,6 +40,10 @@
         <input type="file" id="file-import" accept="application/json,.json,text/html,.html,.htm" hidden />
       </nav>
       <div id="status" role="status" aria-live="polite"></div>
+      <div id="persistence-warning" class="persistence-warning" role="alert" aria-live="assertive" hidden>
+        <span data-warning-message></span>
+        <button id="dismiss-persistence-warning" type="button" aria-label="Dismiss persistence warning">Dismiss</button>
+      </div>
     </header>
 
     <div id="app-body">

@@ -1,4 +1,5 @@
 import { focusDialog } from "./focus.js";
+import { anchorPopover } from "./anchoredPopover.js";
 // Theme picker popover: lists the available visual themes with a small
 // color preview each. Appended to document.body with fixed positioning.
 // One popover open at a time (same conventions as the data popovers).
@@ -6,12 +7,14 @@ import { focusDialog } from "./focus.js";
 import { THEMES } from "../themes/themes.js";
 
 let releaseFocus = null;
+let releasePosition = null;
 let popEl = null;
 let popAnchor = null;
 
 export function closeThemePopover() {
   if (popEl) {
     releaseFocus?.(); releaseFocus = null;
+    releasePosition?.(); releasePosition = null;
     popEl.remove();
     popEl = null;
     popAnchor = null;
@@ -93,18 +96,7 @@ function openThemePopover({ anchor, current, onSelect }) {
   pop.append(head, body);
   document.body.appendChild(pop);
 
-  const r = anchor.getBoundingClientRect();
-  const M = 8;
-  requestAnimationFrame(() => {
-    const pw = pop.offsetWidth;
-    const ph = pop.offsetHeight;
-    let left = Math.min(r.left, window.innerWidth - pw - M);
-    let top = r.bottom + 6;
-    if (top + ph > window.innerHeight - M) top = Math.max(M, r.top - ph - 6);
-    pop.style.left = Math.max(M, left) + "px";
-    pop.style.top = top + "px";
-    pop.style.visibility = "visible";
-  });
+  releasePosition = anchorPopover(pop, anchor);
 
   popEl = pop;
   releaseFocus = focusDialog(pop,anchor);

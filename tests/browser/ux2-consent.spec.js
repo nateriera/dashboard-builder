@@ -59,7 +59,7 @@ test('guided replacement confirms when only another page has tiles', async ({pag
 });
 
 test('tile upload disables Apply while loading and never binds after dismissal', async ({page}) => {
-  await page.route('**/src/ui/dataPopover.js', async route => {
+  await page.route('**/src/ui/dataPopover.js*', async route => {
     const response = await route.fetch(); let source = await response.text();
     source = source.replace('const { columns, rows } = await readUpload(file,pop);', 'await window.ux2Wait; const { columns, rows } = await readUpload(file,pop);');
     source = source.replace('const persisted = await persistDataset(id);', 'await window.ux2Wait; const persisted = await persistDataset(id); window.ux2Done = true;');
@@ -94,7 +94,7 @@ test('tile upload disables Apply while loading and never binds after dismissal',
 });
 
 test('dashboard upload rejection stays visible and preserves the previous dashboard data', async ({page}) => {
-  await page.route('**/src/main.js', async route => {
+  await page.route('**/src/main.js*', async route => {
     const response = await route.fetch();
     const source = (await response.text()).replace('const persisted = await persistDataset(id);', 'await Promise.reject(new Error("Injected upload failure")); const persisted = await persistDataset(id);');
     await route.fulfill({response,body:source});

@@ -193,6 +193,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
 
   const errorEl = document.createElement("div");
   errorEl.className = "data-error";
+  errorEl.setAttribute("role", "alert");
   errorEl.hidden = true;
 
   const mapWrap = document.createElement("div");
@@ -249,9 +250,18 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     state.normalized = null;
     errorEl.textContent = msg;
     errorEl.hidden = false;
-    mapWrap.hidden = true;
+    mapWrap.hidden = !state.columns;
     previewWrap.hidden = true;
     applyBtn.disabled = true;
+  }
+
+  function normalizationErrorMessage(error, mapping) {
+    const message = error?.message || String(error);
+    const column = message.match(/\bin\s+[“"]?([^:”",]+)[”"]?:/i)?.[1]?.trim();
+    const field = column && entry.fields.find(item => mapping[item.key] === column);
+    return field
+      ? `Could not normalize ${field.label} from source column “${column}”: ${message}`
+      : `Could not normalize the mapped fields: ${message}`;
   }
 
   function buildMappingUI() {
@@ -301,6 +311,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   }
 
   function updatePreview() {
+    errorEl.hidden = true;
     const required = entry.fields.filter((f) => !f.optional);
     const missing = required.filter((f) => !state.mapping[f.key]);
     if (missing.length) {
@@ -311,7 +322,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     }
     let rows, dropped;
     try { ({ rows, dropped } = normalizeRows(entry, state.rawRows, state.mapping)); }
-    catch (err) { showError(err.message); state.normalized = null; return; }
+    catch (err) { showError(normalizationErrorMessage(err, state.mapping)); state.normalized = null; return; }
     state.normalized = rows;
 
     previewTable.innerHTML = "";
@@ -514,6 +525,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
 
   const sqlError = document.createElement("div");
   sqlError.className = "data-error";
+  sqlError.setAttribute("role", "alert");
   sqlError.hidden = true;
 
   const qMapWrap = document.createElement("div");
@@ -543,9 +555,18 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   function showSqlError(msg) {
     sqlError.textContent = msg;
     sqlError.hidden = false;
-    qMapWrap.hidden = true;
+    qMapWrap.hidden = !qstate.columns;
     qPreviewWrap.hidden = true;
     qApplyBtn.disabled = true;
+  }
+
+  function sqlNormalizationErrorMessage(error) {
+    const message = error?.message || String(error);
+    const column = message.match(/\bin\s+[“"]?([^:”",]+)[”"]?:/i)?.[1]?.trim();
+    const field = column && entry.fields.find(item => qstate.mapping[item.key] === column);
+    return field
+      ? `Could not normalize ${field.label} from SQL result column “${column}”: ${message}`
+      : `Could not normalize the SQL result fields: ${message}`;
   }
 
   function buildTableList() {
@@ -652,6 +673,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       }
       const sel = document.createElement("select");
       sel.dataset.fieldKey = f.key;
+      sel.setAttribute("aria-label", `Map SQL result column to ${f.label}`);
       const none = document.createElement("option");
       none.value = "";
       none.textContent = f.optional ? "— not mapped —" : "— choose —";
@@ -675,6 +697,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   }
 
   function updateQueryPreview() {
+    sqlError.hidden = true;
     if (!previewGate.eligible(sqlInput.value) || sqlRunning) { qApplyBtn.disabled = true; return; }
     const required = entry.fields.filter((f) => !f.optional);
     const missing = required.filter((f) => !qstate.mapping[f.key]);
@@ -685,7 +708,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     }
     let rows, dropped;
     try { ({ rows, dropped } = normalizeRows(entry, qstate.rows, qstate.mapping)); }
-    catch (err) { showSqlError(err.message); previewGate.invalidate(); qstate.normalized = null; return; }
+    catch (err) { showSqlError(sqlNormalizationErrorMessage(err)); previewGate.invalidate(); qstate.normalized = null; return; }
     qstate.normalized = rows;
 
     qPreviewTable.innerHTML = "";

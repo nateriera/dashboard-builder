@@ -8,8 +8,7 @@
 // - `chart`: plain JS tokens for chart internals (Plot/SVG fills, palettes),
 //   which can't read CSS variables at render time.
 //
-// No webfonts: every theme uses system stacks, keeping the app and its
-// static exports free of runtime network dependencies.
+// Paper bundles its brand fonts locally; other themes retain system stacks.
 
 const SYSTEM_BODY =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
@@ -22,23 +21,28 @@ export const THEMES = [
     name: "Paper",
     blurb: "Warm light, editorial",
     css: {
-      "--paper": "#f6f3ea",
-      "--white": "#ffffff",
-      "--ink": "#232839",
-      "--dusk": "#3e5c76",
-      "--periwinkle": "#c9803a",
-      "--slate-200": "#d8d2c2",
-      "--slate-300": "#b3ac99",
-      "--slate-500": "#6e6a5e",
-      "--slate-600": "#4a463c",
-      "--danger": "#b0413e",
-      "--success": "#5f8268",
-      "--warning": "#c9803a",
-      "--card-shadow":
-        "0 1px 2px rgba(35, 40, 57, 0.07), 0 1px 1px rgba(35, 40, 57, 0.05)",
-      "--font-display": `Georgia, 'Times New Roman', serif`,
-      "--font-body": SYSTEM_BODY,
-      "--font-mono": SYSTEM_MONO
+      "--paper": "#F5F1EA",
+      "--white": "#FFFFFF",
+      "--ink": "#1E2347",
+      "--dusk": "#4A5278",
+      "--periwinkle": "#B7BFD9",
+      "--slate": "#E7E3D9",
+      "--slate-200": "#E7E3D9",
+      "--slate-300": "#9AA0AE",
+      "--slate-400": "#9AA0AE",
+      "--slate-500": "#6E7484",
+      "--slate-600": "#3A4054",
+      "--slate-700": "#3A4054",
+      "--danger": "#C0452F",
+      "--success": "#2F7D5B",
+      "--warning": "#B97F26",
+      "--shadow-card": "0 1px 3px rgba(30,35,71,.08)",
+      "--shadow-overlay": "0 8px 24px rgba(30,35,71,.10)",
+      "--shadow-focus": "0 0 0 3px rgba(183,191,217,.45)",
+      "--card-shadow": "0 1px 2px rgba(35, 40, 57, 0.07), 0 1px 1px rgba(35, 40, 57, 0.05)",
+      "--font-display": "'Raleway', Georgia, serif",
+      "--font-body": "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+      "--font-mono": "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
     },
     chart: {
       ink: "#232839",
@@ -61,7 +65,7 @@ export const THEMES = [
       divPos: "#b0413e",
       unknown: "#e9e4d4",
       semantic: { success: "#5f8268", warning: "#c9803a", danger: "#b0413e", info: "#3e5c76" },
-      fonts: { display: `Georgia, 'Times New Roman', serif`, body: SYSTEM_BODY, mono: SYSTEM_MONO }
+      fonts: { display: `Raleway, Georgia, serif`, body: `Inter, ${SYSTEM_BODY}`, mono: `'JetBrains Mono', ${SYSTEM_MONO}` }
     }
   },
   {

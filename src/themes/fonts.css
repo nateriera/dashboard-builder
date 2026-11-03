@@ -1,0 +1,4 @@
+/* Google Fonts Latin variable subsets; licenses are alongside the files. */
+@font-face { font-family: 'Raleway'; src: url('../assets/fonts/Raleway.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('../assets/fonts/Inter.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../assets/fonts/JetBrainsMono.woff2') format('woff2'); font-style: normal; font-weight: 100 800; font-display: swap; }

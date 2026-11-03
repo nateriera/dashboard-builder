@@ -1,3 +1,5 @@
+@import './themes/fonts.css';
+
 /* Dashboard Builder — composer chrome. Chart internals are styled by the
    chart kit (chartStyles in src/charts/charts.js); this file covers the app
    shell, palette, grid, and tile chrome only. All colors/fonts come from
@@ -5,22 +7,28 @@
    the :root values below are the Paper theme defaults (pre-JS fallback). */
 
 :root {
-  --paper: #f6f3ea;      /* page background */
-  --ink: #232839;        /* primary text */
-  --dusk: #3e5c76;       /* primary data color */
-  --periwinkle: #c9803a; /* accent */
-  --white: #ffffff;      /* card background */
-  --slate-200: #d8d2c2;
-  --slate-300: #b3ac99;
-  --slate-500: #6e6a5e;
-  --slate-600: #4a463c;
-  --danger: #b0413e;
-  --success: #5f8268;
-  --warning: #c9803a;
+  --paper: #F5F1EA;
+  --white: #FFFFFF;
+  --ink: #1E2347;
+  --dusk: #4A5278;
+  --periwinkle: #B7BFD9;
+  --slate: #E7E3D9;
+  --slate-200: #E7E3D9;
+  --slate-300: #9AA0AE;
+  --slate-400: #9AA0AE;
+  --slate-500: #6E7484;
+  --slate-600: #3A4054;
+  --slate-700: #3A4054;
+  --danger: #C0452F;
+  --success: #2F7D5B;
+  --warning: #B97F26;
+  --shadow-card: 0 1px 3px rgba(30,35,71,.08);
+  --shadow-overlay: 0 8px 24px rgba(30,35,71,.10);
+  --shadow-focus: 0 0 0 3px rgba(183,191,217,.45);
   --card-shadow: 0 1px 2px rgba(35, 40, 57, 0.07), 0 1px 1px rgba(35, 40, 57, 0.05);
-  --font-display: Georgia, "Times New Roman", serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: 'Raleway', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -60,8 +68,8 @@ body {
 .brand h1 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 20px;
-  letter-spacing: 0.04em;
+  font-size: 22px;
+  letter-spacing: 0.08em;
   margin: 0;
   white-space: nowrap;
 }
@@ -209,8 +217,7 @@ body.present .first-run-hint { display: none; }
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 13px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--slate-500);
   margin: 0 0 12px 0;
 }
@@ -324,7 +331,7 @@ body.present .first-run-hint { display: none; }
   min-width: 0;
   font-family: var(--font-display);
   font-size: 14px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   color: var(--ink);
   border: 1px solid transparent;
   border-radius: 4px;
@@ -334,7 +341,6 @@ body.present .first-run-hint { display: none; }
 
 .tile-title:hover { border-color: var(--slate-200); }
 .tile-title:focus {
-  outline: none;
   border-color: var(--periwinkle);
   background: var(--white);
 }
@@ -375,7 +381,7 @@ body.present .first-run-hint { display: none; }
   text-overflow: ellipsis;
 }
 .tile-inspect-selected:hover { background: color-mix(in srgb, var(--periwinkle) 18%, var(--white)); }
-.tile-inspect-selected:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+.tile-inspect-selected:focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
 
 .tile-data-label {
   font-weight: 600;
@@ -458,7 +464,7 @@ body.present .tile-toolbar { display: none; }
   padding: 10px 14px;
   border-bottom: 1px solid var(--slate-200);
   font-family: var(--font-display);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
 .data-pop-close {
@@ -747,7 +753,6 @@ body.present .tile-toolbar { display: none; }
 }
 
 .data-sql-input:focus {
-  outline: none;
   border-color: var(--periwinkle);
 }
 
@@ -819,7 +824,7 @@ body.present .tile-toolbar { display: none; }
 
 .tile-error-title {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--danger);
   margin-bottom: 4px;
 }
@@ -946,7 +951,6 @@ body.present .tile-toolbar { display: none; }
   display: flex;
   flex-direction: column;
   padding: 24px 28px;
-  outline: none;
 }
 
 .tpl-head {
@@ -959,7 +963,7 @@ body.present .tile-toolbar { display: none; }
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 20px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   margin: 0;
 }
 
@@ -1163,7 +1167,7 @@ body.present .tile-toolbar { display: none; }
 }
 
 .palette-item { display: block; width: 100%; text-align: left; color: var(--ink); font: inherit; }
-:focus-visible { outline: 3px solid var(--periwinkle); outline-offset: 3px; }
+:focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
 .tile-toolbar { flex-wrap: nowrap; }
 .tile-control input[type=text] { width: 100px; color: var(--ink); background: var(--white); border: 1px solid var(--slate-300); border-radius: 6px; }
 .data-popover { max-height: calc(100vh - 16px); overflow: auto; }

@@ -604,8 +604,8 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
             ? svg`<a href="#db-crossfilter:${encoded}" aria-label="${crossfilterAriaLabel(sliceLabel)}"><path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2" data-crossfilter-values="${encoded}"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path></a>`
             : svg`<path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path>`;
         })}
-        <text text-anchor="middle" dy="${-4 * textScale}" font-family="${t.fonts.mono}" font-weight="500" font-size="${totalFont}" fill="${t.ink}">${valueFormat(total)}</text>
-        <text text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
+        <text pointer-events="none" text-anchor="middle" dy="${-4 * textScale}" font-family="${t.fonts.mono}" font-weight="500" font-size="${totalFont}" fill="${t.ink}">${valueFormat(total)}</text>
+        <text pointer-events="none" text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
       </g>
     </svg>`}
     <div class="db-legend ${compactLegend ? 'db-legend-compact' : ''}">
@@ -677,8 +677,7 @@ export const chartStyles = html`<style>
     font-family: var(--font-display);
     font-weight: 400;
     font-size: 12px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
     color: var(--slate-500);
     margin-bottom: 8px;
   }
@@ -687,7 +686,7 @@ export const chartStyles = html`<style>
     font-weight: 400;
     font-size: 28px;
     line-height: 1.25;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
     color: var(--ink);
     margin-bottom: 4px;
   }
@@ -740,8 +739,7 @@ export const chartStyles = html`<style>
     font-family: var(--font-display);
     font-weight: 400;
     font-size: 12px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
     color: var(--slate-500);
   }
   .db-kpi-delta { font-family: var(--font-mono); font-size: 13px; margin-top: 8px; }

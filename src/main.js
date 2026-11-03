@@ -1676,16 +1676,11 @@ fileInput.addEventListener("change", () => {
 
 document.getElementById("btn-clear").addEventListener("click", () => {
   if (!grid.save(false).length) return;
-  if (window.confirm("Remove all tiles from the grid?")) {
-    grid.removeAll();
-    tileMeta.clear();
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* storage unavailable; grid is still cleared */
-    }
-    setStatus("Grid cleared");
-  }
+  const name = pages.find(page => page.id === currentPageId)?.name || "current page";
+  if (!window.confirm(`Clear current page “${name}”? This removes its tiles.`)) return;
+  grid.removeAll();
+  tileMeta.clear();
+  saveNow();
 });
 
 // ── Present mode ─────────────────────────────────────────────────────────

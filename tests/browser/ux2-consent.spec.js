@@ -126,3 +126,31 @@ test('removing a tile names it and respects cancel and confirm', async ({page}) 
   await confirmation.getByRole('button',{name:'Remove',exact:true}).click();
   await expect(page.locator('.grid-stack-item')).toHaveCount(count - 1);
 });
+
+test('clear current page preserves other pages and storage across reload', async ({page}) => {
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  page.once('dialog', dialog => dialog.accept('Detail'));
+  await page.getByRole('button',{name:'Add dashboard page'}).click();
+  await page.locator('.palette-item[data-tile-type="bar"]').click();
+  await clickHeaderAction(page, '#btn-save');
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')));
+  let prompt = '';
+  page.once('dialog', async dialog => { prompt = dialog.message(); await dialog.dismiss(); });
+  await clickHeaderAction(page, '#btn-clear');
+  expect(prompt).toMatch(/current page/i);
+  await expect(page.locator('.grid-stack-item')).toHaveCount(1);
+  page.once('dialog', dialog => dialog.accept());
+  await clickHeaderAction(page, '#btn-clear');
+  await expect(page.locator('.grid-stack-item')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).tiles.filter(t => t.pageId === JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).currentPageId).length)).toBe(0);
+  const after = await page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')));
+  expect(after.pages).toEqual(before.pages);
+  expect(after.savedViews).toEqual(before.savedViews);
+  expect(after.defaultDataset).toEqual(before.defaultDataset);
+  expect(after.tiles.filter(t => t.pageId !== after.currentPageId)).toEqual(before.tiles.filter(t => t.pageId !== before.currentPageId));
+  await page.reload();
+  await expect(page.getByRole('tab',{name:'Detail'})).toHaveAttribute('aria-selected','true');
+  await expect(page.locator('.grid-stack-item')).toHaveCount(0);
+  await page.getByRole('tab',{name:'Page 1'}).click();
+  await expect(page.locator('.grid-stack-item')).toHaveCount(before.tiles.filter(t => t.pageId !== before.currentPageId).length);
+});

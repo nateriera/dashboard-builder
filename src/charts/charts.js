@@ -600,8 +600,8 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
             ? svg`<a href="#db-crossfilter:${encoded}" aria-label="${crossfilterAriaLabel(sliceLabel)}"><path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2" data-crossfilter-values="${encoded}"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path></a>`
             : svg`<path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path>`;
         })}
-        <text text-anchor="middle" dy="${-4 * textScale}" font-family="${t.fonts.mono}" font-weight="500" font-size="${totalFont}" fill="${t.ink}">${valueFormat(total)}</text>
-        <text text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
+        <text pointer-events="none" text-anchor="middle" dy="${-4 * textScale}" font-family="${t.fonts.mono}" font-weight="500" font-size="${totalFont}" fill="${t.ink}">${valueFormat(total)}</text>
+        <text pointer-events="none" text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
       </g>
     </svg>`}
     <div class="db-legend ${compactLegend ? 'db-legend-compact' : ''}">

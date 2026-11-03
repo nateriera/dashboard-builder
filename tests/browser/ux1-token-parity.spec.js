@@ -33,7 +33,7 @@ test('Paper app and generated export resolve the same bundled fonts and palette'
   const fontRequests = [];
   page.on('request', req => { if (req.resourceType() === 'font') fontRequests.push(req.url()); });
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await assertPaperFonts(page);
   expect(fontRequests.filter(url => !url.startsWith(new URL(page.url()).origin))).toEqual([]);
   if (process.env.UX1_BUILT) expect(fontRequests).toEqual([]);
@@ -53,7 +53,7 @@ test('Paper app and generated export resolve the same bundled fonts and palette'
 
 test('Paper controls show canonical hover, disabled, scrim and tab states', async ({page}) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const item = page.locator('.palette-item').first();
   const borderBefore = await item.evaluate(el => getComputedStyle(el).borderLeftColor);
   await item.hover();
@@ -67,7 +67,7 @@ test('Paper controls show canonical hover, disabled, scrim and tab states', asyn
 });
 
 test('Paper export tab selection remains distinct from hover', async ({page,browser}) => {
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const pending=page.waitForEvent('download'); await clickHeaderAction(page,'#btn-export-html');
   const download=await pending; const context=await browser.newContext({offline:true});
   try {
@@ -80,7 +80,7 @@ test('Paper export tab selection remains distinct from hover', async ({page,brow
 });
 
 test('Paper changes do not alter Slate states or brush', async ({page}) => {
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const values=await page.evaluate(async () => {
     const {setTheme}=await import('/src/themes/themes.js');
     const holder=document.createElement('div'); holder.innerHTML='<div id="palette"><h2>Chart</h2><button class="palette-item">Item</button></div><div class="guided-actions"><button disabled>Disabled</button></div><div class="tile-chart"><svg><rect class="db-time-brush" width="10" height="10"></rect></svg></div>';
@@ -94,7 +94,7 @@ test('Paper changes do not alter Slate states or brush', async ({page}) => {
 });
 
 test('Export preserves Slate brush and tab styles', async ({page,browser}) => {
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.evaluate(async()=>{(await import('/src/themes/themes.js')).setTheme('slate')});
   const pending=page.waitForEvent('download'); await clickHeaderAction(page,'#btn-export-html'); const download=await pending;
   const context=await browser.newContext({offline:true});

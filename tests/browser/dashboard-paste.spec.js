@@ -8,7 +8,7 @@ for (const omitProfile of [false,true]) {
       await route.fulfill({response,body:source});
     });
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
-    await page.goto('/');await expect(page.locator('#status')).toContainText('build');
+    await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
     await page.evaluate(()=>{
       window.datasetWrites=0;const put=IDBObjectStore.prototype.put;
       IDBObjectStore.prototype.put=function(...args){if(this.name==='datasets')window.datasetWrites++;return put.apply(this,args);};
@@ -27,7 +27,7 @@ for (const omitProfile of [false,true]) {
       return {writes:window.datasetWrites,entries:entries.map(({name,columns,rows,persisted})=>({name,columns,rows,persisted}))};
     });
     expect(errors).toEqual([]);expect(result).toEqual({writes:1,entries:[{name:'Pasted table',columns:['Region','Amount'],rows:[{Region:'West',Amount:'15'},{Region:'East',Amount:'20'}],persisted:true}]});
-    await page.reload();await expect(page.locator('#status')).toContainText('build');
+    await page.reload();await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
     expect(await page.evaluate(async()=> (await import('/src/data/store.js')).listDatasets())).toHaveLength(1);
   });
 }

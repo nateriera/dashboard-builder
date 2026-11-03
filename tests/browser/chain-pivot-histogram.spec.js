@@ -4,7 +4,7 @@ import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './ac
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 
 const source=(sql,columns,types,order={kind:'columns',fields:['sequence']})=>({sql,dependencies:[],schema:{columns,types},order});
@@ -208,7 +208,7 @@ test('GB-2 Gate B bench #5 builds parameter-filtered Histogram and Stats tiles t
   const saved=await page.evaluate(async()=>Object.values(JSON.parse((await import('/src/data/queries.js')).serializeQueries()).items).filter(query=>query.chain));
   expect(saved.filter(query=>query.chain.steps.at(-1).op==='histogram')).toHaveLength(1);
   expect(saved.filter(query=>query.chain.steps.at(-1).op==='stats')).toHaveLength(1);
-  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Export HTML'}).click()]);
+  const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#btn-export-html').click()]);
   const html=await readFile(await download.path(),'utf8');
   expect(html).toContain('"preBinnedHistogram":true');
 });

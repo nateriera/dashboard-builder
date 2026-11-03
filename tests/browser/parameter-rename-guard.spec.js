@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint=page.locator('.first-run-hint');
   if(await hint.isVisible().catch(()=>false))await hint.getByRole('button',{name:'Got it'}).click();
 }
@@ -66,6 +66,7 @@ test('S1-B blocks rename, delete, and type changes for every consumer kind, then
   await popover.getByRole('button',{name:'Delete parameter spare'}).click();
   await expect(popover.getByLabel('Rename parameter spare')).toHaveCount(0);
 
+  await page.locator('#btn-saved-views').click();
   await page.locator('#saved-view-picker').selectOption('prior');
   await page.locator('#btn-apply-view').click();
   await expect(page.locator('#status')).toContainText('Detached parameter bindings: growth');

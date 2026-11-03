@@ -8,7 +8,7 @@ const fixtureSql=`SELECT i AS sequence,
   FROM range(0,20) AS t(i)`;
 
 async function openEditor(page,{type='table',parameters=[]}={}) {
-  await page.goto('/');await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint=page.locator('.first-run-hint');
   if(await hint.isVisible())await hint.getByRole('button',{name:'Got it'}).click();
   const id=await page.evaluate(async ({sql,type})=>(await import('/src/data/queries.js')).saveQuery({

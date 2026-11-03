@@ -62,6 +62,8 @@ import { partitionExportViews } from './export/savedViews.js';
 import { referencedParameterNames } from './data/parameterSql.js';
 import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows } from './data/dataQuality.js';
 import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
+import { anchorPopover } from './ui/anchoredPopover.js';
+import { focusDialog } from './ui/focus.js';
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -71,10 +73,7 @@ document.head.appendChild(chartStyles);
 setTheme(getThemeId());
 
 const STORAGE_KEY = "dashboard-builder:layout:v1";
-const FIRST_RUN_HINT_KEY = "dashbuilder.seenHint.v1";
-// Build stamp, shown in the status bar on boot. Bump on every shipped archive
-// so it's always possible to confirm which code is actually running.
-const BUILD = typeof __BUILD_TAG__ !== "undefined" ? __BUILD_TAG__ : "local";
+const GUIDANCE_DISMISSED_KEY = "dashboard-builder:palette-guidance-dismissed:v1";
 const gridEl = document.querySelector(".grid-stack");
 const statusEl = document.getElementById("status");
 const persistenceWarningEl = document.getElementById("persistence-warning");
@@ -125,6 +124,46 @@ const grid = GridStack.init(
   },
   gridEl
 );
+
+const gridGuidance = document.getElementById('grid-guidance');
+const emptyGridOverlay = document.createElement('div');
+emptyGridOverlay.className = 'grid-cell-guides';
+emptyGridOverlay.setAttribute('aria-hidden', 'true');
+gridEl.prepend(emptyGridOverlay);
+let gridGestureActive = false;
+let expandedPaletteWidth = null;
+function measureGridGuides() {
+  const columns = grid.getColumn();
+  const cellHeight = grid.getCellHeight(true);
+  const gap = Number(grid.opts.margin) || 0;
+  const columnWidth = gridEl.clientWidth / columns;
+  gridEl.style.setProperty('--grid-guide-columns', columns);
+  gridEl.style.setProperty('--grid-guide-column-width', `${columnWidth}px`);
+  gridEl.style.setProperty('--grid-guide-row-height', `${cellHeight}px`);
+  gridEl.style.setProperty('--grid-guide-gap', `${gap}px`);
+  const guideRows = Math.max(16, Math.ceil(Math.max(gridEl.clientHeight, 720) / (cellHeight + gap)));
+  const guideCount = columns * guideRows;
+  if (emptyGridOverlay.childElementCount !== guideCount) {
+    const cells = document.createDocumentFragment();
+    for (let index = 0; index < guideCount; index++) cells.append(document.createElement('span'));
+    emptyGridOverlay.replaceChildren(cells);
+  }
+  const appBody = document.getElementById('app-body');
+  const palette = document.getElementById('palette');
+  if (!document.body.classList.contains('palette-collapsed') || expandedPaletteWidth === null) expandedPaletteWidth = palette.getBoundingClientRect().width;
+  document.body.classList.toggle('palette-collapsed', appBody.clientWidth < expandedPaletteWidth + 560);
+}
+function syncGridGuidance() {
+  measureGridGuides();
+  const empty = grid.getGridItems().length === 0;
+  gridGuidance.hidden = !empty;
+  gridEl.classList.toggle('show-grid-guides', empty || gridGestureActive);
+}
+new ResizeObserver(syncGridGuidance).observe(gridEl);
+new ResizeObserver(syncGridGuidance).observe(document.getElementById('app-body'));
+grid.on('added removed change', syncGridGuidance);
+grid.on('dragstart resizestart', () => { gridGestureActive = true; syncGridGuidance(); });
+grid.on('dragstop resizestop', () => { gridGestureActive = false; syncGridGuidance(); });
 
 // ── Tile metadata ────────────────────────────────────────────────────────
 // GridStack owns geometry (x/y/w/h); this map owns everything else per tile.
@@ -245,6 +284,10 @@ function buildTileContent(type, meta) {
 
   const toolbar = document.createElement("div");
   toolbar.className = "tile-toolbar";
+  const titleRow = document.createElement('div');
+  titleRow.className = 'tile-title-row';
+  const dataRow = document.createElement('div');
+  dataRow.className = 'tile-data-row';
 
   const titleInput = document.createElement("input");
   titleInput.className = "tile-title";
@@ -257,6 +300,8 @@ function buildTileContent(type, meta) {
   titleInput.addEventListener("change", () => {
     meta.title = titleInput.value;
     titleInput.title = meta.title;
+    const remove = tile.querySelector('.tile-remove');
+    remove?.setAttribute('aria-label', `Remove ${meta.title?.trim() || entry.label || meta.type}`);
     renderTileById(meta.id);
     scheduleAutosave();
   });
@@ -269,9 +314,11 @@ function buildTileContent(type, meta) {
   dataBtn.title = "Choose or upload data";
   const dataLabel = document.createElement("span");
   dataLabel.className = "tile-data-label";
-  dataBtn.append(document.createTextNode("Data: "), dataLabel);
+  dataLabel.textContent = datasetDisplayName(meta);
+  dataBtn.append(dataLabel);
   const refreshDataLabel = () => {
-    dataLabel.textContent = datasetDisplayName(meta);
+    const count = Array.isArray(meta.filterRows) ? meta.filterRows.length : null;
+    dataLabel.textContent = `${datasetDisplayName(meta)} (${count ?? '…'} ${count === 1 ? 'row' : 'rows'})`;
   };
   dataBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -326,9 +373,9 @@ function buildTileContent(type, meta) {
   const removeBtn = document.createElement("button");
   removeBtn.className = "tile-remove";
   removeBtn.type = "button";
-  removeBtn.textContent = "×";
-  removeBtn.title = "Remove tile";
-  removeBtn.setAttribute("aria-label", "Remove tile");
+  removeBtn.textContent = "Remove chart";
+  removeBtn.title = "Remove chart";
+  removeBtn.setAttribute("aria-label", `Remove ${meta.title?.trim() || entry.label || meta.type}`);
   removeBtn.addEventListener("click", () => {
     const name = meta.title?.trim() || entry.label || meta.type;
     const actions = document.createElement("div");
@@ -369,9 +416,9 @@ function buildTileContent(type, meta) {
     details.scrollIntoView({ behavior: "smooth", block: "nearest" });
     details.querySelector("summary")?.focus();
   });
-  toolbar.append(titleInput, dataBtn, inspectSelected);
+  titleRow.append(titleInput);
   const settings = document.createElement('details'); settings.className = 'tile-settings';
-  const summary = document.createElement('summary'); summary.textContent = 'Settings'; settings.append(summary);
+  const summary = document.createElement('summary'); summary.textContent = 'Chart settings'; settings.append(summary);
   const settingsBody = document.createElement('div'); settingsBody.className = 'tile-settings-body'; settings.append(settingsBody);
   settings.addEventListener('pointerdown', e => e.stopPropagation());
   settings.addEventListener('mousedown', e => e.stopPropagation());
@@ -504,8 +551,12 @@ function buildTileContent(type, meta) {
       label.append(input); settingsBody.append(label);
     }
   }
-  toolbar.append(settings);
-  toolbar.append(removeBtn);
+  titleRow.append(settings, removeBtn, inspectSelected);
+  const dataCaption = document.createElement('span');
+  dataCaption.className = 'tile-data-caption';
+  dataCaption.textContent = 'Data source';
+  dataRow.append(dataCaption, dataBtn);
+  toolbar.append(titleRow, dataRow);
 
   const chart = document.createElement("div");
   chart.className = "tile-chart";
@@ -625,6 +676,13 @@ function datasetDisplayName(meta) {
     return q ? q.name : "Missing query";
   }
   return DATASET_LABELS[meta.dataset] || meta.dataset;
+}
+
+function refreshTileDataLabel(meta) {
+  const tile = gridEl.querySelector(`.grid-stack-item[gs-id="${CSS.escape(meta.id)}"] .tile-data-label`);
+  if (!tile) return;
+  const count = Array.isArray(meta.filterRows) ? meta.filterRows.length : null;
+  tile.textContent = `${datasetDisplayName(meta)} (${count ?? '…'} ${count === 1 ? 'row' : 'rows'})`;
 }
 
 function paintUnavailable(el, title, message) {
@@ -908,6 +966,7 @@ function renderTile(el) {
   }
   reportDropped(meta.id, droppedCount(data));
   meta.filterRows = data;
+  refreshTileDataLabel(meta);
   const prepared=prepareTileRows(meta,data);
   meta.renderRows=prepared.rows;
   if (prepared.empty) { paintFilteredEmpty(chartEl); showTileFilterFeedback(chartEl,meta,entry,data); return; }
@@ -938,6 +997,7 @@ async function renderQueryTile(el, meta, entry, chartEl) {
   const paintRows = rows => {
     reportDropped(meta.id, droppedCount(rows));
     meta.filterRows = rows;
+    refreshTileDataLabel(meta);
     const prepared=prepareTileRows(meta,rows);
     meta.renderRows=prepared.rows;
     if (prepared.empty) { paintFilteredEmpty(chartEl); showTileFilterFeedback(chartEl,meta,entry,rows); return; }
@@ -1131,7 +1191,7 @@ function scheduleAutosave() {
   saveTimer = setTimeout(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
-      setStatus("Autosaved " + new Date().toLocaleTimeString());
+      setStatus('Changes saved in this browser');
     } catch {
       setPersistenceWarning("Autosave failed: storage unavailable");
     }
@@ -1142,7 +1202,7 @@ function saveNow() {
   if (protectUnreadableSave) { setPersistenceWarning("Save blocked to protect the unreadable dashboard."); return; }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
-    setStatus("Saved " + new Date().toLocaleTimeString());
+    setStatus('Changes saved in this browser');
   } catch {
     setPersistenceWarning("Save failed: storage unavailable");
   }
@@ -1203,6 +1263,37 @@ grid.on("removed", (_event, items) => {
 // ── Palette: drag onto the grid (GridStack drag-in) or click to add ──────
 const paletteEl = document.getElementById("palette-items");
 const paletteItems = [];
+let paletteModal = null;
+let paletteFocusRelease = null;
+function closePaletteModal() {
+  if (!paletteModal) return;
+  const modal = paletteModal;
+  paletteModal = null;
+  paletteEl.remove();
+  document.getElementById('palette').append(paletteEl);
+  modal.remove();
+  paletteFocusRelease?.(); paletteFocusRelease = null;
+}
+function openPaletteModal(trigger) {
+  if (paletteModal) return;
+  const modal = document.createElement('div');
+  modal.className = 'palette-modal-backdrop';
+  modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-label', 'Choose a chart');
+  const panel = document.createElement('section'); panel.className = 'palette-modal-panel';
+  const heading = document.createElement('h2'); heading.textContent = 'Charts';
+  const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Close'; close.setAttribute('aria-label', 'Close chart palette');
+  close.addEventListener('click', closePaletteModal);
+  panel.append(heading, close, paletteEl); modal.append(panel);
+  modal.addEventListener('pointerdown', event => { if (event.target === modal) closePaletteModal(); });
+  modal.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); closePaletteModal(); } }, true);
+  document.body.append(modal); paletteModal = modal;
+  paletteFocusRelease = focusDialog(panel, trigger);
+  paletteItems[0]?.focus();
+}
+function openPaletteForAdd(trigger) {
+  if (document.body.classList.contains('palette-collapsed')) openPaletteModal(trigger);
+  else paletteItems[0]?.focus();
+}
 for (const [type, entry] of Object.entries(TILE_TYPES)) {
   const item = document.createElement("button");
   item.type = "button";
@@ -1228,10 +1319,89 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
       if (title) title.focus({ preventScroll: true });
       else { widget.tabIndex = -1; widget.focus({ preventScroll: true }); }
     }));
+    if (paletteModal) closePaletteModal();
   });
   paletteEl.appendChild(item);
   paletteItems.push(item);
 }
+
+document.getElementById('btn-add-chart').addEventListener('click', event => openPaletteForAdd(event.currentTarget));
+document.getElementById('btn-grid-add-chart').addEventListener('click', event => openPaletteForAdd(event.currentTarget));
+const guidanceCard = document.getElementById('palette-guidance');
+const btnShowGuidance = document.getElementById('btn-show-guidance');
+function setGuidanceDismissed(dismissed) {
+  guidanceCard.hidden = dismissed;
+  btnShowGuidance.hidden = !dismissed;
+  try { if (dismissed) localStorage.setItem(GUIDANCE_DISMISSED_KEY, '1'); else localStorage.removeItem(GUIDANCE_DISMISSED_KEY); } catch { /* page session only */ }
+}
+try { setGuidanceDismissed(localStorage.getItem(GUIDANCE_DISMISSED_KEY) === '1'); } catch { setGuidanceDismissed(false); }
+document.getElementById('btn-hide-guidance').addEventListener('click', () => setGuidanceDismissed(true));
+btnShowGuidance.addEventListener('click', () => { setGuidanceDismissed(false); document.getElementById('palette-guidance-title').focus?.(); });
+
+const headerActions = document.querySelector('.header-actions');
+const moreMenu = document.querySelector('.header-more-menu');
+const responsiveActions = document.createElement('div'); responsiveActions.className = 'header-responsive-actions';
+moreMenu.prepend(responsiveActions);
+const responsiveIds = ['btn-data', 'btn-filters', 'btn-present'];
+const responsiveOrigins = responsiveIds.map(id => {
+  const button = document.getElementById(id);
+  const marker = document.createComment(`origin:${id}`);
+  button.before(marker);
+  return { button, marker };
+});
+function fitHeaderActions() {
+  for (const { button, marker } of responsiveOrigins) if (button.parentElement === responsiveActions) marker.replaceWith(button);
+  const overflows = () => {
+    const gap = parseFloat(getComputedStyle(headerActions).columnGap) || 0;
+    const children = [...headerActions.children].filter(child => child !== document.getElementById('file-import'));
+    const required = children.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0) + gap * Math.max(0, children.length - 1);
+    return required > headerActions.clientWidth + 1;
+  };
+  if (overflows()) {
+    for (const { button, marker } of responsiveOrigins) {
+      if (!overflows()) break;
+      if (!marker.parentNode) button.before(marker);
+      responsiveActions.append(button);
+    }
+  }
+}
+new ResizeObserver(fitHeaderActions).observe(document.getElementById('app-header'));
+window.addEventListener('resize', () => { fitHeaderActions(); requestAnimationFrame(fitHeaderActions); });
+new ResizeObserver(fitHeaderActions).observe(headerActions);
+fitHeaderActions();
+
+const savedViewPicker = document.getElementById('saved-view-picker');
+const savedViewsTrigger = document.getElementById('btn-saved-views');
+const savedViewControls = document.getElementById('saved-view-controls');
+let savedViewsPopover = null;
+let savedViewsAnchorStop = null;
+let savedViewsFocusRelease = null;
+function closeSavedViews() {
+  if (!savedViewsPopover) return;
+  savedViewsAnchorStop?.(); savedViewsAnchorStop = null;
+  savedViewsFocusRelease?.(); savedViewsFocusRelease = null;
+  savedViewControls.hidden = true;
+  document.body.append(savedViewControls);
+  savedViewsPopover.remove(); savedViewsPopover = null;
+  savedViewsTrigger.setAttribute('aria-expanded', 'false');
+}
+function openSavedViews() {
+  if (savedViewsPopover) { closeSavedViews(); return; }
+  const popover = document.createElement('section'); popover.className = 'saved-views-popover';
+  const heading = document.createElement('h2'); heading.textContent = 'Saved views';
+  const explanation = document.createElement('p'); explanation.textContent = 'Save the current filters, parameters, and theme to return to later.';
+  popover.append(heading, explanation);
+  savedViewControls.hidden = false; popover.append(savedViewControls);
+  popover.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); closeSavedViews(); } }, true);
+  document.body.append(popover); savedViewsPopover = popover;
+  savedViewsAnchorStop = anchorPopover(popover, savedViewsTrigger);
+  savedViewsFocusRelease = focusDialog(popover, savedViewsTrigger);
+  savedViewsTrigger.setAttribute('aria-expanded', 'true');
+  savedViewPicker.focus();
+}
+savedViewsTrigger.addEventListener('click', openSavedViews);
+document.addEventListener('pointerdown', event => { if (savedViewsPopover && !savedViewsPopover.contains(event.target) && !savedViewsTrigger.contains(event.target)) closeSavedViews(); });
+savedViewPicker.addEventListener('change', () => { document.getElementById('btn-apply-view').disabled = !savedViewPicker.value; });
 
 // Associate each palette item with its default widget size so drops land
 // at a sensible size. helper:'clone' keeps the palette item in place.
@@ -1266,13 +1436,13 @@ const btnData = document.getElementById("btn-data");
 const btnFilters = document.getElementById("btn-filters");
 const btnTemplates = document.getElementById("btn-templates");
 const btnTheme = document.getElementById("btn-theme");
-const savedViewPicker = document.getElementById('saved-view-picker');
 function refreshSavedViews() {
   if (!savedViewPicker) return;
   const selected = savedViewPicker.value;
   savedViewPicker.replaceChildren(new Option('Current view', ''));
   for (const view of savedViews) savedViewPicker.append(new Option(view.brokenParameters?.length ? `${view.name} — Missing parameter: ${view.brokenParameters.join(', ')}` : view.name, view.id));
   if (savedViews.some(view => view.id === selected)) savedViewPicker.value = selected;
+  document.getElementById('btn-apply-view').disabled = !savedViewPicker.value;
 }
 document.getElementById('btn-save-view')?.addEventListener('click', () => {
   const name = window.prompt('Name this saved view:')?.trim();
@@ -1283,7 +1453,7 @@ document.getElementById('btn-save-view')?.addEventListener('click', () => {
   const view = { id: existing?.id || `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name,
     theme: getThemeId(), currentPageId, filters: structuredClone(filters), parameters: structuredClone(parameters.map(({bindings,...parameter})=>parameter)) };
   savedViews = [...savedViews.filter(item => item.id !== view.id), view];
-  refreshSavedViews(); savedViewPicker.value = view.id; scheduleAutosave();
+  refreshSavedViews(); savedViewPicker.value = view.id; document.getElementById('btn-apply-view').disabled = false; scheduleAutosave();
   setStatus(`Saved view “${name}”.`);
 });
 document.getElementById('btn-apply-view')?.addEventListener('click', () => {
@@ -1395,14 +1565,14 @@ if (btnTemplates) {
   });
 }
 function refreshDashboardButton() {
-  if (btnData) btnData.textContent = `Data: ${dashboardDefaultName()}`;
+  if (btnData) btnData.textContent = 'Manage data';
 }
 function refreshAllDataLabels() {
   gridEl.querySelectorAll(".grid-stack-item").forEach((el) => {
     const node = el.gridstackNode;
     const meta = node && tileMeta.get(node.id);
     const lab = el.querySelector(".tile-data-label");
-    if (meta && lab) lab.textContent = datasetDisplayName(meta);
+    if (meta && lab) refreshTileDataLabel(meta);
   });
 }
 function renderAllTiles() {
@@ -1833,8 +2003,6 @@ function setPresent(on) {
   btnExitPresent.hidden = !on;
   grid.setStatic(on); // locks drag + resize
   if (on) {
-    firstRunHint?.remove();
-    firstRunHint = null;
     closeDataPopover();
     closeDashboardPopover();
     closeThemePopover();
@@ -1845,8 +2013,8 @@ function setPresent(on) {
     gridEl.tabIndex = -1;
     gridEl.focus({ preventScroll: true });
   } else {
-    btnPresent.focus();
-    showFirstRunHint();
+    const focusTarget = btnPresent.closest('.header-more')?.querySelector('summary') || btnPresent;
+    focusTarget.focus();
   }
   // Charts keep their rendered width; re-render in case chrome changes it.
   requestAnimationFrame(() =>
@@ -1858,47 +2026,6 @@ function setPresent(on) {
 
 btnPresent.addEventListener("click", () => setPresent(true));
 btnExitPresent.addEventListener("click", () => setPresent(false));
-
-let firstRunHint = null;
-function showFirstRunHint() {
-  if (document.body.classList.contains("present") || firstRunHint?.isConnected) return;
-  try {
-    if (localStorage.getItem(FIRST_RUN_HINT_KEY) === "1") return;
-  } catch {
-    // The hint remains available when storage cannot be read.
-  }
-
-  const hint = document.createElement("aside");
-  hint.className = "first-run-hint";
-  hint.setAttribute("aria-labelledby", "first-run-hint-title");
-  const heading = document.createElement("strong");
-  heading.id = "first-run-hint-title";
-  heading.textContent = "Getting started";
-  const list = document.createElement("ul");
-  for (const text of [
-    "Charts: drag one onto the grid or click to add it.",
-    "A tile’s Data button binds samples, uploads, or SQL to that chart.",
-    "Export HTML creates a shareable dashboard file."
-  ]) {
-    const item = document.createElement("li");
-    item.textContent = text;
-    list.appendChild(item);
-  }
-  const dismiss = document.createElement("button");
-  dismiss.type = "button";
-  dismiss.textContent = "Got it";
-  dismiss.addEventListener("click", () => {
-    try { localStorage.setItem(FIRST_RUN_HINT_KEY, "1"); } catch { /* dismiss for this page */ }
-    hint.remove();
-    firstRunHint = null;
-  });
-  hint.append(heading, list, dismiss);
-  const palette=document.getElementById('palette');
-  const paletteItems=document.getElementById('palette-items');
-  if(palette&&paletteItems)palette.insertBefore(hint,paletteItems);
-  else document.body.appendChild(hint);
-  firstRunHint = hint;
-}
 
 // ── Startup: restore autosaved layout, else a starter dashboard ──────────
 function starterLayout() {
@@ -1916,7 +2043,7 @@ function starterLayout() {
 }
 
 (async function init() {
-  const restoredCount = await loadPersistedDatasets(); // IndexedDB, before any tile renders
+  await loadPersistedDatasets(); // IndexedDB, before any tile renders
   let queryLoadIssue='';
   try {loadPersistedQueries();} // validate before any query tile renders
   catch(error) {queryLoadIssue=`Saved queries could not be loaded: ${error.message} Stored data retained; import a valid backup to recover.`;}
@@ -1928,10 +2055,7 @@ function starterLayout() {
     if (raw) {
       loadLayout(JSON.parse(raw));
       restored = true;
-      setStatus(
-        "Restored autosaved layout" +
-          (restoredCount ? ` (${restoredCount} dataset${restoredCount === 1 ? "" : "s"} loaded)` : "")
-      );
+      setStatus("Layout restored from this browser · Stored locally");
     }
   } catch {
     restored = false;
@@ -1965,7 +2089,9 @@ function starterLayout() {
   }
   if (!restored) {
     loadLayout(starterLayout());
-    setStatus(corruptMessage || "Starter dashboard loaded");
+    setStatus(corruptMessage || "Starter dashboard loaded · Stored locally");
+  } else {
+    setStatus('Layout restored from this browser · Stored locally');
   }
   const issues = storageIssues();
   if (issues.length) {
@@ -1979,7 +2105,7 @@ function starterLayout() {
     };
     statusEl.after(retry);
   }
-  setStatus(`${[corruptMessage, queryLoadIssue].filter(Boolean).join(" ") || statusMessage} · build ${BUILD}`);
+  if (corruptMessage || queryLoadIssue) setStatus([statusEl.textContent, corruptMessage, queryLoadIssue].filter((message, index, all) => message && !all.slice(0, index).includes(message)).join(' · '));
   if (protectUnreadableSave) setPersistenceWarning(corruptMessage);
-  showFirstRunHint();
+  syncGridGuidance();
 })();

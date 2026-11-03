@@ -5,7 +5,7 @@ import { clickHeaderAction } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 
 async function importLayout(page, layout) {
@@ -83,7 +83,7 @@ for (const scenario of removalCases) {
     expect(saved.filters).toEqual(scenario.expected);
     expect(await page.evaluate(() => window.filterUpdateCalls)).toBe(scenario.updates);
     await page.reload();
-    await expect(page.locator('#status')).toContainText('Restored autosaved layout');
+    await expect(page.locator('#status')).toContainText('Layout restored from this browser');
     await expect(page.locator('.grid-stack-item')).toHaveCount(survivingIds.length);
     for (const id of survivingIds) await expect(page.locator(`.grid-stack-item[gs-id="${id}"]`)).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).filters)).toEqual(scenario.expected);

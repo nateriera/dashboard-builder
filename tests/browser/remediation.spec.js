@@ -7,7 +7,7 @@ import { clickHeaderAction, focusHeaderAction } from './header-actions.js';
 const upload = { name:'Revenue',columns:['label','value'],rows:[{label:'North',value:12},{label:'South',value:30}],fieldKeys:['label','value'],mapping:{label:'label',value:'value'},raw:null };
 const envelope = (tiles,datasets={},queries={}) => ({app:'dashboard-builder',version:1,theme:'paper',tiles,datasets,queries});
 const tile = (dataset='categorical',opts={}) => ({id:'t1',type:'bar',dataset,title:'Revenue',x:0,y:0,w:6,h:5,...opts});
-async function ready(page) { await page.goto('/'); await expect(page.locator('#status')).toContainText('build'); }
+async function ready(page) { await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/); }
 async function importJSON(page,data) {
   await page.locator('#status').evaluate(e=>e.textContent='Reading test import…');
   await page.locator('#file-import').setInputFiles({name:'fixture.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});
@@ -33,7 +33,7 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   const data=envelope([tile('categorical',{tileOptions:{xLabel:'USD'}})],{revenue:upload});
   data.defaultDataset={kind:'dataset',ref:'upload:revenue'};
   await importJSON(page,data); await expect(page.locator('#status')).toContainText('Imported');
-  await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
+  await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8) (8 rows)');
   await expect(page.locator('.tile-chart')).toContainText('USD');
   const exported=await jsonExport(page); expect(exported.version).toBe(5); expect(exported.tiles[0].binding).toEqual({mode:'explicit',ref:'categorical'});
   await focusHeaderAction(page, '#btn-templates'); await page.keyboard.press('Enter');
@@ -112,9 +112,9 @@ test('R5/R7: quota fault during import restores old chart and removes new datase
     Storage.prototype.setItem=function(k,v){ if(k==='dashboard-builder:layout:v1'&&!failed){failed=true;throw new DOMException('Injected quota','QuotaExceededError');}return set.call(this,k,v); };
   });
   await importJSON(page,envelope([tile('upload:new')],{new:upload})); await expect(page.locator('#status')).toContainText('Import failed');
-  await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
+  await expect(page.locator('.tile-data-label')).toHaveText('Categories (8) (8 rows)');
   expect(await page.evaluate(async()=>{const {getDataset}=await import('/src/data/store.js');return getDataset('new');})).toBeNull();
-  await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
+  await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8) (8 rows)');
 });
 test('R6/R9: capacity, query cap and supported editor viewport', async ({page},testInfo) => {
   await ready(page);
@@ -153,13 +153,13 @@ test('R5/R7: partial IndexedDB write and construction faults leave prior layout 
   });
   await importJSON(page,envelope([tile('upload:new')],{new:upload,fault:upload})); await expect(page.locator('#status')).toContainText('Import failed');
   expect(await page.evaluate(async()=>{const {getDataset}=await import('/src/data/store.js');return getDataset('new');})).toBeNull();
-  await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
+  await expect(page.locator('.tile-data-label')).toHaveText('Categories (8) (8 rows)');
   await page.evaluate(()=>{
     const create=document.createElement.bind(document); let failed=false;
     document.createElement=function(tag,...rest){if(tag==='div'&&!failed){failed=true;throw new Error('Injected construction failure');}return create(tag,...rest);};
   });
   await importJSON(page,envelope([tile('upload:new')],{new:upload})); await expect(page.locator('#status')).toContainText('Import failed');
-  await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
+  await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8) (8 rows)');
 });
 test('R4/R8: real WASM precision, immediate cache invalidation and serialized resynchronization', async ({page}) => {
   await ready(page);
@@ -186,7 +186,7 @@ test('R6/R9: worker upload, keyboard save/import/export and cancel remain operab
   await expect(page.locator('.data-preview-note').first()).toContainText('2 rows');
   await page.locator('.data-apply').first().focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.tile-data-label')).toContainText('revenue.csv');
-  await focusHeaderAction(page, '#btn-save'); await page.keyboard.press('Enter'); await expect(page.locator('#status')).toContainText('Saved');
+  await focusHeaderAction(page, '#btn-save'); await page.keyboard.press('Enter'); await expect(page.locator('#status')).toContainText('Changes saved in this browser');
   const downloaded=page.waitForEvent('download'); await focusHeaderAction(page, '#btn-export'); await page.keyboard.press('Enter'); await downloaded;
   const chooser=page.waitForEvent('filechooser'); await focusHeaderAction(page, '#btn-import'); await page.keyboard.press('Enter');
   await (await chooser).setFiles({name:'keyboard.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(envelope([tile('categorical')])))});

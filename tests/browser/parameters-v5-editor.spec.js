@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint=page.locator('.first-run-hint');
   if(await hint.isVisible().catch(()=>false))await hint.getByRole('button',{name:'Got it'}).click();
   await page.locator('#btn-filters').click();
@@ -28,7 +28,7 @@ test('T6 creates a select only after an explicit dataset, column and option refr
   await expect.poll(()=>page.evaluate(()=>localStorage.getItem('dashboard-builder:layout:v1'))).not.toBeNull();
   await page.evaluate(()=>{const layout=JSON.parse(localStorage.getItem('dashboard-builder:layout:v1'));layout.parameters[0].value='Removed category';localStorage.setItem('dashboard-builder:layout:v1',JSON.stringify(layout));});
   await page.reload();
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.locator('#btn-filters').click();
   const reloaded=page.locator('.dashboard-filters-popover');await reloaded.getByRole('tab',{name:'Parameters'}).click();
   await expect(reloaded.locator('.parameter-stale-flag')).toContainText('“Removed category” is stale and is preserved.');
@@ -113,7 +113,7 @@ test('slice 2 keeps SQL-referencing bound parameters frozen and disclosed in the
 });
 
 test('slice 2 binds a filter, syncs values, surfaces multi-value conflict, and detaches through the guard',async({page})=>{
-  await page.goto('/');await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.evaluate(()=>localStorage.setItem('dashboard-builder:layout:v1',JSON.stringify({
     app:'dashboard-builder',version:5,rowHeight:24,
     parameters:[{name:'choice',type:'single-select',value:'Housing',source:{dataset:'categorical',column:'label'},options:['Housing','Food']}],
@@ -122,7 +122,7 @@ test('slice 2 binds a filter, syncs values, surfaces multi-value conflict, and d
   })));
   const layoutError=await page.evaluate(async()=>{try{const {validateLayout}=await import('/src/data/layout.js');validateLayout(JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')));return null;}catch(error){return error.message;}});
   expect(layoutError).toBeNull();
-  await page.reload();await expect(page.locator('#status')).toContainText('build');
+  await page.reload();await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.locator('#btn-filters').click();const pop=page.locator('.dashboard-filters-popover');
   await pop.getByRole('tab',{name:'Parameters'}).click();const row=pop.locator('.dashboard-parameter');
   await row.getByLabel('Filter binding for choice').selectOption('filter-choice');
@@ -161,7 +161,7 @@ test('slice 2 applies saved-view filter state around bound controls and reset re
 });
 
 test('slice 2 number slider and numeric input stay synchronized and honor integer step',async({page})=>{
-  await page.goto('/');await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.evaluate(()=>localStorage.setItem('dashboard-builder:layout:v1',JSON.stringify({app:'dashboard-builder',version:5,rowHeight:24,parameters:[{name:'count',type:'number',value:4,min:0,max:10,step:2,integer:true}],tiles:[]})));
   await page.reload();await page.locator('#btn-filters').click();const pop=page.locator('.dashboard-filters-popover');
   await pop.getByRole('tab',{name:'Parameters'}).click();

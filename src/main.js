@@ -41,7 +41,9 @@ import {
   loadPersistedQueries,
   inlineQueries,
   restoreQueries,
-  pruneQueries
+  pruneQueries,
+  listQueries,
+  detachQueryParameterConsumer
 } from "./data/queries.js";
 import { isMissingTableError, sampleTableName, uploadTableName } from "./data/sql.js";
 import { toggleDataPopover, closeDataPopover } from "./ui/dataPopover.js";
@@ -1269,7 +1271,7 @@ function refreshSavedViews() {
   if (!savedViewPicker) return;
   const selected = savedViewPicker.value;
   savedViewPicker.replaceChildren(new Option('Current view', ''));
-  for (const view of savedViews) savedViewPicker.append(new Option(view.name, view.id));
+  for (const view of savedViews) savedViewPicker.append(new Option(view.brokenParameters?.length ? `${view.name} — Missing parameter: ${view.brokenParameters.join(', ')}` : view.name, view.id));
   if (savedViews.some(view => view.id === selected)) savedViewPicker.value = selected;
 }
 document.getElementById('btn-save-view')?.addEventListener('click', () => {
@@ -1292,7 +1294,7 @@ document.getElementById('btn-apply-view')?.addEventListener('click', () => {
   parameters = validateParameters(structuredClone(view.parameters));
   setTheme(view.theme); refreshThemeButton();
   renderAllTiles(); refreshQueryTiles(); scheduleAutosave();
-  setStatus(`Applied saved view “${view.name}”.`);
+  setStatus(`Applied saved view “${view.name}”.` + (view.brokenParameters?.length ? ` Detached parameter bindings: ${view.brokenParameters.join(', ')}.` : ''));
 });
 function dashboardFilterTiles() {
   const pageNames=new Map(pages.map(page=>[page.id,page.name]));
@@ -1331,9 +1333,23 @@ if (btnFilters) {
       parameters,
       tiles:dashboardFilterTiles(),
       pages,
+      queries:listQueries(),
+      savedViews,
       tileTitle:id=>tileMeta.get(id)?.title || id,
       onFiltersChange:setFilters,
-      onParametersChange:setParameters
+      onParametersChange:setParameters,
+      onDetachParameterConsumers:(name,kind,consumers)=>{
+        let ok=true;
+        for(const consumer of consumers){
+          if(kind==='savedView'){
+            savedViews=savedViews.map(view=>view.id!==consumer.id?view:{...view,parameters:view.parameters.filter(item=>item.name!==name),brokenParameters:[...new Set([...(view.brokenParameters||[]),name])]});
+          }else ok=detachQueryParameterConsumer(consumer.id,kind,name)&&ok;
+        }
+        if(kind==='savedView')refreshSavedViews();
+        refreshQueryTiles();scheduleAutosave();
+        if(!ok)setStatus('The detached query binding could not be saved durably; the current session is marked broken.');
+        return {queries:listQueries(),savedViews};
+      }
     });
   });
 }

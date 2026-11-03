@@ -5,6 +5,7 @@ import { LIMITS, assertRows } from './limits.js';
 import { validateFilters } from './filters.js';
 import { validateParameters } from './parameters.js';
 import { checkedChainFields } from './queryChain.js';
+import { validateDetachedParameterConsumers } from './parameterConsumers.js';
 
 const own = (o,k) => Object.hasOwn(o,k);
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -53,7 +54,7 @@ function records(v, kind) {
       const sql = text(e.sql, 'SQL', 100000);
       const dependencies = e.dependencies === undefined ? null : e.dependencies;
       if (dependencies !== null && (!Array.isArray(dependencies) || dependencies.some(r => ref(r, false) === null))) fail('Invalid query dependencies.');
-      out[id] = { name, sql, columns, fieldKeys, mapping: map, dependencies, ...checkedChainFields(e) };
+      out[id] = { name, sql, columns, fieldKeys, mapping: map, dependencies, ...checkedChainFields(e), ...(e.detachedParameterConsumers!==undefined?{detachedParameterConsumers:validateDetachedParameterConsumers(e.detachedParameterConsumers)}:{}) };
     }
   }
   return out;
@@ -190,7 +191,9 @@ export function validateLayout(input) {
     if (!pageIds.has(viewPage)) fail('Saved view references a missing page.');
     const viewFilters=validateFilters(view.filters);
     if(viewFilters.some(filter=>filter.scope==='page'&&!pageIds.has(filter.pageId)))fail('Saved view filter references a missing page.');
-    return { id: view.id, name, theme: viewTheme, currentPageId:viewPage, filters:viewFilters, parameters: validateParameters(view.parameters) };
+    const brokenParameters=view.brokenParameters===undefined?[]:view.brokenParameters;
+    if(!Array.isArray(brokenParameters)||brokenParameters.length>100||brokenParameters.some(name=>typeof name!=='string'||!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))||new Set(brokenParameters).size!==brokenParameters.length) fail('Invalid saved view broken parameters.');
+    return { id: view.id, name, theme: viewTheme, currentPageId:viewPage, filters:viewFilters, parameters: validateParameters(view.parameters), ...(brokenParameters.length?{brokenParameters:[...brokenParameters]}:{}) };
   });
   return { app: 'dashboard-builder', version: 4, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, savedViews: views, pages, currentPageId, tiles, datasets, queries };
 }

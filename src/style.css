@@ -2730,7 +2730,12 @@ body.present .tile-toolbar { display: none; }
 .filters-overflow { margin: 2px 0 0; color: var(--slate-600); font-size: 12px; }
 .filter-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .filters-form-error { margin: 0; color: var(--danger); font-size: 12px; }
-.dashboard-parameter { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; align-items: end; gap: 8px; padding: 9px; border: 1px solid var(--slate-200); border-radius: 7px; }
+.dashboard-parameter { display: grid; grid-template-columns: minmax(0,1fr) minmax(100px,.55fr) minmax(0,1fr) auto; align-items: end; gap: 8px; padding: 9px; border: 1px solid var(--slate-200); border-radius: 7px; }
+.dashboard-parameter .parameter-type { min-width: 0; width: 100%; padding: 6px 8px; border: 1px solid var(--slate-300); border-radius: 5px; background: var(--white); color: var(--ink); font: inherit; }
+.parameter-consumer-warning { grid-column: 1 / -1; padding: 8px; border-radius: 6px; background: var(--slate-100); color: var(--ink); }
+.parameter-consumer-warning p { margin: 0 0 5px; }
+.parameter-consumer-name { font-size: .9em; }
+.parameter-detach-consumers { margin: 5px 6px 0 0; }
 .dashboard-parameter .parameter-slider { width: 100%; padding: 0; accent-color: var(--dusk); }
 .parameter-output { display: block; font-family: var(--font-mono); font-size: 11px; }
 .parameter-example { display: block; margin: 0 0 10px; padding: 8px; border-radius: 5px; background: var(--paper); font-size: 11px; overflow-wrap: anywhere; white-space: normal; }
@@ -2739,7 +2744,7 @@ body.present .tile-toolbar { display: none; }
 .tile-filter-status { margin: 8px 12px 0; padding: 6px 9px; border-left: 3px solid var(--dusk); background: color-mix(in srgb, var(--dusk) 7%, var(--white)); color: var(--slate-600); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .tile-filter-status[data-state="ignored"], .tile-filter-status[data-state="unmapped"] { border-left-color: var(--warning); }
 .tile-filter-status[data-state="highlight"] { border-left-color: var(--success); }
-@media (max-width: 480px) { .dashboard-filters-popover { width: min(390px, calc(100vw - 16px)); } .dashboard-parameter { grid-template-columns: 1fr auto; } .dashboard-parameter .parameter-value-label { grid-column: 1 / -1; } }
+@media (max-width: 480px) { .dashboard-filters-popover { width: min(390px, calc(100vw - 16px)); } .dashboard-parameter { grid-template-columns: 1fr auto; } .dashboard-parameter .parameter-type-label, .dashboard-parameter .parameter-value-label { grid-column: 1 / -1; } }
 }
 body.present #page-tabs { display: none; }
 

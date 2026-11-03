@@ -187,12 +187,14 @@ const queryCache = new Map();
 
 export function getCachedRows(qid, query, entry, parameters = []) {
   const e = queryCache.get(qid);
+  assertNoDetachedParameterBindings(query);
   if(query.chain){const plan=compileTransformChain(query.chain,{parameters});if(!plan.sql||plan.sql!==query.sql)return null;}
   const resolvedSql = substituteParameters(query.sql, parameters);
   return e && e.revision === datasetVersion() && e.identity === JSON.stringify([query,entry?.fields,resolvedSql]) ? e.rows : null;
 }
 export function dropCachedRows(qid) { queryCache.delete(qid); }
 export async function runTileQuery(qid, query, entry, parameters = []) {
+  assertNoDetachedParameterBindings(query);
   if(query.chain){const plan=compileTransformChain(query.chain,{parameters});if(!plan.sql||plan.sql!==query.sql)throw new Error(plan.errors.join(' ')||'Saved SQL does not match its transform chain.');}
   const resolvedSql = substituteParameters(query.sql, parameters);
   const result=query.chain?await previewTransformChain(query.chain,parameters,{sampleOnly:false,refreshSchema:false}):await runQuery(resolvedSql);
@@ -205,4 +207,9 @@ export async function runTileQuery(qid, query, entry, parameters = []) {
   const materialized = retainSourceRows(withDroppedCount(rows.map((row, index) => ({ ...row, ...normalized[index] })), dropped), rows);
   queryCache.set(qid, { revision, identity: JSON.stringify([query,entry.fields,resolvedSql]), rows: materialized, sourceRows: rows });
   return materialized;
+}
+
+function assertNoDetachedParameterBindings(query) {
+  const binding = query.detachedParameterConsumers?.[0];
+  if (binding) throw new Error(`Parameter "${binding.name}" has an explicitly detached ${binding.kind === 'chain' ? 'transform-chain' : 'query SQL'} binding.`);
 }

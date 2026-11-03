@@ -1051,8 +1051,9 @@ function replaceLayout(candidate, { fit = false } = {}) {
 
 // ── Persistence: autosave + explicit save ────────────────────────────────
 let saveTimer = null;
+let protectUnreadableSave = false;
 function scheduleAutosave() {
-  if (bulkLoading) return;
+  if (bulkLoading || protectUnreadableSave) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
@@ -1065,6 +1066,7 @@ function scheduleAutosave() {
 }
 
 function saveNow() {
+  if (protectUnreadableSave) { setStatus("Save blocked to protect the unreadable dashboard."); return; }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
     setStatus("Saved " + new Date().toLocaleTimeString());
@@ -1748,8 +1750,10 @@ function starterLayout() {
   try {loadPersistedQueries();} // validate before any query tile renders
   catch(error) {queryLoadIssue=`Saved queries could not be loaded: ${error.message} Stored data retained; import a valid backup to recover.`;}
   let restored = false;
+  let raw = null;
+  let corruptMessage = "";
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       loadLayout(JSON.parse(raw));
       restored = true;
@@ -1759,11 +1763,38 @@ function starterLayout() {
       );
     }
   } catch {
-    restored = false; // corrupt or unreadable save: fall through to starter
+    restored = false;
+    let retained = false;
+    if (raw !== null) {
+      try {
+        const key = STORAGE_KEY + ":corrupt:" + Date.now() + ":" + Math.random().toString(36).slice(2);
+        localStorage.setItem(key, raw);
+        if (localStorage.getItem(key) !== raw) throw new Error("Recovery verification failed");
+        retained = true;
+      } catch { /* Do not overwrite the only available copy. */ }
+    }
+    protectUnreadableSave = !retained;
+    corruptMessage = retained
+      ? "Your saved dashboard could not be read. A copy was kept; the starter is being shown."
+      : "Your saved dashboard could not be read. Its original is protected; the starter is being shown. Saving is disabled.";
+    const notice = document.createElement("div");
+    notice.dataset.corruptNotice = "";
+    notice.setAttribute("role", "alert");
+    notice.append(document.createTextNode(corruptMessage + " "));
+    if (raw !== null) {
+      const getCopy = document.createElement("button");
+      getCopy.type = "button"; getCopy.textContent = "Download retained copy";
+      getCopy.onclick = () => download("unreadable-dashboard.json", raw);
+      notice.append(getCopy);
+    }
+    const dismiss = document.createElement("button");
+    dismiss.type = "button"; dismiss.textContent = "Dismiss";
+    dismiss.onclick = () => notice.remove();
+    notice.append(dismiss); statusEl.after(notice);
   }
   if (!restored) {
     loadLayout(starterLayout());
-    setStatus("Starter dashboard loaded");
+    setStatus(corruptMessage || "Starter dashboard loaded");
   }
   const issues = storageIssues();
   if (issues.length) {
@@ -1772,6 +1803,6 @@ function starterLayout() {
     retry.onclick = async () => { await loadPersistedDatasets(); setStatus(storageIssues().join("; ") || "Migration verified."); };
     statusEl.after(retry);
   }
-  setStatus(`${queryLoadIssue||statusMessage} · build ${BUILD}`);
+  setStatus(`${[corruptMessage, queryLoadIssue].filter(Boolean).join(" ") || statusMessage} · build ${BUILD}`);
   showFirstRunHint();
 })();

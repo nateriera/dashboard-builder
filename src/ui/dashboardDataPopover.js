@@ -202,7 +202,8 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
     sourceStatus.textContent = "Validating pasted table…";
     try {
       const { columns, rows } = parsePastedTable(pasteArea.value);
-      onUpload({ name: "Pasted table", columns, rows });
+      const profile = profileRows(columns, rows);
+      onUpload({ name: "Pasted table", columns, rows, profile });
       closeDashboardPopover();
     } catch (e) {
       err.textContent = e?.message || String(e);

@@ -41,6 +41,7 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
   let currentParameters=validateParameters(parameters);
   let activeTab="filters";
   let addFilterOpen=false;
+  let editingFilterId=null;
   let addParameterOpen=false;
 
   const pop=element("div","data-popover dashboard-filters-popover");
@@ -103,6 +104,10 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       const remove=element("button","filter-remove","×");remove.type="button";remove.title=`Remove ${filter.field} filter`;remove.setAttribute("aria-label",`Remove ${filter.field} filter`);
       remove.addEventListener("click",()=>{emitFilters(currentFilters.filter(item=>item.id!==filter.id));renderFiltersPanel();});
       chip.append(caption,remove);list.append(chip);
+      if(filter.source!=='crossfilter'&&['is','is-not'].includes(filter.op)){
+        const edit=element('button','filter-edit','Edit');edit.type='button';edit.setAttribute('aria-label',`Edit ${filter.field} filter`);
+        edit.addEventListener('click',()=>{editingFilterId=filter.id;addFilterOpen=true;renderFiltersPanel();});chip.append(edit);
+      }
       if(filter.source!=='crossfilter'){
         const connectionBox=element("details","filter-connections");
         const summary=element("summary","",filter.targets ? `${filter.targets.length} chart connection${filter.targets.length===1?'':'s'}` : 'Same-name fields across charts');
@@ -138,14 +143,14 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       }
     }
     panel.append(list);
-    const add=element("button","filter-add","Add filter");add.type="button";add.disabled=!filterTiles.length;add.addEventListener("click",()=>{addFilterOpen=!addFilterOpen;renderFiltersPanel();});
+    const add=element("button","filter-add","Add filter");add.type="button";add.disabled=!filterTiles.length;add.addEventListener("click",()=>{editingFilterId=null;addFilterOpen=!addFilterOpen;renderFiltersPanel();});
     panel.append(add);
-    if(addFilterOpen) panel.append(buildFilterForm());
+    if(addFilterOpen) panel.append(buildFilterForm(currentFilters.find(filter=>filter.id===editingFilterId)));
   }
 
-  function buildFilterForm() {
+  function buildFilterForm(existing = null) {
     const form=element("div","filter-form");
-    const legend=element("strong","","New filter");form.append(legend);
+    const legend=element("strong","",existing?'Edit filter':'New filter');form.append(legend);
     const sourceTileLabel=element('label','filter-field-label','Source chart');
     const sourceTileSelect=element('select','filter-field-select');sourceTileSelect.setAttribute('aria-label','Filter source chart');
     const sourcePlaceholder=element('option','','Choose a chart');sourcePlaceholder.value='';sourcePlaceholder.disabled=true;sourcePlaceholder.selected=true;sourceTileSelect.append(sourcePlaceholder);
@@ -207,12 +212,14 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
         for(const [value,text] of [["is","Is"],["is-not","Is not"]]){const option=element("option","",text);option.value=value;operator.append(option);}
         operator.value=selectedOperator;operator.addEventListener("change",()=>{selectedOperator=operator.value;});controls.append(operator);
         const values=element("div","filter-values");
-        for(const [index,value] of selectedField.values.entries()){
-          const label=element("label","filter-value");const checkbox=element("input","");checkbox.type="checkbox";checkbox.value=String(index);
+        for(const value of selectedField.values){
+          const label=element("label","filter-value");const checkbox=element("input","");checkbox.type="checkbox";checkbox.value=JSON.stringify(value);
+          checkbox.checked=selectedValues.some(item=>Object.is(item,value));
           checkbox.addEventListener("change",()=>{
             const next=new Set(selectedValues);
-            if(checkbox.checked)next.add(index);else next.delete(index);
-            selectedValues=[...next].map(i=>selectedField.values[i]);updateApplyState();
+            const value=JSON.parse(checkbox.value);
+            if(checkbox.checked)next.add(value);else next.delete(value);
+            selectedValues=[...next];updateApplyState();
           });
           label.append(checkbox,document.createTextNode(value===null?'Blank':String(value)));values.append(label);
         }
@@ -240,6 +247,21 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
     sourceTileSelect.addEventListener('change',()=>{selectedTile=null;fieldSelect.value='';renderControls();});
     fieldSelect.addEventListener("change",renderControls);
     if(filterTiles.length){sourceTileSelect.value=filterTiles[0].id;renderControls();}
+    if(existing){
+      const source=filterTiles.find(tile=>tile.fields.some(field=>field.field===existing.field&&field.type==='category'));
+      if(source){
+        sourceTileSelect.value=source.id;selectedTile=null;renderControls();
+        fieldSelect.value=existing.field;renderControls();
+        selectedValues=[...existing.values];selectedOperator=existing.op;
+        controls.querySelector('.filter-operator').value=selectedOperator;
+        for(const checkbox of controls.querySelectorAll('input[type="checkbox"]')) checkbox.checked=selectedValues.some(value=>Object.is(value,JSON.parse(checkbox.value)));
+        selectedTargets=existing.targets?.map(target=>({...target}))||defaultTargets(source.id,selectedField);
+        renderConnectionEditors(targetWrap,selectedField.type,selectedTargets,targets=>{selectedTargets=targets;targetsTouched=true;updateApplyState();});
+        scopeSelect.value=existing.scope||(existing.targets?'charts':'dashboard');
+        pageSelect.value=existing.pageId||source.pageId||pages[0]?.id||'';
+        pageSelect.hidden=scopeSelect.value!=='page';targetWrap.hidden=scopeSelect.value!=='charts';updateApplyState();
+      }
+    }
     apply.addEventListener("click",()=>{
       if(!selectedField)return;
       let filter;
@@ -248,11 +270,11 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, tiles = [
       if(selectedField.type==='number'){
         const [min,max]=selectedValues.map(Number);
         if(!Number.isFinite(min)||!Number.isFinite(max)||min>max){showError("Enter a valid minimum and maximum.");return;}
-        filter={id:newId('filter'),field:selectedField.field,op:'between',values:[min,max],...scopeOptions};
+        filter={id:existing?.id||newId('filter'),field:selectedField.field,op:'between',values:[min,max],...scopeOptions};
       }else if(selectedField.type==='date'){
-        filter={id:newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...(selectedRelativePreset?{relativePreset:selectedRelativePreset}:{}),...scopeOptions};
-      }else filter={id:newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues,...scopeOptions};
-      try{emitFilters([...currentFilters,filter]);addFilterOpen=false;renderFiltersPanel();}
+        filter={id:existing?.id||newId('filter'),field:selectedField.field,op:'date-between',values:selectedValues,...(selectedRelativePreset?{relativePreset:selectedRelativePreset}:{}),...scopeOptions};
+      }else filter={id:existing?.id||newId('filter'),field:selectedField.field,op:selectedOperator,values:selectedValues,...scopeOptions};
+      try{emitFilters([...currentFilters.filter(filter=>filter.id!==existing?.id),filter]);addFilterOpen=false;editingFilterId=null;renderFiltersPanel();}
       catch(err){showError(err.message);}
     });
     return form;

@@ -10,6 +10,7 @@ import { previewTheme } from "../themes/themes.js";
 import { applyFilters, sortAndLimitRows } from "../data/filters.js";
 import { chartData } from "../ui/chartData.js";
 import { retainSourceRows } from '../data/rowProvenance.js';
+import { timeBrushPoints, timeBrushSelection } from '../charts/timeMarks.js';
 
 document.head.appendChild(chartStyles);
 
@@ -245,7 +246,7 @@ function renderExport(payload) {
               crossfilterField: t.crossfilterField || null
             }
           });
-          wireOfflineTimeBrush(chartEl, t, entry, filtered.rows, filters);
+          wireOfflineTimeBrush(chartEl, t, entry, filters);
           const active = filters.find(filter => filter.source === "crossfilter" && filter.sourceTile === t.id);
           const mappings=t.tileOptions?.crossfilterFieldMappings||{};
           const incoming=mode==='highlight'?filters.filter(filter=>filter.source==='crossfilter'&&filter.sourceTile!==t.id&&(mappings[filter.field]??(filter.field===entry.crossfilterField?entry.crossfilterField:null))===entry.crossfilterField):[];
@@ -324,16 +325,12 @@ function renderExport(payload) {
       }
       return rect;
     };
-    const state = brushStates.get(chartEl) || { tile, rows: [], drag: null };
+    const state = brushStates.get(chartEl) || { tile, drag: null };
     brushStates.set(chartEl,state);
     chartEl.addEventListener('pointerdown',event=>{
       const svg=event.target.closest?.('svg[role="img"]');
       if(event.button!==0||!svg)return;
-      const circles=[...svg.querySelectorAll('g[aria-label="dot"] circle')];
-      const points=circles.slice(0,state.rows.length).flatMap((circle,index)=>{
-        const x=Number(circle.getAttribute('cx')),time=new Date(state.rows[index]?.date).getTime();
-        return Number.isFinite(x)&&Number.isFinite(time)?[{x,time}]:[];
-      }).sort((a,b)=>a.x-b.x).filter((point,index,all)=>index===0||point.x!==all[index-1].x);
+      const points=timeBrushPoints(svg);
       if(points.length<2)return;
       const x=plotX(svg,event.clientX);
       if(x<points[0].x||x>points.at(-1).x)return;
@@ -352,15 +349,12 @@ function renderExport(payload) {
     chartEl.addEventListener('pointerup',event=>{
       const drag=state.drag;if(!drag||drag.pointerId!==event.pointerId)return;state.drag=null;
       if(Math.abs(drag.currentX-drag.startX)<12){drag.svg.querySelector(':scope > rect.db-time-brush')?.remove();return;}
-      const atX=x=>{
-        const points=drag.points;if(x<=points[0].x)return points[0].time;if(x>=points.at(-1).x)return points.at(-1).time;
-        const index=points.findIndex(point=>point.x>=x),a=points[index-1],b=points[index];return a.time+(b.time-a.time)*(x-a.x)/(b.x-a.x);
-      };
-      const values=[atX(Math.min(drag.startX,drag.currentX)),atX(Math.max(drag.startX,drag.currentX))].map(time=>new Date(time).toISOString().slice(0,10));
+      const selection=timeBrushSelection(drag.points,drag.startX,drag.currentX);
+      if(!selection)return;
       const activeFilters=getFilters();
       const current=activeFilters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===tile.id&&filter.op==='date-between'&&filter.field==='date');
       const next=activeFilters.filter(filter=>filter!==current);
-      next.push({id:current?.id||`cross-export-date-${Date.now().toString(36)}`,field:'date',op:'date-between',values,source:'crossfilter',sourceTile:tile.id});
+      next.push({id:current?.id||`cross-export-date-${Date.now().toString(36)}`,field:'date',op:'date-between',...selection,source:'crossfilter',sourceTile:tile.id});
       updateFilters(next);
     },true);
     chartEl.addEventListener('pointercancel',event=>{
@@ -368,16 +362,14 @@ function renderExport(payload) {
     },true);
   }
 
-  function wireOfflineTimeBrush(chartEl,t,entry,rows,activeFilters){
+  function wireOfflineTimeBrush(chartEl,t,entry,activeFilters){
     if(!['line','area'].includes(t.type)||!entry.fields?.some(field=>field.key==='date'))return;
     const state=brushStates.get(chartEl);if(!state)return;
-    state.tile=t;state.rows=rows;
+    state.tile=t;
     const svg=chartEl.querySelector('svg[role="img"][viewBox]');
     const active=activeFilters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===t.id&&filter.field==='date'&&filter.op==='date-between');
     if(!svg||!active){svg?.querySelector(':scope > rect.db-time-brush')?.remove();return;}
-    const circles=[...svg.querySelectorAll('g[aria-label="dot"] circle')],points=circles.slice(0,rows.length).flatMap((circle,index)=>{
-      const x=Number(circle.getAttribute('cx')),time=new Date(rows[index]?.date).getTime();return Number.isFinite(x)&&Number.isFinite(time)?[{x,time}]:[];
-    }).sort((a,b)=>a.x-b.x).filter((point,index,all)=>index===0||point.x!==all[index-1].x);
+    const points=timeBrushPoints(svg);
     if(points.length<2)return;
     const xAt=time=>{
       const byTime=[...points].sort((a,b)=>a.time-b.time);

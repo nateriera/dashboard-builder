@@ -1,5 +1,6 @@
 import { numericExtent } from "../data/limits.js";
-import { donutParts } from "./integrity.js";
+import { donutParts, donutSourceLabels } from "./integrity.js";
+import { timeMarkRender } from './timeMarks.js';
 // Chart components — theme-aware, brand-neutral.
 //
 // Every component takes `theme` in its options (defaulting to the active
@@ -264,19 +265,20 @@ export function columnChart(data, { x, y, sort = "desc", fill = null, highlight 
 
 // ── Line chart (time series; one or many series via `stroke`) ───────────────
 // data: rows; x: date/number field; y: numeric field; stroke: optional series field.
-export function lineChart(data, { x, y, stroke = null, width = 680, height, xLabel = null, yLabel = null, yFormat = fmtInt.format.bind(fmtInt), xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
+export function lineChart(data, { x, y, stroke = null, width = 680, height, xLabel = null, yLabel = null, yFormat = fmtInt.format.bind(fmtInt), xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "", sourceRows = data } = {}) {
   const t = theme.chart;
   const base = { x, y, tip, strokeWidth: 2 };
+  const render = timeMarkRender(data, sourceRows, x);
   const xType = data[0] && data[0][x] instanceof Date ? "time" : typeof (data[0] && data[0][x]) === "string" ? "point" : "linear";
   const marks = stroke
     ? [
         Plot.lineY(data, { ...base, stroke }),
-        Plot.dot(data, { x, y, stroke, r: 2.5, tip: false })
+        Plot.dot(data, { x, y, stroke, r: 2.5, tip: false, render })
       ]
     : [
         Plot.lineY(data, { ...base, stroke: t.primary }),
-        Plot.dot(data, { x, y, stroke: t.primary, r: 2.5, tip: false }),
-        Plot.dot(data, Plot.selectLast({ x, y, fill: t.highlight, stroke: t.primary, r: 4 }))
+        Plot.dot(data, { x, y, stroke: t.primary, r: 2.5, tip: false, render }),
+        Plot.dot(data, Plot.selectLast({ x, y, fill: t.highlight, stroke: t.primary, r: 4, render }))
       ];
   marks.push(...referenceMarks("y", referenceValue, referenceLabel, theme, { x: axisMaximum(data, x), y: Number(referenceValue) }));
   return themedPlot(theme, {
@@ -397,13 +399,13 @@ export function boxplotChart(data, { label = "label", value = "value", width = 6
   return themedPlot(theme,{width,height,marginBottom:48,x:{label:null,tickRotate:categories.length>12?-30:0},y:{label:yLabel,grid:true,tickFormat:fmtInt.format.bind(fmtInt),domain:domainWithReference(data.map(row=>row[value]),referenceValue)},marks:[Plot.boxY(data,{x:label,y:value,fill:t.primary,tip:true}),Plot.ruleY([0],{stroke:t.border}),...referenceMarks("y",referenceValue,referenceLabel,theme,{x:categories.at(-1),y:Number(referenceValue)})]});
 }
 
-export function areaChart(data, { x = "date", y = "value", series = null, width = 680, height, xLabel = null, yLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
+export function areaChart(data, { x = "date", y = "value", series = null, width = 680, height, xLabel = null, yLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "", sourceRows = data } = {}) {
   const t=theme.chart;
   const xType=data[0]?.[x] instanceof Date?"time":typeof data[0]?.[x]==="string"?"point":"linear";
   const marks=series?
     [Plot.areaY(data,{x,y1:0,y2:y,z:series,fill:series,fillOpacity:.18,tip:true}),Plot.lineY(data,{x,y,z:series,stroke:series,strokeWidth:1.5})]:
     [Plot.areaY(data,{x,y1:0,y2:y,fill:t.primary,fillOpacity:.45,tip:true}),Plot.lineY(data,{x,y,stroke:t.primary,strokeWidth:2})];
-  marks.push(Plot.dot(data,{x,y,r:1,fillOpacity:0,strokeOpacity:0,tip:false,ariaLabel:()=>""}));
+  marks.push(Plot.dot(data,{x,y,r:1,fillOpacity:0,strokeOpacity:0,tip:false,ariaLabel:()=>"",render:timeMarkRender(data,sourceRows,x)}));
   marks.push(...referenceMarks("y",referenceValue,referenceLabel,theme,{x:axisMaximum(data,x),y:Number(referenceValue)}));
   return themedPlot(theme,{width,height,x:{label:xLabel??null,type:xType},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt),grid:true,domain:domainWithReference(data.map(row=>row[y]),referenceValue,null,true)},color:series?{range:t.categorical,legend:true}:undefined,marks});
 }
@@ -575,10 +577,7 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
   const t = theme.chart;
   const compactLegend = width < 280;
   width = Math.max(80, Math.min(width, height - 80, 400));
-  const sourceLabels = [...new Set(data.map(d => String(d[label] ?? "Unlabeled")))];
   data = donutParts(data, label, value);
-  const partLabels = new Set(data.map(d => String(d[label])));
-  const otherLabels = sourceLabels.filter(name => !partLabels.has(name));
   const total = data.reduce((s, d) => s + d[value], 0);
   const slices = d3pie().value((d) => d[value]).sort(null)(data);
   const arcGen = d3arc().innerRadius(innerRadius).outerRadius(outerRadius);
@@ -593,7 +592,7 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
       <g transform="translate(${c} ${c})">
         ${slices.map((s, i) => {
           const sliceLabel = String(s.data[label]);
-          const values = crossfilterField && !sourceLabels.includes(sliceLabel) ? otherLabels : [s.data[label]];
+          const values = donutSourceLabels(s.data, label);
           const encoded = crossfilterField ? encodeURIComponent(JSON.stringify(values)) : "";
           return crossfilterField
             ? svg`<a href="#db-crossfilter:${encoded}" aria-label="${crossfilterAriaLabel(sliceLabel)}"><path d="${arcGen(s)}" fill="${colors[i]}" stroke="${t.card}" stroke-width="2" data-crossfilter-values="${encoded}"><title>${s.data[label]}: ${valueFormat(s.data[value])}</title></path></a>`

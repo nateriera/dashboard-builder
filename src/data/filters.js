@@ -1,3 +1,5 @@
+import { LIMITS } from './limits.js';
+
 const own = (value, key) => value != null && Object.hasOwn(value, key);
 const forbidden = new Set(["__proto__", "constructor", "prototype"]);
 const idPattern = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -13,7 +15,7 @@ function validCalendarDate(value) {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
-function calendarDate(value) {
+export function calendarDate(value) {
   if (value instanceof Date && Number.isFinite(value.getTime())) {
     return value.toISOString().slice(0, 10);
   }
@@ -39,7 +41,8 @@ export function validateFilters(input) {
   const crossfilterSources = new Set();
   return input.map(filter => {
     if (!filter || typeof filter !== "object" || Array.isArray(filter) || !idPattern.test(filter.id || "") || !validField(filter.field)) throw new Error("Invalid filter.");
-    if (!Array.isArray(filter.values) || filter.values.length === 0 || filter.values.length > 200 || filter.values.some(value => !validValue(value))) throw new Error("Invalid filter values.");
+    const valueLimit = filter.source === 'crossfilter' && filter.op === 'is' ? LIMITS.rows : 200;
+    if (!Array.isArray(filter.values) || filter.values.length === 0 || filter.values.length > valueLimit || filter.values.some(value => !validValue(value))) throw new Error("Invalid filter values.");
     if (filter.op === "between") {
       if (filter.values.length !== 2 || filter.values.some(value => typeof value !== "number") || filter.values[0] > filter.values[1]) throw new Error("Invalid numeric filter range.");
     } else if (filter.op === "date-between") {
@@ -79,12 +82,16 @@ export function validateFilters(input) {
     } else if (filter.sourceTile !== undefined) {
       throw new Error("Invalid filter source tile.");
     }
+    if (filter.markValues !== undefined) {
+      if (filter.source !== 'crossfilter' || filter.op !== 'date-between' || !Array.isArray(filter.markValues) || !filter.markValues.length || filter.markValues.length > LIMITS.marks || filter.markValues.some(value => typeof value !== 'string' || value.length > 200 || calendarDate(value) === null || !Number.isFinite(new Date(value).getTime()))) throw new Error('Invalid brushed mark values.');
+      result.markValues = [...filter.markValues];
+    }
     return result;
   });
 }
 
-function sameValue(a, b) {
-  return Object.is(a, b);
+function selectionKey(value) {
+  return Object.is(value, -0) ? 'number:-0' : scalarKey(value);
 }
 
 function numericFilterValue(value) {
@@ -109,6 +116,8 @@ export function applyFilters(rows, filters = [], { sourceTile = null, pageId = n
     if (!rows.some(row => own(row, field))) continue;
     applied = true;
     appliedCount++;
+    const markedTimes = filter.markValues && new Set(filter.markValues.map(value => new Date(value).getTime()));
+    const selectedKeys = new Set(filter.values.map(selectionKey));
     result = result.filter(row => {
       if (!own(row, field)) return true;
       const value = row[field];
@@ -119,9 +128,9 @@ export function applyFilters(rows, filters = [], { sourceTile = null, pageId = n
       if (filter.op === "date-between") {
         const date = calendarDate(value);
         const [start, end] = filter.relativePreset ? dateRangeForPreset(filter.relativePreset, now) : filter.values;
-        return date !== null && date >= start && date <= end;
+        return date !== null && date >= start && date <= end && (!markedTimes || markedTimes.has(new Date(value).getTime()));
       }
-      const selected = filter.values.some(candidate => sameValue(candidate, value));
+      const selected = selectedKeys.has(selectionKey(value));
       return filter.op === "is" ? selected : !selected;
     });
   }

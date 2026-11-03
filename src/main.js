@@ -51,6 +51,9 @@ import { openGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
 import { toggleFiltersPopover } from "./ui/filtersPopover.js";
 import { chartData } from "./ui/chartData.js";
+import { profileRows } from './data/profile.js';
+import { timeBrushPoints as brushPoints, timeBrushSelection } from './charts/timeMarks.js';
+import { partitionExportViews } from './export/savedViews.js';
 import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows } from './data/dataQuality.js';
 import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
 
@@ -649,21 +652,6 @@ function crossfilterValuesFromTarget(target) {
 }
 
 const timeBrushStates=new WeakMap();
-function brushPoints(svg,state){
-  const rows=state.meta.renderRows||state.meta.filterRows||[];
-  const circles=[...svg.querySelectorAll('g[aria-label="dot"] circle')].slice(0,rows.length);
-  return circles.flatMap((circle,index)=>{
-    const x=Number(circle.getAttribute('cx')),date=new Date(rows[index]?.date);
-    return Number.isFinite(x)&&Number.isFinite(date.getTime())?[{x,time:date.getTime()}]:[];
-  }).sort((a,b)=>a.x-b.x).filter((point,index,all)=>index===0||point.x!==all[index-1].x);
-}
-function dateAtBrushX(points,x){
-  if(!points.length)return null;
-  if(x<=points[0].x)return points[0].time;
-  if(x>=points.at(-1).x)return points.at(-1).time;
-  const right=points.findIndex(point=>point.x>=x),a=points[right-1],b=points[right];
-  return a.time+(b.time-a.time)*(x-a.x)/(b.x-a.x);
-}
 function brushXAtDate(points,time){
   if(!points.length)return null;
   const byTime=[...points].sort((a,b)=>a.time-b.time);
@@ -683,7 +671,7 @@ function wireTimeBrush(chartEl,meta,entry){
     const draw=(svg,x1,x2,points)=>{const view=svg.viewBox.baseVal,left=Math.max(points[0].x,Math.min(x1,x2)),right=Math.min(points.at(-1).x,Math.max(x1,x2)),rect=rectangle(svg);rect.setAttribute('x',String(left));rect.setAttribute('y',String(view.y));rect.setAttribute('width',String(Math.max(0,right-left)));rect.setAttribute('height',String(view.height));};
     chartEl.addEventListener('pointerdown',event=>{
       const svg=event.target.closest?.('svg[role="img"]');if(event.button!==0||!svg)return;
-      const points=brushPoints(svg,state);if(points.length<2)return;
+      const points=brushPoints(svg);if(points.length<2)return;
       const x=plotX(svg,event.clientX);if(x<points[0].x||x>points.at(-1).x)return;
       state.drag={svg,points,startX:x,currentX:x,pointerId:event.pointerId};svg.setPointerCapture?.(event.pointerId);draw(svg,x,x,points);event.preventDefault();
     },true);
@@ -691,17 +679,16 @@ function wireTimeBrush(chartEl,meta,entry){
     chartEl.addEventListener('pointerup',event=>{
       const drag=state.drag;if(!drag||drag.pointerId!==event.pointerId)return;state.drag=null;
       if(Math.abs(drag.currentX-drag.startX)<12){drag.svg.querySelector(':scope > rect.db-time-brush')?.remove();return;}
-      const a=dateAtBrushX(drag.points,Math.min(drag.startX,drag.currentX)),b=dateAtBrushX(drag.points,Math.max(drag.startX,drag.currentX));
-      if(!Number.isFinite(a)||!Number.isFinite(b))return;
-      const values=[new Date(a).toISOString().slice(0,10),new Date(b).toISOString().slice(0,10)];
+      const selection=timeBrushSelection(drag.points,drag.startX,drag.currentX,field);
+      if(!selection)return;
       const {meta,entry}=state,current=filters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===meta.id&&filter.field===field&&filter.op==='date-between');
-      setFilters([...filters.filter(filter=>filter!==current),{id:current?.id||`cross-date-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`,field:entry.fields.find(item=>item.key==='date').key,op:'date-between',values,source:'crossfilter',sourceTile:meta.id}]);
+      setFilters([...filters.filter(filter=>filter!==current),{id:current?.id||`cross-date-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`,field:entry.fields.find(item=>item.key==='date').key,op:'date-between',...selection,source:'crossfilter',sourceTile:meta.id}]);
     },true);
     chartEl.addEventListener('pointercancel',event=>{if(state.drag?.pointerId===event.pointerId){state.drag.svg.querySelector(':scope > rect.db-time-brush')?.remove();state.drag=null;}},true);
   }else{state.meta=meta;state.entry=entry;}
   const svg=chartEl.querySelector('svg[role="img"]'),active=filters.find(filter=>filter.source==='crossfilter'&&filter.sourceTile===meta.id&&filter.field===field&&filter.op==='date-between');
   if(!svg||!active){svg?.querySelector(':scope > rect.db-time-brush')?.remove();return;}
-  const points=brushPoints(svg,state),a=brushXAtDate(points,new Date(`${active.values[0]}T00:00:00Z`).getTime()),b=brushXAtDate(points,new Date(`${active.values[1]}T23:59:59Z`).getTime());
+  const points=brushPoints(svg),a=brushXAtDate(points,new Date(`${active.values[0]}T00:00:00Z`).getTime()),b=brushXAtDate(points,new Date(`${active.values[1]}T23:59:59Z`).getTime());
   if(points.length>1&&Number.isFinite(a)&&Number.isFinite(b)){const view=svg.viewBox.baseVal,rect=svg.querySelector(':scope > rect.db-time-brush')||document.createElementNS('http://www.w3.org/2000/svg','rect');rect.setAttribute('class','db-time-brush');rect.setAttribute('aria-hidden','true');rect.setAttribute('x',String(Math.min(a,b)));rect.setAttribute('y',String(view.y));rect.setAttribute('width',String(Math.abs(b-a)));rect.setAttribute('height',String(view.height));if(!rect.isConnected)svg.append(rect);}
 }
 
@@ -1399,6 +1386,7 @@ if (btnData) {
         setStatus(`Dashboard data: ${dashboardDefaultName()}`);
       },
       onUpload: async ({ name, columns, rows, profile }) => {
+        profile ??= profileRows(columns, rows);
         const { id } = saveDataset({
           name,
           columns,
@@ -1510,6 +1498,11 @@ async function exportHtml() {
     }
 
     const layout=serializeLayout();
+    const exportViews=partitionExportViews(layout.savedViews,layout.parameters);
+    if(exportViews.excluded.length && !window.confirm('These saved views will be excluded from the HTML export because their parameters differ from the materialized values:\n' + exportViews.excluded.map(view=>`- ${view.name}: ${view.reason}`).join('\n') + '\nContinue exporting the matching views?')) {
+      setStatus('HTML export cancelled.');
+      return;
+    }
     const tiles = [];
     let blanked = 0, dropped = 0;
     for (const savedTile of layout.tiles) {
@@ -1544,7 +1537,7 @@ async function exportHtml() {
     rowHeight: ROW_HEIGHT,
       pages:layout.pages,
       currentPageId:layout.currentPageId,
-      savedViews:layout.savedViews,
+      savedViews:exportViews.included,
       kind: "dashboard-export",
       title: serializeLayout().title || "Dashboard",
       exportedAt: new Date().toISOString(),

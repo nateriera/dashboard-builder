@@ -1,22 +1,37 @@
 import { LIMITS } from '../data/limits.js';
 
+// Group membership is rendering metadata, not a user data column. Preserve it
+// through both registry and chart grouping without replacing source records.
+const donutLabels = new WeakMap();
+export function donutSourceLabels(row, label = 'label') {
+  return donutLabels.get(row) || [row[label] ?? null];
+}
+function donutPart(part, labels) {
+  donutLabels.set(part, [...new Set(labels)]);
+  return part;
+}
+
 export function donutParts(rows, label = 'label', value = 'value', max = 6) {
   const groups = new Map();
+  const members = new Map();
   for (const row of rows) {
     const v = row[value];
     if (v == null) continue;
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new Error('Donut charts require finite, nonnegative values. Use a bar chart for signed data.');
     const k = String(row[label] ?? 'Unlabeled');
     groups.set(k, (groups.get(k) || 0) + v);
+    if (!members.has(k)) members.set(k, new Set());
+    for (const member of donutSourceLabels(row, label)) members.get(k).add(member);
   }
-  const parts = [...groups].map(([k,v]) => ({ [label]: k, [value]: v })).sort((a,b) => b[value] - a[value] || a[label].localeCompare(b[label]));
+  const parts = [...groups].map(([k,v]) => donutPart({ [label]: k, [value]: v }, members.get(k))).sort((a,b) => b[value] - a[value] || a[label].localeCompare(b[label]));
   const total = parts.reduce((s,r) => s + r[value], 0);
   if (!Number.isFinite(total) || total <= 0) throw new Error('Donut charts require a positive total.');
   if (parts.length <= max) return parts;
   const kept = parts.slice(0, max - 1);
   let other = 'Other (remaining categories)';
   while (groups.has(other)) other += ' — grouped';
-  kept.push({ [label]: other, [value]: parts.slice(max - 1).reduce((s,r) => s + r[value], 0) });
+  const folded = parts.slice(max - 1);
+  kept.push(donutPart({ [label]: other, [value]: folded.reduce((s,r) => s + r[value], 0) }, folded.flatMap(row => donutSourceLabels(row, label))));
   return kept;
 }
 

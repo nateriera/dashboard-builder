@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { acceptImportConfirmation } from './accept-import.js';
 
 async function ready(page) {
   await page.goto('/');
@@ -211,3 +212,5 @@ test('GB-2 Gate B bench #5 builds parameter-filtered Histogram and Stats tiles t
   const html=await readFile(await download.path(),'utf8');
   expect(html).toContain('"preBinnedHistogram":true');
 });
+
+acceptImportConfirmation(test);

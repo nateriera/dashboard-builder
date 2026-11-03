@@ -1,4 +1,4 @@
-import { acceptImportConfirmation } from './accept-import.js';
+import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -150,3 +150,4 @@ test('T1: imported queries stay blocked through page/filter/parameter changes, e
 });
 
 acceptImportConfirmation(test);
+acceptExportSnapshotConfirmation(test);

@@ -1,4 +1,4 @@
-import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
+import { acceptExportSnapshotConfirmation, acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -159,3 +159,4 @@ test('GA-1: a malformed stored chain reports a blocked load and retains its dura
 });
 
 acceptImportConfirmation(test);
+acceptExportSnapshotConfirmation(test);

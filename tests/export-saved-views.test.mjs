@@ -7,7 +7,7 @@ const region={name:'region',type:'text',value:'North'};
 test('HTML saved views compare parameter values by name, independent of order and numeric bounds', () => {
   const view={id:'same',name:'Matching',parameters:[region,{...growth(2),max:5}],theme:'ink',filters:[]};
   const result=partitionExportViews([view],[growth(2),region]);
-  assert.deepEqual(result,{included:[view],excluded:[]});
+  assert.deepEqual(result,{included:[view],excluded:[],viewerViews:[{...view,disabled:false,disabledReason:null}]});
   assert.equal(result.included[0],view);
 });
 test('HTML export names differing saved views and explains the parameter difference without changing them', () => {
@@ -17,11 +17,13 @@ test('HTML export names differing saved views and explains the parameter differe
   assert.deepEqual(result.included,[views[1]]);
   assert.equal(result.excluded[0].name,'Old forecast');
   assert.match(result.excluded[0].reason,/growth.*1.*2/);
+  assert.deepEqual(result.viewerViews.map(item=>item.disabled),[true,false]);
+  assert.match(result.viewerViews[0].disabledReason,/growth.*1.*2/);
   assert.deepEqual(views,before);
 });
 test('missing or extra saved parameter values are excluded, while matching empty sets remain exportable', () => {
   const empty={id:'empty',name:'No parameters',parameters:[]},one={id:'one',name:'Growth only',parameters:[growth(1)]};
-  assert.deepEqual(partitionExportViews([empty],[]),{included:[empty],excluded:[]});
+  assert.deepEqual(partitionExportViews([empty],[]).included,[empty]);
   assert.equal(partitionExportViews([empty],[growth(1)]).excluded[0].name,'No parameters');
   assert.equal(partitionExportViews([one],[]).excluded[0].name,'Growth only');
 });

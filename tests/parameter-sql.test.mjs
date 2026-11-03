@@ -1,8 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { substituteParameters } from '../src/data/parameters.js';
+import { referencedParameterNames } from '../src/data/parameterSql.js';
 
 const text = value => [{ name: 'p', type: 'text', value }];
+
+test('SQL parameter inventory includes code tokens once and ignores quoted text and comments', () => {
+  assert.deepEqual(referencedParameterNames("SELECT {{growth}}, {{growth}} -- {{note}}\nFROM t WHERE label='{{literal}}' /* {{also_ignored}} */ AND x={{region}}"), ['growth','region']);
+});
 
 test('parameters in code become literals, including hostile text and finite numbers', () => {
   const hostile = "x'); DROP TABLE upload_sales; --";

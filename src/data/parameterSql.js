@@ -1,6 +1,16 @@
 import { validateParameters } from './parameters.js';
 import { scanSql } from './sqlLexer.js';
 
+/** Return SQL parameter names that occur in executable SQL, not strings or comments. */
+export function referencedParameterNames(sql) {
+  const names = new Set();
+  for (const { context, text } of scanSql(sql)) {
+    if (context !== 'code') continue;
+    for (const match of text.matchAll(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g)) names.add(match[1]);
+  }
+  return [...names];
+}
+
 /** Substitute only original code tokens; inserted literals are never rescanned. */
 export function substituteParameters(sql, parameters = []) {
   const byName = new Map(validateParameters(parameters).map(parameter => [parameter.name, parameter]));

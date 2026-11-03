@@ -65,6 +65,29 @@ function renderExport(payload) {
     }
     head.appendChild(meta);
   }
+  const disclosure = document.createElement('section');
+  disclosure.className = 'export-freeze-notice';
+  disclosure.setAttribute('aria-label', 'Snapshot and frozen SQL parameters');
+  const snapshot = document.createElement('p');
+  let snapshotTime = 'the recorded export time';
+  try { if (payload.exportedAt) snapshotTime = new Date(payload.exportedAt).toLocaleString(); } catch {}
+  snapshot.textContent = `Data snapshot as of ${snapshotTime}. SQL-referencing parameters are frozen at these exported values.`;
+  disclosure.appendChild(snapshot);
+  const frozen = Array.isArray(payload.frozenParameters) ? payload.frozenParameters : [];
+  if (frozen.length) {
+    const list = document.createElement('dl');
+    list.className = 'export-frozen-parameters';
+    for (const parameter of frozen) {
+      const name = document.createElement('dt'); name.textContent = parameter.name;
+      const value = document.createElement('dd'); value.textContent = JSON.stringify(parameter.value) ?? 'undefined';
+      list.append(name, value);
+    }
+    disclosure.appendChild(list);
+  } else {
+    const none = document.createElement('p'); none.textContent = 'No SQL-referencing parameters were used.';
+    disclosure.appendChild(none);
+  }
+  head.appendChild(disclosure);
   root.appendChild(head);
 
   if(Array.isArray(payload.savedViews)&&payload.savedViews.length){
@@ -72,9 +95,9 @@ function renderExport(payload) {
     const label=document.createElement('label');label.textContent='Saved view';
     const select=document.createElement('select');select.setAttribute('aria-label','Saved dashboard view');
     const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose a view';select.appendChild(placeholder);
-    for(const view of payload.savedViews){const option=document.createElement('option');option.value=view.id;option.textContent=view.name;select.appendChild(option);}
+    for(const view of payload.savedViews){const option=document.createElement('option');option.value=view.id;option.disabled=view.disabled===true;option.textContent=view.disabled===true?`${view.name} — Disabled: ${view.disabledReason}`:view.name;select.appendChild(option);}
     const apply=document.createElement('button');apply.type='button';apply.textContent='Apply view';
-    apply.addEventListener('click',()=>{const view=payload.savedViews.find(item=>item.id===select.value);if(!view)return;
+    apply.addEventListener('click',()=>{const view=payload.savedViews.find(item=>item.id===select.value);if(!view||view.disabled===true)return;
       payload.filters=JSON.parse(JSON.stringify(view.filters));payload.currentPageId=view.currentPageId;payload.theme=view.theme;previewTheme(view.theme);renderExport(payload);});
     label.appendChild(select);views.append(label,apply);root.appendChild(views);
   }

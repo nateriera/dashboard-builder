@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { acceptImportConfirmation } from './accept-import.js';
+import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './accept-import.js';
 
 async function ready(page) {
   await page.goto('/');
@@ -214,3 +214,4 @@ test('GB-2 Gate B bench #5 builds parameter-filtered Histogram and Stats tiles t
 });
 
 acceptImportConfirmation(test);
+acceptExportSnapshotConfirmation(test);

@@ -27,6 +27,7 @@ export const THEMES = [
       "--dusk": "#4A5278",
       "--periwinkle": "#B7BFD9",
       "--brush-fill": "rgba(183,191,217,.30)",
+      "--scrim": "rgba(14,31,42,.45)",
       "--slate": "#E7E3D9",
       "--slate-200": "#E7E3D9",
       "--slate-300": "#9AA0AE",

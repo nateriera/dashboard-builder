@@ -662,7 +662,7 @@ export const chartStyles = html`<style>
 svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.55; padding: 10px 4px; }
 .db-heatmap-legend { margin: 2px 6% 4px 12%; }
-.db-heatmap-ramp { height: 9px; border-radius: 2px; }
+.db-heatmap-ramp { height: 9px; border-radius: 6px; }
 .db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 12px; margin-top: 3px; }
 :focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
   .db-card {
@@ -761,7 +761,7 @@ svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--f
   .db-legend-compact .db-fig { margin: 0; }
   .db-legend-label { min-width: 0; }
   .db-swatch {
-    display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+    display: inline-block; width: 12px; height: 12px; border-radius: 6px;
     margin-right: 8px;
   }
   .db-facets { display: grid; gap: 28px 24px; margin-top: 4px; }

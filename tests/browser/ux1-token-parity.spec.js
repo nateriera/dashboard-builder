@@ -50,3 +50,31 @@ test('Paper app and generated export resolve the same bundled fonts and palette'
     expect(requests).toEqual([]);
   } finally { await context.close(); }
 });
+
+test('Paper controls show canonical hover, disabled, scrim and tab states', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('#status')).toContainText('build');
+  const item = page.locator('.palette-item').first();
+  const borderBefore = await item.evaluate(el => getComputedStyle(el).borderLeftColor);
+  await item.hover();
+  expect(await item.evaluate(el => getComputedStyle(el).borderLeftColor)).toBe(borderBefore);
+  const disabled = await page.evaluate(() => { const b=document.createElement('button'); b.disabled=true; b.className='data-apply'; document.body.append(b); const c=getComputedStyle(b); return [c.opacity,c.cursor]; });
+  expect(disabled).toEqual(['0.45','not-allowed']);
+  await clickHeaderAction(page, '#btn-templates');
+  await expect(page.locator('.tpl-overlay')).toHaveCSS('background-color','rgba(14, 31, 42, 0.45)');
+  const states=await page.evaluate(() => {const nav=document.createElement('nav');nav.id='page-tabs';nav.innerHTML='<button>Hover</button><button aria-selected="true">Selected</button>';document.body.append(nav);return [...nav.children].map(x=>getComputedStyle(x).backgroundColor);});
+  expect(states[1]).not.toEqual(states[0]);
+});
+
+test('Paper export tab selection remains distinct from hover', async ({page,browser}) => {
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  const pending=page.waitForEvent('download'); await clickHeaderAction(page,'#btn-export-html');
+  const download=await pending; const context=await browser.newContext({offline:true});
+  try {
+    const viewer=await context.newPage(); await viewer.setContent(await fs.readFile(await download.path(),'utf8'));
+    await viewer.evaluate(() => {const nav=document.createElement('nav'); nav.className='export-page-tabs'; nav.innerHTML='<button>Hover</button><button aria-selected="true">Selected</button>'; document.body.append(nav);});
+    const buttons=viewer.locator('.export-page-tabs button'); await buttons.first().hover();
+    const colors=await buttons.evaluateAll(nodes=>nodes.map(node=>getComputedStyle(node).backgroundColor));
+    expect(colors).toEqual(['rgb(231, 227, 217)','rgb(74, 82, 120)']);
+  } finally { await context.close(); }
+});

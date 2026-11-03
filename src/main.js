@@ -1319,7 +1319,7 @@ function applyDashboardDefault(dd, statusMsg) {
   if (statusMsg) setStatus(statusMsg);
 }
 async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
-  if (grid.save(false).length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
+  if (serializeLayout().tiles.length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
   try {
     const original = getDataset(id);
     const raw = original?.raw || (original ? { columns: original.columns, rows: original.rows } : null);

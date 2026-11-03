@@ -41,3 +41,19 @@ test('import asks after validation and preserves every stored byte on cancellati
   await expect(page.locator('[gs-id="replacement"]')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('dashboard-builder:layout:v1:recovery'))).toBeTruthy();
 });
+
+test('guided replacement confirms when only another page has tiles', async ({page}) => {
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  page.once('dialog', dialog => dialog.accept('Empty page'));
+  await page.getByRole('button', {name:'Add dashboard page'}).click();
+  await expect(page.locator('.grid-stack-item')).toHaveCount(0);
+  await page.locator('#btn-data').click();
+  await page.locator('.data-popover .data-drop input').setInputFiles({name:'metrics.csv',mimeType:'text/csv',buffer:Buffer.from('region,amount\nWest,12\nEast,20')});
+  const guide = page.locator('.guided-dialog'); await expect(guide).toBeVisible();
+  let message = '';
+  page.once('dialog', async dialog => { message = dialog.message(); await dialog.dismiss(); });
+  await guide.getByRole('button', {name:'Build selected charts'}).click();
+  await expect.poll(() => message).toContain('Replace the current dashboard');
+  await expect(guide).toBeVisible();
+  await expect(page.locator('.grid-stack-item')).toHaveCount(0);
+});

@@ -144,10 +144,11 @@ export function validateLayout(input) {
     if (tileOptions.clickDestinationPageId === pageId) fail('Drill-through destination must be a different page.');
     // Selected-mark values backing the "Inspect N" action. Restored on load so
     // the inspect button reappears alongside the persisted crossfilter banner
-    // (UI pass 2026-10-09). Plain JSON scalars only, capped like other lists.
+    // (UI pass 2026-10-09). Donut remainders can cover every source category;
+    // keep their membership within the dataset row budget on reload too.
     let drillValues = null;
     if (t.drillValues !== undefined && t.drillValues !== null) {
-      if (!Array.isArray(t.drillValues) || t.drillValues.length > 100 ||
+      if (!Array.isArray(t.drillValues) || t.drillValues.length > (t.type === 'donut' ? LIMITS.rows : 100) ||
           !t.drillValues.every((v) => v === null || ['string','number','boolean'].includes(typeof v)))
         fail('Invalid selected-mark values.');
       drillValues = t.drillValues.slice();

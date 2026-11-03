@@ -47,6 +47,16 @@ test('S6: donut Other selects its folded original records in the composer and of
       expect(await selected.locator('tbody tr td:first-child').allTextContents()).toEqual(raw.rows.slice(5).map(row=>row.label));
     }
   } finally { await context.close(); }
+  const many=Array.from({length:211},(_,index)=>({label:`Category ${String(index).padStart(3,'0')}`,value:211-index}));
+  await importLayout(page,{app:'dashboard-builder',version:1,tiles:[tile('many-donut','donut','upload:many'),tile('many-target','table','upload:many',6)],datasets:{many:{name:'Many categories',columns:['label','value'],rows:many,fieldKeys:['label','value'],mapping:{label:'label',value:'value'}}}});
+  await page.locator('.grid-stack-item[gs-id="many-donut"] svg a[aria-label*="Other"]').focus();
+  await page.keyboard.press('Enter');
+  const selected=page.locator('.grid-stack-item[gs-id="many-target"] tbody tr');
+  await expect(selected).toHaveCount(206);
+  expect(await selected.locator('td:first-child').allTextContents()).toEqual(many.slice(5).map(row=>row.label));
+  await clickHeaderAction(page,'#btn-save');await page.reload();
+  await expect(page.locator('#status')).toContainText('Restored autosaved layout');
+  await expect(selected).toHaveCount(206);
 });
 
 test('S7: category multiselect survives deselection, Apply, reopening and editing', async ({page}) => {

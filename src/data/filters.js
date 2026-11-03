@@ -41,7 +41,8 @@ export function validateFilters(input) {
   const crossfilterSources = new Set();
   return input.map(filter => {
     if (!filter || typeof filter !== "object" || Array.isArray(filter) || !idPattern.test(filter.id || "") || !validField(filter.field)) throw new Error("Invalid filter.");
-    if (!Array.isArray(filter.values) || filter.values.length === 0 || filter.values.length > 200 || filter.values.some(value => !validValue(value))) throw new Error("Invalid filter values.");
+    const valueLimit = filter.source === 'crossfilter' && filter.op === 'is' ? LIMITS.rows : 200;
+    if (!Array.isArray(filter.values) || filter.values.length === 0 || filter.values.length > valueLimit || filter.values.some(value => !validValue(value))) throw new Error("Invalid filter values.");
     if (filter.op === "between") {
       if (filter.values.length !== 2 || filter.values.some(value => typeof value !== "number") || filter.values[0] > filter.values[1]) throw new Error("Invalid numeric filter range.");
     } else if (filter.op === "date-between") {
@@ -89,8 +90,8 @@ export function validateFilters(input) {
   });
 }
 
-function sameValue(a, b) {
-  return Object.is(a, b);
+function selectionKey(value) {
+  return Object.is(value, -0) ? 'number:-0' : scalarKey(value);
 }
 
 function numericFilterValue(value) {
@@ -116,6 +117,7 @@ export function applyFilters(rows, filters = [], { sourceTile = null, pageId = n
     applied = true;
     appliedCount++;
     const markedTimes = filter.markValues && new Set(filter.markValues.map(value => new Date(value).getTime()));
+    const selectedKeys = new Set(filter.values.map(selectionKey));
     result = result.filter(row => {
       if (!own(row, field)) return true;
       const value = row[field];
@@ -128,7 +130,7 @@ export function applyFilters(rows, filters = [], { sourceTile = null, pageId = n
         const [start, end] = filter.relativePreset ? dateRangeForPreset(filter.relativePreset, now) : filter.values;
         return date !== null && date >= start && date <= end && (!markedTimes || markedTimes.has(new Date(value).getTime()));
       }
-      const selected = filter.values.some(candidate => sameValue(candidate, value));
+      const selected = selectedKeys.has(selectionKey(value));
       return filter.op === "is" ? selected : !selected;
     });
   }

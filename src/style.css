@@ -1375,6 +1375,12 @@ body.present .tile-toolbar { display: none; }
 .parameter-example { display: block; margin: 0 0 8px; padding: 8px; border-radius: 6px; background: var(--paper); font-size: 12px; overflow-wrap: anywhere; white-space: normal; }
 .parameter-form input[type=text] { width: 100%; }
 .parameter-editor { grid-column: 1 / -1; display: grid; gap: 8px; min-width: 0; }
+.parameter-slider { width: 100%; }
+.parameter-binding-editor { grid-column: 1 / -1; display: grid; gap: 4px; padding: 8px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--slate-50); }
+.parameter-binding-editor select { max-width: 100%; }
+.parameter-binding-status, .parameter-binding-conflict { margin: 0; font-size: 12px; }
+.parameter-binding-status { color: var(--slate-600); }
+.parameter-binding-conflict { color: var(--danger-700, #9b1c1c); }
 .parameter-editor > .parameter-value-label, .parameter-editor > .parameter-check-label { max-width: 100%; }
 .parameter-number-settings { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
 .parameter-check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }

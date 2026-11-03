@@ -2,8 +2,9 @@ import { ROW_HEIGHT } from '../tiles/geometry.js';
 import { TILE_TYPES, DATASETS } from '../tiles/registry.js';
 import { THEMES } from '../themes/themes.js';
 import { LIMITS, assertRows } from './limits.js';
-import { validateFilters } from './filters.js';
+import { filterFieldType, validateFilters } from './filters.js';
 import { validateParameters } from './parameters.js';
+import { validateParameterBindings } from './parameterBindings.js';
 import { checkedChainFields } from './queryChain.js';
 import { validateDetachedParameterConsumers } from './parameterConsumers.js';
 
@@ -179,12 +180,46 @@ export function validateLayout(input) {
     if (!Array.isArray(parameters)) return;
     for (const parameter of parameters || []) {
       if (!object(parameter)) continue;
-      const v5Only = !['number','text'].includes(parameter.type) || parameter.type === 'number' && (own(parameter,'step') || own(parameter,'integer'));
-      if (data.version < 5 && v5Only) fail(`Layout v${data.version} cannot use v5-only parameter type ${parameter.type} (${parameter.name}).`);
+      const v5Only = !['number','text'].includes(parameter.type) || parameter.type === 'number' && (own(parameter,'step') || own(parameter,'integer')) || own(parameter,'bindings');
+      if (data.version < 5 && v5Only) fail(`Layout v${data.version} cannot use v5-only parameter type ${own(parameter,'bindings')?'bindings':parameter.type} (${parameter.name}).`);
     }
   };
   validateParameterVersion(data.parameters);
   const parameters = validateParameters(data.parameters);
+  const layoutTileRows = tile => {
+    if (tile.dataset?.startsWith('query:')) return null;
+    if (tile.dataset?.startsWith('upload:')) return datasets[tile.dataset.slice(7)]?.rows || null;
+    if (tile.dataset && own(DATASETS,tile.dataset)) return DATASETS[tile.dataset];
+    if (defaultDataset.kind==='dataset') {
+      const source=defaultDataset.ref;
+      if (source.startsWith('upload:')) return datasets[source.slice(7)]?.rows || null;
+      if (own(DATASETS,source)) return DATASETS[source];
+      return null;
+    }
+    const source=TILE_TYPES[tile.type].datasets?.[0];
+    return source&&own(DATASETS,source)?DATASETS[source]:null;
+  };
+  const bindingFieldInfos = filter => {
+    const scoped=tiles.filter(tile=>filter.targets
+      ? filter.targets.some(target=>target.tileId===tile.id)
+      : (!filter.pageId||tile.pageId===filter.pageId));
+    const infos=[];
+    for(const tile of scoped){
+      const target=filter.targets?.find(item=>item.tileId===tile.id);
+      const field=target?.field||filter.field;
+      const rows=layoutTileRows(tile);
+      if(!rows){
+        const query=tile.dataset?.startsWith('query:')?queries[tile.dataset.slice(6)]:null;
+        if(filter.targets||query?.columns?.includes(field))infos.push({field,type:'unknown',checkable:false});
+        continue;
+      }
+      if(!rows.some(row=>own(row,field))){if(filter.targets)infos.push({field,type:'unknown',checkable:false});continue;}
+      const values=rows.map(row=>row[field]).filter(value=>value!==null&&value!=='');
+      infos.push({field,type:filterFieldType(rows,field),checkable:true,valueTypes:[...new Set(values.map(value=>typeof value))],numericCompatible:values.every(value=>typeof value==='number'&&Number.isFinite(value)||typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value))),dateCompatible:values.every(value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value))});
+    }
+    return infos;
+  };
+  validateParameterBindings(parameters,filters,bindingFieldInfos);
   const validateSelectSources = parameterList => {
     for (const parameter of parameterList) {
       if (!['single-select','multi-select'].includes(parameter.type)) continue;
@@ -221,6 +256,7 @@ export function validateLayout(input) {
     if(!Array.isArray(brokenParameters)||brokenParameters.length>100||brokenParameters.some(name=>typeof name!=='string'||!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))||new Set(brokenParameters).size!==brokenParameters.length) fail('Invalid saved view broken parameters.');
     validateParameterVersion(view.parameters);
     const viewParameters=validateParameters(view.parameters);
+    if(viewParameters.some(parameter=>Object.hasOwn(parameter,'bindings')))fail('Saved views store parameter values, not filter bindings.');
     validateSelectSources(viewParameters);
     return { id: view.id, name, theme: viewTheme, currentPageId:viewPage, filters:viewFilters, parameters: viewParameters, ...(brokenParameters.length?{brokenParameters:[...brokenParameters]}:{}) };
   });

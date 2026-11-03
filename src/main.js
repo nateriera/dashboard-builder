@@ -1281,7 +1281,7 @@ document.getElementById('btn-save-view')?.addEventListener('click', () => {
   const existing = savedViews.find(view => view.name.toLocaleLowerCase() === name.toLocaleLowerCase());
   if (existing && !window.confirm(`Replace saved view “${existing.name}”?`)) return;
   const view = { id: existing?.id || `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name,
-    theme: getThemeId(), currentPageId, filters: structuredClone(filters), parameters: structuredClone(parameters) };
+    theme: getThemeId(), currentPageId, filters: structuredClone(filters), parameters: structuredClone(parameters.map(({bindings,...parameter})=>parameter)) };
   savedViews = [...savedViews.filter(item => item.id !== view.id), view];
   refreshSavedViews(); savedViewPicker.value = view.id; scheduleAutosave();
   setStatus(`Saved view “${name}”.`);
@@ -1291,7 +1291,11 @@ document.getElementById('btn-apply-view')?.addEventListener('click', () => {
   if (!view) { setStatus('Choose a saved view first.'); return; }
   switchDashboardPage(view.currentPageId);
   filters = validateFilters(structuredClone(view.filters));
-  parameters = validateParameters(structuredClone(view.parameters));
+  const dashboardParameters=new Map(parameters.map(parameter=>[parameter.name,parameter]));
+  parameters = validateParameters((view.parameters||[]).map(parameter=>{
+    const definition=dashboardParameters.get(parameter.name);
+    return definition?{...definition,value:structuredClone(parameter.value)}:parameter;
+  }));
   setTheme(view.theme); refreshThemeButton();
   renderAllTiles(); refreshQueryTiles(); scheduleAutosave();
   setStatus(`Applied saved view “${view.name}”.` + (view.brokenParameters?.length ? ` Detached parameter bindings: ${view.brokenParameters.join(', ')}.` : ''));
@@ -1309,7 +1313,8 @@ function dashboardFilterTiles() {
     if (!Array.isArray(rows) || !rows.length) return [];
     const fields=[...new Set(rows.flatMap(row=>Object.keys(row)))].map(field=>{
       const type=filterFieldType(rows,field);
-      return {field,type,...(type==='category' ? distinctValues(rows,field) : {})};
+      const values=rows.map(row=>row[field]).filter(value=>value!==null&&value!=='');
+      return {field,type,checkable:true,valueTypes:[...new Set(values.map(value=>typeof value))],numericCompatible:values.every(value=>typeof value==='number'&&Number.isFinite(value)||typeof value==='string'&&value.trim()!==''&&Number.isFinite(Number(value))),dateCompatible:values.every(value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)),...(type==='category' ? distinctValues(rows,field) : {})};
     });
     return [{id:meta.id,title:meta.title,pageId:meta.pageId,pageName:pageNames.get(meta.pageId),fields}];
   });
@@ -1648,6 +1653,8 @@ async function exportHtml() {
     const frozenParameters = layout.parameters
       .filter(parameter => parameterNames.has(parameter.name))
       .map(parameter => ({ name: parameter.name, value: parameter.value }));
+    const frozenNames=new Set(frozenParameters.map(parameter=>parameter.name));
+    const liveParameterCount=layout.parameters.filter(parameter=>!frozenNames.has(parameter.name)&&parameter.bindings?.some(binding=>binding.kind==='filter')).length;
     const viewerViews = exportViews.viewerViews;
     const exportedAt = new Date().toISOString();
     const confirmations = [];
@@ -1657,6 +1664,7 @@ async function exportHtml() {
     if (exportViews.excluded.length) {
       confirmations.push('These saved views will be disabled in the HTML export because their parameters differ from the materialized values:\n' + exportViews.excluded.map(view=>`- ${view.name}: ${view.reason}`).join('\n'));
     }
+    if(liveParameterCount)confirmations.push(`${liveParameterCount} bound parameters will be live controls in the viewer`);
     if (confirmations.length && !window.confirm(confirmations.join('\n\n') + '\n\nContinue exporting?')) {
       setStatus('HTML export cancelled.');
       return;
@@ -1710,6 +1718,7 @@ async function exportHtml() {
       title: serializeLayout().title || "Dashboard",
       exportedAt,
       frozenParameters,
+      parameters: structuredClone(layout.parameters),
       theme: getThemeId(),
       filters: filters.map(filter => ({ ...filter, values: [...filter.values], targets: filter.targets?.map(target => ({ ...target })) })),
       tiles

@@ -7,6 +7,7 @@ for(const key of ['Node','Element','HTMLElement','SVGElement','NodeList','HTMLCo
 const { enumerateParameterOptions, validateParameters, substituteParameters } = await import('../src/data/parameters.js');
 const { validateLayout } = await import('../src/data/layout.js');
 const { decodeLayoutFile } = await import('../src/data/layoutImport.js');
+const { bindingCompatibilityError, bindingConflict, parameterValueFromFilter } = await import('../src/data/parameterBindings.js');
 
 const upload = { name:'Places', columns:['region'], fieldKeys:[], mapping:{}, rows:[{region:'West'},{region:'East'},{region:'West'}] };
 const envelope = (parameters, extra={}) => ({ app:'dashboard-builder', version:5, rowHeight:24, tiles:[], parameters, ...extra });
@@ -63,9 +64,9 @@ test('layout v5 pins select sources to sample/upload columns and rejects v5 shap
   assert.throws(()=>validateLayout(envelope([select()], {datasets:{places:upload},defaultDataset:{kind:'dataset',ref:'upload:places'}})),/dashboard default dataset/i);
   assert.throws(()=>validateLayout(envelope([{...select(),source:{dataset:'query:q',column:'region'}}])),/not a query/i);
   assert.throws(()=>validateLayout(envelope([{...select(),source:{dataset:'upload:places',column:'missing'}}],{datasets:{places:upload} })),/column missing/i);
-  for (const parameter of [select(),{name:'flag',type:'boolean',value:true},{name:'stepper',type:'number',value:1,step:1}]) {
+  for (const parameter of [select(),{name:'flag',type:'boolean',value:true},{name:'stepper',type:'number',value:1,step:1},{name:'bound',type:'number',value:1,bindings:[{kind:'filter',filterId:'f'}]}]) {
     const old={...base,version:4,parameters:[parameter]};
-    assert.throws(()=>validateLayout(old),new RegExp(`v5-only parameter type ${parameter.type}`));
+    assert.throws(()=>validateLayout(old),new RegExp(`v5-only parameter type ${parameter.bindings?'bindings':parameter.type}`));
   }
   for (const version of [1,2,3,4]) {
     const old={app:'dashboard-builder',version,...(version>=3?{rowHeight:24}:{}),tiles:[],parameters:[{name:'n',type:'number',value:2},{name:'t',type:'text',value:'x'}]};
@@ -98,4 +99,18 @@ test('HTML editable backups decode to layout v5 and retain typed saved-view valu
   assert.equal(decoded.version,5);
   assert.deepEqual(decoded.parameters[0].value,parameters[0].value);
   assert.deepEqual(decoded.savedViews[0].parameters[0].value,parameters[0].value);
+});
+
+test('v5 filter bindings validate typed pairings, cross references, conflicts, and range endpoints', () => {
+  const binding={kind:'filter',filterId:'filter-1'};
+  const parameters=[{name:'region',type:'single-select',value:'West',source:{dataset:'upload:places',column:'region'},options:['West','East'],bindings:[binding]}];
+  const filter={id:'filter-1',field:'region',op:'is',values:['West']};
+  const tile={id:'t',type:'table',dataset:'upload:places',binding:{mode:'explicit',ref:'upload:places'},x:0,y:0,w:6,h:7};
+  const layout=validateLayout(envelope(parameters,{datasets:{places:upload},filters:[filter],tiles:[tile]}));
+  assert.deepEqual(layout.parameters[0].bindings,[binding]);
+  assert.throws(()=>validateLayout(envelope(parameters,{datasets:{places:upload},filters:[],tiles:[tile]})),/region.*filter-1/);
+  assert.throws(()=>validateParameters([{...parameters[0],bindings:[binding,binding]}]),/bindings/);
+  assert.equal(bindingCompatibilityError(parameters[0],{...filter,op:'between'},[{field:'region',type:'category',checkable:true}]).includes('requires a single-value filter'),true);
+  assert.equal(bindingConflict({name:'amount',type:'number-range',value:{from:null,to:4},bindings:[binding]},filter),'A bound range needs both ends; the filter was left unchanged.');
+  assert.deepEqual(parameterValueFromFilter({name:'regions',type:'multi-select',value:[]},{...filter,values:['West','East']}),{value:['West','East']});
 });

@@ -8,6 +8,8 @@
 .transform-count, .transform-provenance, .transform-status { margin: 0; font-size: 12px; }
 .transform-preview { overflow-x: auto; }
 .transform-error { margin: 0; }
+.transform-warning { margin: 0; padding: 6px 8px; border-radius: 5px; color: #7a4a00; background: #fff4d6; font-size: 12px; }
+.db-histogram-degenerate { margin: 3px 8px 0; color: var(--slate-500); font-size: 11px; text-align: center; }
 @media (max-width: 540px) { .transform-aggregate { grid-template-columns: 1fr; } }
 .data-popover > .data-tabs { flex-wrap: wrap; }
 .wrangling-popover { width: min(560px, calc(100vw - 16px)); }

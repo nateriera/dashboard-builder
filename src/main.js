@@ -126,6 +126,115 @@ const grid = GridStack.init(
   gridEl
 );
 
+// Keyboard arrangement is temporary UI state. Geometry remains owned by
+// GridStack and is persisted by the same `change` listener as pointer edits.
+let arrangementSession = null;
+let arrangementAnnouncementTimer = null;
+let pendingArrangementAnnouncement = "";
+
+function flushArrangementAnnouncement() {
+  clearTimeout(arrangementAnnouncementTimer);
+  arrangementAnnouncementTimer = null;
+  if (!pendingArrangementAnnouncement) return;
+  setStatus(pendingArrangementAnnouncement);
+  pendingArrangementAnnouncement = "";
+}
+
+function queueArrangementAnnouncement(message) {
+  pendingArrangementAnnouncement = message;
+  clearTimeout(arrangementAnnouncementTimer);
+  arrangementAnnouncementTimer = setTimeout(flushArrangementAnnouncement, 120);
+}
+
+function finishArrangement({ restore = false, focus = true, announce = true } = {}) {
+  const session = arrangementSession;
+  if (!session) return;
+  arrangementSession = null;
+  clearTimeout(arrangementAnnouncementTimer);
+  arrangementAnnouncementTimer = null;
+  pendingArrangementAnnouncement = "";
+  session.widget.classList.remove("tile-arranging");
+  session.button.setAttribute("aria-pressed", "false");
+  if (restore && session.widget.isConnected) {
+    grid.update(session.widget, session.geometry);
+    const meta = tileMeta.get(session.id);
+    if (meta) meta.sizing = session.sizing;
+  }
+  if (focus && session.button.isConnected) session.button.focus();
+  if (announce) setStatus(restore ? `Canceled arranging ${session.title}.` : `Finished arranging ${session.title}.`);
+}
+
+function beginArrangement(widget, button, meta) {
+  if (arrangementSession) finishArrangement();
+  const node = widget.gridstackNode;
+  if (!node) return;
+  arrangementSession = {
+    id: meta.id,
+    title: meta.title?.trim() || meta.type,
+    widget,
+    button,
+    geometry: { x: node.x, y: node.y, w: node.w, h: node.h },
+    sizing: meta.sizing
+  };
+  widget.classList.add("tile-arranging");
+  button.setAttribute("aria-pressed", "true");
+  button.focus();
+  setStatus(`Arranging ${arrangementSession.title}. Arrow keys move, Shift + arrow keys resize, Enter finishes, Escape cancels.`);
+}
+
+function moveOrResizeArrangedTile(event) {
+  const session = arrangementSession;
+  if (!session) return;
+  const target = event.target;
+  if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) {
+    finishArrangement({ focus: false });
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault(); event.stopPropagation();
+    finishArrangement({ restore: true });
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault(); event.stopPropagation();
+    flushArrangementAnnouncement();
+    finishArrangement({ announce: false });
+    return;
+  }
+  const delta = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] })[event.key];
+  if (!delta) return;
+  event.preventDefault(); event.stopPropagation();
+  const node = session.widget.gridstackNode;
+  if (!node) return;
+  const next = { x: node.x, y: node.y, w: node.w, h: node.h };
+  if (event.shiftKey) {
+    if (event.key === "ArrowRight") next.w = Math.min(node.maxW || grid.getColumn(), grid.getColumn() - node.x, node.w + 1);
+    if (event.key === "ArrowLeft") next.w = Math.max(node.minW || 1, node.w - 1);
+    if (event.key === "ArrowDown") next.h = Math.min(node.maxH || Infinity, node.h + 1);
+    if (event.key === "ArrowUp") next.h = Math.max(node.minH || 1, node.h - 1);
+  } else {
+    next.x += delta[0]; next.y += delta[1];
+    if (next.x < 0 || next.x + next.w > grid.getColumn() || next.y < 0) return;
+  }
+  if (next.x === node.x && next.y === node.y && next.w === node.w && next.h === node.h) return;
+  if (event.shiftKey && (next.w !== node.w || next.h !== node.h)) {
+    const meta = tileMeta.get(session.id);
+    if (meta) meta.sizing = "manual";
+  }
+  grid.update(session.widget, next);
+  const placed = session.widget.gridstackNode;
+  if (!placed) return;
+  if (event.shiftKey) queueArrangementAnnouncement(`${session.title}: ${placed.w} wide, ${placed.h} tall`);
+  else queueArrangementAnnouncement(`${session.title}: row ${placed.y + 1}, column ${placed.x + 1}`);
+}
+
+window.addEventListener("keydown", moveOrResizeArrangedTile, true);
+document.addEventListener("focusin", event => {
+  if (arrangementSession && event.target instanceof HTMLElement && event.target.matches(".tile-title")) {
+    finishArrangement({ focus: false, announce: false });
+  }
+});
+
 // ── Tile metadata ────────────────────────────────────────────────────────
 // GridStack owns geometry (x/y/w/h); this map owns everything else per tile.
 let tileSeq = 0;
@@ -261,6 +370,20 @@ function buildTileContent(type, meta) {
     scheduleAutosave();
   });
 
+  const arrangeBtn = document.createElement("button");
+  arrangeBtn.type = "button";
+  arrangeBtn.className = "tile-arrange-btn";
+  arrangeBtn.textContent = "Move and resize";
+  arrangeBtn.setAttribute("aria-label", `Move and resize ${meta.title?.trim() || meta.type}`);
+  arrangeBtn.setAttribute("aria-pressed", "false");
+  arrangeBtn.addEventListener("pointerdown", event => event.stopPropagation());
+  arrangeBtn.addEventListener("click", event => {
+    event.stopPropagation();
+    const widget = tile.closest(".grid-stack-item");
+    if (arrangementSession?.id === meta.id) finishArrangement();
+    else if (widget) beginArrangement(widget, arrangeBtn, meta);
+  });
+
   // ── Data button: opens the Samples/Upload popover ──
   const dataBtn = document.createElement("button");
   dataBtn.type = "button";
@@ -369,7 +492,7 @@ function buildTileContent(type, meta) {
     details.scrollIntoView({ behavior: "smooth", block: "nearest" });
     details.querySelector("summary")?.focus();
   });
-  toolbar.append(titleInput, dataBtn, inspectSelected);
+  toolbar.append(titleInput, arrangeBtn, dataBtn, inspectSelected);
   const settings = document.createElement('details'); settings.className = 'tile-settings';
   const summary = document.createElement('summary'); summary.textContent = 'Settings'; settings.append(summary);
   const settingsBody = document.createElement('div'); settingsBody.className = 'tile-settings-body'; settings.append(settingsBody);
@@ -1170,6 +1293,9 @@ function scheduleResize(el) {
 grid.on('resizestart', (_event, el) => {
   const meta = tileMeta.get(el.gridstackNode?.id);
   if (meta) meta.sizing = 'manual';
+});
+grid.on("dragstart", () => {
+  if (arrangementSession) finishArrangement({ focus: false, announce: false });
 });
 grid.on('resize', (_event, el) => scheduleResize(el));
 grid.on('resizestop', (_event, el) => { scheduleResize(el); scheduleAutosave(); });

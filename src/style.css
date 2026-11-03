@@ -422,6 +422,30 @@ body.present #grid-wrap { padding: 16px; }
 
 body.present .tile-toolbar { display: none; }
 
+/* UX-5: keep tile arrangement discoverable and show the active keyboard target. */
+.tile-arrange-btn {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--slate-600);
+  font: 600 12px var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tile-arrange-btn:hover,
+.tile-arrange-btn[aria-pressed="true"] {
+  border-color: var(--periwinkle);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--periwinkle) 10%, var(--white));
+}
+.grid-stack-item.tile-arranging {
+  z-index: 5;
+  box-shadow: var(--shadow-focus) !important;
+}
+
 #btn-exit-present {
   position: fixed;
   top: 16px;

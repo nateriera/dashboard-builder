@@ -652,7 +652,7 @@ export const chartStyles = html`<style>
 .tile-chart .chart-transform-note { margin: 8px 0; }
 .tile-chart svg a[data-crossfilter-selected="false"],
 .tile-chart svg path[data-crossfilter-selected="false"] { opacity: .38; }
-.tile-chart svg .db-time-brush { fill: rgb(62 92 118 / 14%); stroke: var(--periwinkle); stroke-width: 1.25; pointer-events: none; }
+.tile-chart svg .db-time-brush { fill: var(--brush-fill); stroke: var(--periwinkle); stroke-width: 1.25; pointer-events: none; }
 .db-data-table { min-width: 0; }
 .db-data-table-scroll { max-width: 100%; max-height: min(60vh, 560px); overflow: auto; }
 .db-data-table-grid { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12px; }

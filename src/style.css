@@ -1374,6 +1374,37 @@ body.present .tile-toolbar { display: none; }
 .parameter-output { display: block; font-family: var(--font-mono); font-size: 12px; }
 .parameter-example { display: block; margin: 0 0 8px; padding: 8px; border-radius: 6px; background: var(--paper); font-size: 12px; overflow-wrap: anywhere; white-space: normal; }
 .parameter-form input[type=text] { width: 100%; }
+.parameter-editor { grid-column: 1 / -1; display: grid; gap: 8px; min-width: 0; }
+.parameter-editor > .parameter-value-label, .parameter-editor > .parameter-check-label { max-width: 100%; }
+.parameter-number-settings { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.parameter-check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.parameter-check-label input { accent-color: var(--dusk); }
+.parameter-range-bounds, .parameter-source-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.parameter-bound, .parameter-source-controls > label { display: grid; gap: 5px; min-width: 0; }
+.parameter-source-controls .parameter-refresh-options { grid-column: 1 / -1; justify-self: start; }
+.parameter-option-preview { padding: 8px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--white); font-size: 11px; }
+.parameter-option-preview p { margin: 0 0 6px; color: var(--slate-600); }
+.parameter-option-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.parameter-option-chip { max-width: 100%; padding: 2px 6px; border-radius: 999px; background: var(--paper); overflow-wrap: anywhere; }
+.parameter-stale-flag { margin: 0; color: var(--warning); font-size: 12px; }
+.parameter-select-value { min-height: 34px; max-width: 100%; padding: 6px; border: 1px solid var(--slate-300); border-radius: 5px; background: var(--white); color: var(--ink); font: inherit; }
+.parameter-select-value[multiple] { min-height: 88px; }
+.parameter-editor { grid-column: 1 / -1; display: grid; gap: 8px; min-width: 0; }
+.parameter-editor > .parameter-value-label, .parameter-editor > .parameter-check-label { max-width: 100%; }
+.parameter-number-settings { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.parameter-check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.parameter-check-label input { accent-color: var(--dusk); }
+.parameter-range-bounds, .parameter-source-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.parameter-bound, .parameter-source-controls > label { display: grid; gap: 5px; min-width: 0; }
+.parameter-source-controls .parameter-refresh-options { grid-column: 1 / -1; justify-self: start; }
+.parameter-option-preview { padding: 8px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--white); font-size: 11px; }
+.parameter-option-preview p { margin: 0 0 6px; color: var(--slate-600); }
+.parameter-option-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.parameter-option-chip { max-width: 100%; padding: 2px 6px; border-radius: 999px; background: var(--paper); overflow-wrap: anywhere; }
+.parameter-stale-flag { margin: 0; color: var(--warning); font-size: 12px; }
+.parameter-select-value { min-height: 34px; max-width: 100%; padding: 6px; border: 1px solid var(--slate-300); border-radius: 5px; background: var(--white); color: var(--ink); font: inherit; }
+.parameter-select-value[multiple] { min-height: 88px; }
+.parameter-bound .parameter-value-label { margin-bottom: 4px; }
 .tile-empty { display: flex; align-items: center; min-height: 90px; padding: 16px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--white); color: var(--slate-600); font-size: 14px; }
 .tile-filter-status { margin: 8px 12px 0; padding: 4px 8px; background: color-mix(in srgb, var(--dusk) 7%, var(--white)); color: var(--dusk); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .dashboard-filters-popover { width: min(390px, calc(100vw - 16px)); } .dashboard-parameter { grid-template-columns: 1fr auto; } .dashboard-parameter .parameter-value-label { grid-column: 1 / -1; } }
@@ -2740,6 +2771,20 @@ body.present .tile-toolbar { display: none; }
 .parameter-output { display: block; font-family: var(--font-mono); font-size: 11px; }
 .parameter-example { display: block; margin: 0 0 10px; padding: 8px; border-radius: 5px; background: var(--paper); font-size: 11px; overflow-wrap: anywhere; white-space: normal; }
 .parameter-form input[type=text] { width: 100%; }
+.parameter-editor { grid-column: 1 / -1; display: grid; gap: 8px; min-width: 0; }
+.parameter-number-settings { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.parameter-check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.parameter-check-label input { accent-color: var(--dusk); }
+.parameter-range-bounds, .parameter-source-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.parameter-bound, .parameter-source-controls > label { display: grid; gap: 5px; min-width: 0; }
+.parameter-source-controls .parameter-refresh-options { grid-column: 1 / -1; justify-self: start; }
+.parameter-option-preview { padding: 8px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--white); font-size: 11px; }
+.parameter-option-preview p { margin: 0 0 6px; color: var(--slate-600); }
+.parameter-option-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.parameter-option-chip { max-width: 100%; padding: 2px 6px; border-radius: 999px; background: var(--paper); overflow-wrap: anywhere; }
+.parameter-stale-flag { margin: 0; color: var(--warning); font-size: 12px; }
+.parameter-select-value { min-height: 34px; max-width: 100%; padding: 6px; border: 1px solid var(--slate-300); border-radius: 5px; background: var(--white); color: var(--ink); font: inherit; }
+.parameter-select-value[multiple] { min-height: 88px; }
 .tile-empty { display: flex; align-items: center; min-height: 90px; padding: 16px; border: 1px solid var(--slate-200); border-radius: 8px; background: var(--white); color: var(--slate-600); font-size: 13px; }
 .tile-filter-status { margin: 8px 12px 0; padding: 6px 9px; border-left: 3px solid var(--dusk); background: color-mix(in srgb, var(--dusk) 7%, var(--white)); color: var(--slate-600); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .tile-filter-status[data-state="ignored"], .tile-filter-status[data-state="unmapped"] { border-left-color: var(--warning); }

@@ -23,7 +23,7 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   const add=page.locator('.palette-item').filter({hasText:'Bar chart'});
   const before=await page.locator('.tile').count(); await add.focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.tile')).toHaveCount(before+1);
-  const added=page.locator('.tile').last(); await added.locator('.tile-data-btn').focus(); await page.keyboard.press('Enter');
+  const added=page.locator('.tile').last(); const dataButton=added.locator('.tile-data-btn'); await expect(dataButton).toBeVisible(); await dataButton.press('Enter');
   await expect(page.locator('.data-popover')).toBeVisible();
   await expect(page.locator('.data-pop-close')).toBeFocused();
   await page.keyboard.press('Shift+Tab');
@@ -35,7 +35,7 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   await importJSON(page,data); await expect(page.locator('#status')).toContainText('Imported');
   await page.reload(); await expect(page.locator('.tile-data-label')).toHaveText('Categories (8)');
   await expect(page.locator('.tile-chart')).toContainText('USD');
-  const exported=await jsonExport(page); expect(exported.version).toBe(4); expect(exported.tiles[0].binding).toEqual({mode:'explicit',ref:'categorical'});
+  const exported=await jsonExport(page); expect(exported.version).toBe(5); expect(exported.tiles[0].binding).toEqual({mode:'explicit',ref:'categorical'});
   await focusHeaderAction(page, '#btn-templates'); await page.keyboard.press('Enter');
   await expect(page.locator('.tpl-close')).toBeFocused(); await page.keyboard.press('Shift+Tab');
   expect(await page.evaluate(()=>document.querySelector('.tpl-modal').contains(document.activeElement))).toBe(true);

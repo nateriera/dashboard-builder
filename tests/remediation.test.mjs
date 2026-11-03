@@ -140,7 +140,7 @@ test('R3: every binding survives migration, reload and JSON without input mutati
     const v2 = validateLayout(original), roundTrip = validateLayout(JSON.parse(JSON.stringify(v2)));
     assert.equal(JSON.stringify(original),raw); assert.equal(roundTrip.tiles[0].dataset,dataset);
     assert.deepEqual(roundTrip.tiles[0].binding,dataset === null ? {mode:'dashboard'} : {mode:'explicit',ref:dataset});
-    assert.equal(roundTrip.version,4);
+    assert.equal(roundTrip.version,5);
   }
 });
 test('R7: malformed envelopes fail validation before any mutation', () => {
@@ -167,7 +167,7 @@ test('Desktop parity: multi-page layouts and dashboard/page/chart filter scopes 
       {id:'page',field:'label',op:'is',values:['Housing'],scope:'page',pageId:'detail'},
       {id:'charts',field:'group',op:'is',values:['A'],scope:'charts',targets:[{tileId:'two',field:'group'}]}]};
   const saved=validateLayout(input);
-  assert.equal(saved.version,4);assert.equal(saved.currentPageId,'detail');assert.equal(saved.tiles[0].pageId,'overview');
+  assert.equal(saved.version,5);assert.equal(saved.currentPageId,'detail');assert.equal(saved.tiles[0].pageId,'overview');
   assert.deepEqual(validateLayout(JSON.parse(JSON.stringify(saved))).filters,saved.filters);
   assert.throws(()=>validateLayout({...input,filters:[{id:'page',field:'label',op:'is',values:['Housing'],scope:'page',pageId:'missing'}]}),/missing page/);
   assert.throws(()=>validateLayout({...input,currentPageId:'missing'}),/current dashboard page/);

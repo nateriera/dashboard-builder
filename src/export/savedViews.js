@@ -10,7 +10,8 @@ export function partitionExportViews(views, parameters) {
   };
   for (const view of views) {
     const saved = new Map((view.parameters || []).map(parameter => [parameter.name, parameter.value]));
-    const changed = [...new Set([...current.keys(), ...saved.keys()])].filter(name => !current.has(name) || !saved.has(name) || !Object.is(current.get(name), saved.get(name)));
+    const sameValue = (left, right) => Object.is(left, right) || JSON.stringify(left) === JSON.stringify(right);
+    const changed = [...new Set([...current.keys(), ...saved.keys()])].filter(name => !current.has(name) || !saved.has(name) || !sameValue(current.get(name), saved.get(name)));
     const broken = view.brokenParameters || [];
     if (!changed.length && !broken.length) {
       included.push(view);

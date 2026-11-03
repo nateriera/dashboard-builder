@@ -185,13 +185,16 @@ test('Desktop parity: pages retain separate tile layouts and page-scoped filters
   const jsonDownload = page.waitForEvent('download');
   await clickHeaderAction(page, '#btn-export');
   const backup = JSON.parse(await fs.readFile(await (await jsonDownload).path(), 'utf8'));
-  expect(backup.version).toBe(4);
+  expect(backup.version).toBe(5);
   expect(backup.pages.map(item => item.name)).toEqual(['Page 1', 'Detail']);
   expect(backup.tiles.map(item => item.pageId)).toEqual([backup.pages[0].id, backup.pages[1].id]);
 
   const htmlDownload = page.waitForEvent('download');
   await page.locator('#btn-export-html').click();
   const htmlFile = await htmlDownload;
+  const htmlPayload=exportPayload(await fs.readFile(await htmlFile.path(),'utf8'));
+  expect(htmlPayload.version).toBe(5);
+  expect(htmlPayload.layout.version).toBe(5);
   const exported = await context.newPage();
   await exported.setContent(await fs.readFile(await htmlFile.path(), 'utf8'));
   await expect(exported.locator('.export-page-tabs')).toBeVisible();

@@ -27,3 +27,14 @@ test('missing or extra saved parameter values are excluded, while matching empty
   assert.equal(partitionExportViews([empty],[growth(1)]).excluded[0].name,'No parameters');
   assert.equal(partitionExportViews([one],[]).excluded[0].name,'Growth only');
 });
+
+test('HTML view partitioning compares typed range objects and select lists by value', () => {
+  const parameters=[{name:'window',value:{from:'2025-01-01',to:null}},{name:'regions',value:['West','East']}];
+  const views=[
+    {id:'same',name:'Same',parameters:structuredClone(parameters)},
+    {id:'different',name:'Different',parameters:[{name:'window',value:{from:'2025-01-02',to:null}},{name:'regions',value:['West','East']}]}
+  ];
+  const result=partitionExportViews(views,parameters);
+  assert.deepEqual(result.included.map(view=>view.id),['same']);
+  assert.deepEqual(result.excluded.map(view=>view.name),['Different']);
+});

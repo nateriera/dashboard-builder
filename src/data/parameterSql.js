@@ -23,7 +23,11 @@ export function substituteParameters(sql, parameters = []) {
       if (/[A-Za-z0-9_$.]/.test(before) || /[A-Za-z0-9_$.]/.test(after)) throw new Error(`Parameter ${placeholder} is adjacent to an identifier or dot. Separate it from other SQL tokens.`);
       const parameter = byName.get(name);
       if (!parameter) throw new Error(`Unknown SQL parameter "${name}". Add it in Filters → Parameters.`);
-      return parameter.type === 'number' ? String(parameter.value) : `'${parameter.value.replace(/'/g, "''")}'`;
+      if (parameter.type === 'date-range' || parameter.type === 'number-range') throw new Error(`Range parameter "${name}" substitutes through bindings, not SQL placeholders.`);
+      if (parameter.type === 'boolean') return parameter.value ? 'TRUE' : 'FALSE';
+      if (parameter.type === 'number') return String(parameter.value);
+      if (parameter.type === 'multi-select') return parameter.value.length ? `(${parameter.value.map(value => `'${value.replace(/'/g, "''")}'`).join(', ')})` : '(NULL)';
+      return `'${parameter.value.replace(/'/g, "''")}'`;
     }));
   }
   const expanded = parts.join('');

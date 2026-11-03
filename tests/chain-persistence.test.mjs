@@ -156,7 +156,7 @@ test('layout export/import retains chain fields and parameter references without
   assert.deepEqual(record.chain,parameterChain());
   const input = envelope({[saved.id]:record},[{name:'factor',type:'number',value:2},{name:'grain',type:'text',value:'month'}]);
   const candidate = validateLayout(input);
-  assert.equal(candidate.version,4);
+  assert.equal(candidate.version,5);
   assert.deepEqual(candidate.queries[saved.id].chain,parameterChain());
   assert.deepEqual([...candidate.queries[saved.id].parameterDependencies].sort(),['factor','grain']);
   const roundTrip = validateLayout(JSON.parse(JSON.stringify(candidate)));

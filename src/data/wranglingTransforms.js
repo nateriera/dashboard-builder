@@ -109,6 +109,7 @@ function aggregateSql(aggregate,types) {
   const valid=numeric(types[aggregate.column])?`(${field} IS NOT NULL AND isfinite(${field}))`:'FALSE';
   const value=numeric(types[aggregate.column])?`CASE WHEN ${valid} THEN ${field} END`:'NULL::DOUBLE';
   let expression=`${aggregate.operation}(${value})`,type='Float64';
+  if(['MIN','MAX'].includes(aggregate.operation)&&numeric(types[aggregate.column])) type=types[aggregate.column];
   // DuckDB widens integer SUM to HUGEINT (Arrow Decimal). Keep integer
   // results exact and materializable; an out-of-range sum fails visibly.
   if(aggregate.operation==='SUM'&&/^(?:U?Int|U?TinyInt|U?SmallInt|U?BigInt|Integer)/i.test(types[aggregate.column]||'')) {

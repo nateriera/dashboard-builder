@@ -1,4 +1,5 @@
 import { validateLayout, assertNoCollisions } from "./data/layout.js";
+import { decodeLayoutFile } from './data/layoutImport.js';
 import { validateFilters, applyFilters, distinctValues, filterFieldType, sortAndLimitRows } from "./data/filters.js";
 import { validateParameters, substituteParameters } from "./data/parameters.js";
 import { datasetVersion, listDatasets, storageIssues, rollbackDatasets, subscribeDatasetChanges } from "./data/store.js";
@@ -14,6 +15,7 @@ import { LIMITS } from "./data/limits.js";
 import { GridStack } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import "./style.css";
+import './ui/transformEditor.css';
 import { chartStyles } from "./charts/charts.js";
 import { getTheme, getThemeId, setTheme, THEMES } from "./themes/themes.js";
 import { TILE_TYPES, DATASETS, DATASET_LABELS, resizeTileChart } from "./tiles/registry.js";
@@ -1430,8 +1432,7 @@ function download(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-document.getElementById("btn-export").addEventListener("click", async () => {
-  const layout = serializeLayout();
+function inlineLayoutBackup(layout) {
   // Inline small uploaded datasets so the exported file is self-contained.
   // Includes the dashboard-wide default dataset, not just per-tile uploads.
   const refs = layout.tiles.map((t) => t.dataset).filter(isUploadRef);
@@ -1452,8 +1453,17 @@ document.getElementById("btn-export").addEventListener("click", async () => {
     if (dataset.raw) dataset.raw = { ...dataset.raw, rows: clean.sourceRows };
     blanked += clean.blanked;
   }
-  const exportDrops = new Map(normalizationDrops);
   for (const qref of queryRefs) if (!getQuery(queryId(qref))) skipped.push(qref + ' (missing query)');
+  const backup={...layout,omittedDependencies:skipped};
+  if (Object.keys(inlined).length) backup.datasets=inlined;
+  const queries=inlineQueries(queryRefs);
+  if (Object.keys(queries).length) backup.queries=queries;
+  return {backup,skipped,blanked};
+}
+
+document.getElementById("btn-export").addEventListener("click", async () => {
+  const {backup:layout,skipped,blanked}=inlineLayoutBackup(serializeLayout());
+  const exportDrops = new Map(normalizationDrops);
   for (const t of layout.tiles.filter(t => isQueryRef(t.dataset))) {
     const resolved = await resolveExportRows(t,TILE_TYPES[t.type]);
     exportDrops.set(t.id, resolved.dropped || 0);
@@ -1461,10 +1471,6 @@ document.getElementById("btn-export").addEventListener("click", async () => {
   }
   layout.omittedDependencies = skipped;
   if (skipped.length && !window.confirm('This JSON will omit these dependencies:\n' + skipped.join('\n') + '\nExport with unavailable-data references retained?')) { setStatus('JSON export cancelled.'); return; }
-  if (Object.keys(inlined).length) layout.datasets = inlined;
-  // Queries are small text: always inline them, same treatment.
-  const inlinedQueries = inlineQueries(layout.tiles.map((t) => t.dataset).filter(isQueryRef));
-  if (Object.keys(inlinedQueries).length) layout.queries = inlinedQueries;
   download(
     `dashboard-layout-${new Date().toISOString().slice(0, 10)}.json`,
     JSON.stringify(layout, null, 2)
@@ -1531,6 +1537,7 @@ async function exportHtml() {
       });
     }
 
+    const {backup,skipped}=inlineLayoutBackup({...layout,savedViews:exportViews.included});
     const payload = {
       app: "dashboard-builder",
       version: 4,
@@ -1539,6 +1546,7 @@ async function exportHtml() {
       currentPageId:layout.currentPageId,
       savedViews:exportViews.included,
       kind: "dashboard-export",
+      layout: backup,
       title: serializeLayout().title || "Dashboard",
       exportedAt: new Date().toISOString(),
       theme: getThemeId(),
@@ -1565,7 +1573,7 @@ async function exportHtml() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
+    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (skipped.length ? ` Editable backup has unavailable dependencies: ${skipped.join(', ')}.` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
   } catch (err) {
     setStatus(`HTML export failed: ${err && err.message ? err.message : err}`);
   }
@@ -1587,7 +1595,7 @@ fileInput.addEventListener("change", () => {
       catch (rollbackError) { rollbackErrors.push(rollbackError); }
     };
     try {
-      const data = validateLayout(JSON.parse(reader.result));
+      const data = validateLayout(decodeLayoutFile(file.name,reader.result));
       assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
       const previous = serializeLayout();
       const queriesBefore = querySnapshot();
@@ -1736,7 +1744,9 @@ function starterLayout() {
 
 (async function init() {
   const restoredCount = await loadPersistedDatasets(); // IndexedDB, before any tile renders
-  loadPersistedQueries(); // saved SQL queries, before any tile renders
+  let queryLoadIssue='';
+  try {loadPersistedQueries();} // validate before any query tile renders
+  catch(error) {queryLoadIssue=`Saved queries could not be loaded: ${error.message} Stored data retained; import a valid backup to recover.`;}
   let restored = false;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -1762,6 +1772,6 @@ function starterLayout() {
     retry.onclick = async () => { await loadPersistedDatasets(); setStatus(storageIssues().join("; ") || "Migration verified."); };
     statusEl.after(retry);
   }
-  setStatus(`${statusMessage} · build ${BUILD}`);
+  setStatus(`${queryLoadIssue||statusMessage} · build ${BUILD}`);
   showFirstRunHint();
 })();

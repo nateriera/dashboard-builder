@@ -8,11 +8,13 @@ import { substituteParameters } from "../data/parameters.js";
 import { TILE_TYPES, guessMapping } from "../tiles/registry.js";
 import { focusDialog } from "./focus.js";
 import { anchorPopover } from "./anchoredPopover.js";
+import { createTransformEditor } from './transformEditor.js';
+import { compileTransformChain } from '../data/wranglingTransforms.js';
 
 let open = null;
 export function closeWranglingPopover() {
   if (!open) return;
-  open.unsubscribe?.(); open.focus?.(); open.position?.(); open.element.remove(); open = null;
+  open.unsubscribe?.(); open.transform?.dispose(); open.focus?.(); open.position?.(); open.element.remove(); open = null;
   document.removeEventListener("pointerdown", pointerDown, true); document.removeEventListener("keydown", keyDown);
 }
 function pointerDown(event) { if (open && !open.element.contains(event.target) && !open.anchor.contains(event.target)) closeWranglingPopover(); }
@@ -24,27 +26,34 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
   if (open?.anchor === anchor) { closeWranglingPopover(); return; }
   closeWranglingPopover();
   const entry = TILE_TYPES[type]; if (!entry) return;
-  let currentKind = initialTab === "formula" ? "formula" : "pivot";
+  let currentKind = ['formula','transform'].includes(initialTab) ? initialTab : 'pivot';
+  let transformEditor=null;
   const pop = el("div", null, "data-popover wrangling-popover"); pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Data wrangling");
   const head = el("div", null, "data-pop-head"); head.append(el("span", "Data wrangling")); const close = el("button", "×", "data-pop-close"); close.type = "button"; close.setAttribute("aria-label", "Close"); close.addEventListener("click", closeWranglingPopover); head.append(close);
   const tabs = el("div", null, "data-tabs");
-  const pivotTab = el("button", "Pivot", "data-tab");
+  const pivotTab = el("button", "Group & summarize", "data-tab");
   const formulaTab = el("button", "Calculated field", "data-tab");
-  pivotTab.type = formulaTab.type = "button";
-  const requestedTab = initialTab === "formula" ? "formula" : "pivot";
+  const transformTab=el('button','Transform','data-tab');
+  pivotTab.type = formulaTab.type = transformTab.type = "button";
+  const requestedTab = currentKind;
   pivotTab.classList.toggle("active", requestedTab === "pivot");
   formulaTab.classList.toggle("active", requestedTab === "formula");
-  tabs.append(pivotTab, formulaTab);
+  transformTab.classList.toggle('active',requestedTab==='transform');
+  tabs.append(pivotTab, formulaTab, transformTab);
   const pivotPanel = el("div", null, "data-panel");
   const formulaPanel = el("div", null, "data-panel");
+  const transformPanel=el('div',null,'data-panel transform-panel');transformPanel.hidden=requestedTab!=='transform';transformPanel.append(el('p','Loading transform source…','data-sql-note'));
   pivotPanel.hidden = requestedTab !== "pivot";
   formulaPanel.hidden = requestedTab !== "formula";
-  pop.append(head, tabs, pivotPanel, formulaPanel); document.body.appendChild(pop);
+  pop.append(head, tabs, pivotPanel, formulaPanel, transformPanel); document.body.appendChild(pop);
   open = { anchor, element: pop };
   open.focus = focusDialog(pop, anchor); open.position = anchorPopover(pop, anchor);
   document.addEventListener("pointerdown", pointerDown, true); document.addEventListener("keydown", keyDown);
-  pivotTab.addEventListener("click", () => { pivotTab.classList.add("active"); formulaTab.classList.remove("active"); pivotPanel.hidden = false; formulaPanel.hidden = true; if (currentKind !== 'pivot') { currentKind = 'pivot'; invalidate(); render(); } });
-  formulaTab.addEventListener("click", () => { formulaTab.classList.add("active"); pivotTab.classList.remove("active"); formulaPanel.hidden = false; pivotPanel.hidden = true; if (currentKind !== 'formula') { currentKind = 'formula'; invalidate(); render(); } });
+  function activate(kind){
+    for(const [key,tab,panel] of [['pivot',pivotTab,pivotPanel],['formula',formulaTab,formulaPanel],['transform',transformTab,transformPanel]]){tab.classList.toggle('active',key===kind);panel.hidden=key!==kind;}
+    if(currentKind!==kind){currentKind=kind;invalidate();transformEditor?.invalidate();render();}
+  }
+  pivotTab.addEventListener('click',()=>activate('pivot'));formulaTab.addEventListener('click',()=>activate('formula'));transformTab.addEventListener('click',()=>activate('transform'));
 
   let module;
   let initialising = true;
@@ -89,7 +98,7 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
       row.append(col, op, name, moveButton(`Move aggregation ${index + 1} up`, index, state.aggs), moveButton(`Move aggregation ${index + 1} down`, index, state.aggs, true), remove(`Remove aggregation ${index + 1}`, index, state.aggs)); aggs.appendChild(row);
     }); pivotPanel.appendChild(aggs);
     const addAgg = el("button", "Add aggregation"); addAgg.type = "button"; addAgg.addEventListener("click", () => { const col = state.columns.find(name => aggregationOptions(state.types[name]).includes('SUM')) || state.columns[0]; state.aggs.push({ column: col, operation: aggregationOptions(state.types[col])[0], name: `Result ${state.aggs.length + 1}` }); invalidate(); render(); }); pivotPanel.appendChild(addAgg);
-    const runPivot = el("button", "Preview pivot", "data-sql-run"); runPivot.type = "button"; runPivot.disabled = state.busy || (!state.groups.length && !state.aggs.length); runPivot.addEventListener("click", () => execute("pivot")); pivotPanel.appendChild(runPivot); status(pivotPanel); preview(pivotPanel, 'pivot');
+    const runPivot = el("button", "Preview summary", "data-sql-run"); runPivot.type = "button"; runPivot.disabled = state.busy || (!state.groups.length && !state.aggs.length); runPivot.addEventListener("click", () => execute("pivot")); pivotPanel.appendChild(runPivot); status(pivotPanel); preview(pivotPanel, 'pivot');
 
     renderRecipeControls(formulaPanel,'formula');
     formulaPanel.append(el("p", "Enter a DuckDB SQL expression such as price * quantity. Click a column name to insert it. Preview validates the expression.", "data-sql-note"));
@@ -102,16 +111,16 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
     const box=el('div',null,'wrangle-recipes');
     const heading=el('strong','Reusable recipes');box.append(heading);
     const recipes=listWranglingRecipes().filter(recipe=>recipe.kind===kind);
-    const select=el('select');select.setAttribute('aria-label',`${kind==='pivot'?'Pivot':'Formula'} recipe`);
+    const select=el('select');select.setAttribute('aria-label',`${kind==='pivot'?'Summary':'Formula'} recipe`);
     const placeholder=el('option','Choose a saved recipe');placeholder.value='';select.append(placeholder);
     for(const recipe of recipes){const option=el('option',recipe.name);option.value=recipe.id;select.append(option);}
     const load=el('button','Load recipe');load.type='button';load.disabled=!recipes.length;
     const removeRecipe=el('button','Delete recipe');removeRecipe.type='button';removeRecipe.disabled=!recipes.length;
-    const name=el('input');name.type='text';name.maxLength=80;name.placeholder='Recipe name';name.setAttribute('aria-label',`${kind==='pivot'?'Pivot':'Formula'} recipe name`);
+    const name=el('input');name.type='text';name.maxLength=80;name.placeholder='Recipe name';name.setAttribute('aria-label',`${kind==='pivot'?'Summary':'Formula'} recipe name`);
     const save=el('button','Save recipe');save.type='button';
     const exportButton=el('button','Export recipes');exportButton.type='button';exportButton.disabled=!recipes.length;
     const importButton=el('button','Import recipes');importButton.type='button';
-    const importFile=el('input');importFile.type='file';importFile.accept='.json,application/json';importFile.hidden=true;importFile.setAttribute('aria-label',`${kind==='pivot'?'Pivot':'Formula'} recipe file`);
+    const importFile=el('input');importFile.type='file';importFile.accept='.json,application/json';importFile.hidden=true;importFile.setAttribute('aria-label',`${kind==='pivot'?'Summary':'Formula'} recipe file`);
     const status=el('span','');status.setAttribute('role','status');
     load.addEventListener('click',()=>{
       const recipe=recipes.find(item=>item.id===select.value);if(!recipe)return;
@@ -191,6 +200,13 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
     const apply = el("button", "Apply derived query to tile", "data-apply"); apply.type = "button";
     apply.disabled = entry.fields.some(field => !field.optional && !mapped[field.key]);
     apply.addEventListener("click", () => applyResult(mapped)); panel.appendChild(apply);
+    if(kind==='pivot'){
+      const seed=el('button','Use result as Transform source');seed.type='button';
+      seed.addEventListener('click',()=>{
+        if(!previewIsCurrent(kind)){invalidate();render();return;}
+        transformEditor.replaceSource({sql:state.sql,dependencies:state.sourceDependencies,schema:{columns:state.result.columns,types:state.result.types},order:null});activate('transform');
+      });panel.append(seed);
+    }
   }
   async function execute(kind) {
     if (state.busy) return; invalidate(); state.busy = true; render();
@@ -230,8 +246,17 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
       module = await import("../data/duckdb.js"); await module.ensureTables(); if (!pop.isConnected) return;
       state.sourceSql = wranglingSourceSql(query); state.table = query ? null : table;
       state.sourceDependencies = query?.dependencies ?? (isUploadRef(meta.dataset) ? [`upload:${uploadId(meta.dataset)}`] : null);
-      const schemaSql = state.sourceSql ? `SELECT * FROM (${state.sourceSql}) AS wrangle_source LIMIT 0` : `SELECT * FROM ${quoteIdentifier(table)} LIMIT 0`;
-      const schema = await module.runQueryDetailed(substituteParameters(schemaSql, structuredClone(getParameters()))); state.columns = schema.columns; state.types = schema.types;
+      const transformSource=query?.chain?.source;
+      const schemaSource=transformSource?.sql||(!transformSource?state.sourceSql:null);
+      const schemaTable=transformSource?.table||table;
+      const schemaSql = schemaSource ? `SELECT * FROM (${wranglingSourceSql({sql:schemaSource})}) AS wrangle_source LIMIT 0` : `SELECT * FROM ${quoteIdentifier(schemaTable)} LIMIT 0`;
+      const schema = await module.runQueryDetailed(substituteParameters(schemaSql, structuredClone(getParameters())));
+      if(!pop.isConnected)return;
+      const source=transformSource?{...transformSource,schema:{columns:schema.columns,types:schema.types}}:{...(state.sourceSql?{sql:state.sourceSql}:{table}),dependencies:state.sourceDependencies,schema:{columns:schema.columns,types:schema.types},order:state.sourceSql?null:{kind:'sourceOrdinal'}};
+      const editableChain=query?.chain?{...structuredClone(query.chain),source}:null;
+      transformEditor=createTransformEditor({panel:transformPanel,entry,source,chain:editableChain,getParameters,onQuery,onClose:closeWranglingPopover,module});open.transform=transformEditor;
+      const output=query?.chain?compileTransformChain(query.chain):schema;
+      state.columns=output.columns;state.types=output.types;
       if (state.columns.length) {
         state.groups = [{ column: state.columns[0], bin: null }];
         const numeric = state.columns.find(name => aggregationOptions(state.types[name]).includes('SUM'));
@@ -242,6 +267,8 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
     } catch (error) {
       initialising = false;
       state.error = error?.message || String(error);
+      transformPanel.replaceChildren();
+      const alert=el('p',state.error,'data-error');alert.setAttribute('role','alert');transformPanel.append(alert);
       render();
     }
   })();

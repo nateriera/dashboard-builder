@@ -106,7 +106,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   const tabPivot = document.createElement("button");
   tabPivot.type = "button";
   tabPivot.className = "data-tab";
-  tabPivot.textContent = "Pivot";
+  tabPivot.textContent = "Group & summarize";
   const tabFormula = document.createElement("button");
   tabFormula.type = "button";
   tabFormula.className = "data-tab";
@@ -114,6 +114,8 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   tabPivot.addEventListener("click", () => { closeDataPopover(); toggleWranglingPopover({ anchor, type, meta, dashboard, initialTab: "pivot", getParameters, onQuery }); });
   tabFormula.addEventListener("click", () => { closeDataPopover(); toggleWranglingPopover({ anchor, type, meta, dashboard, initialTab: "formula", getParameters, onQuery }); });
   tabs.append(tabSamples, tabUpload, tabSql, tabPivot, tabFormula);
+  const tabTransform=document.createElement('button');tabTransform.type='button';tabTransform.className='data-tab';tabTransform.textContent='Transform';
+  tabTransform.addEventListener('click',()=>{closeDataPopover();toggleWranglingPopover({anchor,type,meta,dashboard,initialTab:'transform',getParameters,onQuery});});tabs.append(tabTransform);
 
   const panelSamples = document.createElement("div");
   panelSamples.className = "data-panel";
@@ -413,7 +415,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   // ── SQL panel: DuckDB-WASM queries over every registered table ──
   // The duckdb module (and its .wasm) loads lazily on first use — the SQL
   // tab triggers it, as does the first query tile render.
-  const qstate = { sql: null, columns: null, rows: null, mapping: {}, normalized: null };
+  const qstate = { sql: null, columns: null, rows: null, mapping: {}, normalized: null, chain: null };
   let sqlModule = null;
   let sqlReady = false;
   let sqlReadyPromise = null;
@@ -442,6 +444,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       const q = getQuery(meta.dataset.slice("query:".length));
       if (q && q.sql) {
         sqlInput.value = q.sql;
+        if(q.chain) {qstate.chain=structuredClone(q.chain);sqlInput.readOnly=true;}
         return;
       }
     }
@@ -460,6 +463,11 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     sqlInput.value = starterQuery(sampleTableName(key));
   }
   seedSqlInput();
+  if(qstate.chain) {
+    const note=document.createElement('p');note.className='data-sql-note';
+    note.textContent='This SQL is compiled from a transform chain. Edit its steps in Transform. Run here to review and approve the query.';
+    panelSql.append(note);
+  }
 
   const sqlRunRow = document.createElement("div");
   sqlRunRow.className = "data-sql-runrow";
@@ -530,6 +538,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       lab.textContent = t.label;
       chip.append(code, document.createTextNode(" "), lab);
       chip.addEventListener("click", () => {
+        if(sqlInput.readOnly)return;
         const s = sqlInput.selectionStart ?? sqlInput.value.length;
         const e = sqlInput.selectionEnd ?? s;
         sqlInput.value = sqlInput.value.slice(0, s) + t.name + sqlInput.value.slice(e);
@@ -699,13 +708,23 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     sqlStatus.textContent = "Running…";
     try {
       const parameters=structuredClone(getParameters());
-      const resolvedSql=substituteParameters(request.sql,parameters);
-      const { columns, rows } = await sqlModule.runQuery(resolvedSql);
+      const parameterToken=JSON.stringify(parameters);
+      const result=qstate.chain
+        ? await sqlModule.previewTransformChain(qstate.chain,parameters,{sampleOnly:false})
+        : await sqlModule.runQuery(substituteParameters(request.sql,parameters));
+      if(result.errors?.length)throw new Error(result.errors.join(' '));
+      const {columns,rows}=result;
       if (!pop.isConnected || !previewGate.accept(request, sqlInput.value)) { sqlStatus.textContent = "Edited or data changed — Run again"; return; }
-      qstate.sql = request.sql;
+      if(parameterToken!==JSON.stringify(getParameters())) {previewGate.invalidate();sqlStatus.textContent='Parameters changed — Run again';return;}
+      if(qstate.chain) {
+        qstate.chain=result.chain;sqlInput.value=result.sql;
+        // Only a successfully reviewed result may refresh the compiled artifact.
+        previewGate.accept(previewGate.begin(result.sql),result.sql);
+      }
+      qstate.sql = qstate.chain?result.sql:request.sql;
       qstate.columns = columns;
       qstate.rows = rows;
-      qstate.mapping = guessMapping(entry, columns);
+      qstate.mapping = qstate.chain?{...qstate.chain.outputMapping}:guessMapping(entry, columns);
       sqlStatus.textContent = `${rows.length.toLocaleString()} row${rows.length === 1 ? "" : "s"}`;
       buildQueryMappingUI();
       sqlRunning = false;
@@ -728,8 +747,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
   qApplyBtn.addEventListener("click", () => {
     if (!previewGate.eligible(sqlInput.value) || sqlRunning || !qstate.normalized || qstate.sql == null) { qApplyBtn.disabled = true; return; }
     const { id, name, persisted } = saveQuery({
+      ...(qstate.chain?{chain:{...qstate.chain,outputMapping:{...qstate.mapping}}}:{}),
       sql: qstate.sql,
-      dependencies: listDatasets().map(ds => `upload:${ds.id}`),
+      dependencies: qstate.chain?qstate.chain.source.dependencies:listDatasets().map(ds => `upload:${ds.id}`),
       columns: qstate.columns,
       fieldKeys: entry.dynamicFields ? [...qstate.columns] : entry.fields.map((f) => f.key),
       mapping: { ...qstate.mapping }

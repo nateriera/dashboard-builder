@@ -218,3 +218,55 @@ test('GA-1 engine: an aggregate named invalidDates retains separate aggregate an
   ]));
   expectCounts(data);
 });
+
+test('GA-1 engine: stored schema drift cannot turn a fractional SUM into a rounded integer', async ({page})=>{
+  await ready(page);
+  const chain=envelope(source('SELECT 1.25::DOUBLE AS amount',['amount'],{amount:'Int32'},null),[
+    {id:'total',op:'groupBy',params:{groups:[],aggregations:[aggregate('SUM','Total')]}}
+  ]);
+  const outcome=await page.evaluate(async chain=>{
+    try {return {rows:(await (await import('/src/data/duckdb.js')).previewTransformChain(chain,[],{sampleOnly:false,refreshSchema:false})).rows};}
+    catch(error){return {error:error.message};}
+  },chain);
+  expect(outcome.error).toMatch(/schema changed|preview again/i);
+  const refreshed=await execute(page,chain);
+  expect(refreshed.result.rows).toEqual([{Total:1.25}]);
+});
+
+test('GA-1 engine: a global GroupBy over empty input returns SUM/COUNT zero and AVG/MIN/MAX null', async ({page})=>{
+  await ready(page);
+  const chain=envelope(source('SELECT NULL::DOUBLE AS amount WHERE FALSE',['amount'],{amount:'Float64'},null),[
+    {id:'empty',op:'groupBy',params:{groups:[],aggregations:['SUM','COUNT','AVG','MIN','MAX'].map(operation=>aggregate(operation,operation))}}
+  ]);
+  const data=await execute(page,chain);
+  expect(data.result.rows).toEqual([{SUM:0,COUNT:0,AVG:null,MIN:null,MAX:null}]);
+  expect(data.result.steps[0]).toMatchObject({rowsIn:0,rowsOut:1,exclusions:{SUM:0,AVG:0,MIN:0,MAX:0}});
+  expectCounts(data);
+});
+
+test('GA-1 engine: integer MIN/MAX output retains its type for a downstream SUM', async ({page})=>{
+  await ready(page);
+  for(const operation of ['MIN','MAX']) {
+    const chain=envelope(source("SELECT * FROM (VALUES (1,'A',2),(2,'A',3),(3,'B',5)) AS t(sequence,team,amount)",['sequence','team','amount'],{sequence:'Int32',team:'Utf8',amount:'Int32'}),[
+      {id:'extrema',op:'groupBy',params:{groups:['team'],aggregations:[aggregate(operation,'Extreme')]}},
+      {id:'total',op:'groupBy',params:{groups:[],aggregations:[aggregate('SUM','Total','Extreme')]}}
+    ]);
+    const data=await execute(page,chain);
+    expect(data.result.rows).toEqual([{Total:operation==='MIN'?7:8}]);
+    expectCounts(data);
+  }
+});
+
+test('GA-1 engine: registered upload source ordinals preserve first-seen group order', async ({page})=>{
+  await ready(page);
+  const id=await page.evaluate(async()=>{
+    const {saveDataset}=await import('/src/data/store.js');
+    return saveDataset({name:'Ordered upload',columns:['team','amount'],rows:[{team:'B',amount:2},{team:'A',amount:4},{team:'B',amount:3}],fieldKeys:[],mapping:{}}).id;
+  });
+  const chain=envelope({table:`upload_${id}`,dependencies:[`upload:${id}`],schema:{columns:['team','amount'],types:{team:'Utf8',amount:'Float64'}},order:{kind:'sourceOrdinal'}},[
+    {id:'group',op:'groupBy',params:{groups:['team'],aggregations:[aggregate('SUM','Total')]}}
+  ]);
+  const data=await execute(page,chain);
+  expect(data.result.rows).toEqual([{team:'B',Total:5},{team:'A',Total:4}]);
+  expectCounts(data);
+});

@@ -6,7 +6,7 @@ for (const action of ['Add grouping', 'Add aggregation']) {
     await ready(page);
     const pop = page.locator('.wrangling-popover');
     await expect(pop.getByLabel('Grouping 1 column')).toBeVisible();
-    await pop.getByRole('button', { name: 'Preview pivot' }).click();
+    await pop.getByRole('button', { name: 'Preview summary' }).click();
     await expect(pop.getByRole('button', { name: 'Apply derived query to tile' })).toBeEnabled();
     await pop.getByRole('button', { name: action, exact: true }).click();
     await expect(pop.locator('.data-apply')).toHaveCount(0);
@@ -34,7 +34,7 @@ test('wrangling integrity: semicolon-terminated sources load async schema and re
   await expect(pop.getByLabel('Grouping 1 column')).toHaveValue('label');
   await expect(pop.getByLabel('Aggregation 1 source column')).toHaveValue('value');
   await expect(pop.locator('[role="alert"]')).toHaveCount(0);
-  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await pop.getByRole('button', { name: 'Preview summary' }).click();
   await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('Snapshot');
   await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('2');
   await pop.getByRole('button', { name: 'Apply derived query to tile' }).click();
@@ -71,7 +71,7 @@ for (const kind of ['pivot', 'formula']) {
       await pop.getByLabel('Calculated field formula').fill('"value" * 2');
     }
     await page.evaluate(() => { window.holdIntegrityPreview = true; });
-    await pop.getByRole('button', { name: kind === 'pivot' ? 'Preview pivot' : 'Preview formula' }).click();
+    await pop.getByRole('button', { name: kind === 'pivot' ? 'Preview summary' : 'Preview formula' }).click();
     await expect.poll(() => page.evaluate(() => window.integrityPreviewReady)).toBe(true);
     if (kind === 'pivot') await pop.getByLabel('Aggregation 1 output name').fill('Edited total');
     else await pop.getByLabel('Calculated field formula').fill('"value" * 3');
@@ -79,7 +79,7 @@ for (const kind of ['pivot', 'formula']) {
     await expect(pop.locator('.data-panel:visible [role="status"]').last()).toHaveText('Preview is out of date; run again.');
     await expect(pop.locator('.data-apply')).toHaveCount(0);
     await expect(pop.locator('.data-preview tbody')).toHaveCount(0);
-    await pop.getByRole('button', { name: kind === 'pivot' ? 'Preview pivot' : 'Preview formula' }).click();
+    await pop.getByRole('button', { name: kind === 'pivot' ? 'Preview summary' : 'Preview formula' }).click();
     const apply = pop.getByRole('button', { name: 'Apply derived query to tile' });
     await expect(apply).toBeEnabled();
     await expect(pop.locator('.data-panel:visible .data-preview')).toContainText(kind === 'pivot' ? 'Edited total' : '6');
@@ -94,7 +94,7 @@ test('wrangling integrity: parameter edits during preview discard the captured r
   await holdPreviewCompletion(page);
   const pop = await openParameterizedWrangling(page);
   await page.evaluate(() => { window.holdIntegrityPreview = true; });
-  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await pop.getByRole('button', { name: 'Preview summary' }).click();
   await expect.poll(() => page.evaluate(() => window.integrityPreviewReady)).toBe(true);
   await page.evaluate(() => { window.integrityParameters[1].value = 3; window.holdIntegrityPreview = false; window.releaseIntegrityPreview(); });
   await expect(pop.locator('.data-panel:visible [role="status"]').last()).toHaveText('Preview is out of date; run again.');
@@ -103,7 +103,7 @@ test('wrangling integrity: parameter edits during preview discard the captured r
 
 test('wrangling integrity: Apply rechecks parameter tokens even without a dirty event', async ({ page }) => {
   const pop = await openParameterizedWrangling(page);
-  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await pop.getByRole('button', { name: 'Preview summary' }).click();
   const apply = pop.getByRole('button', { name: 'Apply derived query to tile' });
   await expect(apply).toBeEnabled();
   // Change a live execution input without dispatching a control event/invalidate().
@@ -126,7 +126,7 @@ test('parameterized wrangling preserves placeholders, never rescans values, and 
   });
   const pop = page.locator('.wrangling-popover');
   await expect(pop.getByLabel('Grouping 1 column')).toBeVisible();
-  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await pop.getByRole('button', { name: 'Preview summary' }).click();
   await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('{{q}}');
   await expect(pop.locator('.data-panel:visible .data-preview tbody')).toContainText('2');
   await pop.getByRole('button', { name: 'Apply derived query to tile' }).click();
@@ -147,7 +147,7 @@ async function ready(page) {
   await page.goto('/');
   await expect(page.locator('#status')).toContainText('build');
   await page.locator('.tile').filter({ hasText: 'Requests by category' }).locator('.tile-data-btn').click();
-  await page.getByRole('button', { name: 'Pivot', exact: true }).click();
+  await page.getByRole('button', { name: 'Group & summarize', exact: true }).click();
   await expect(page.locator('.wrangling-popover')).toBeVisible();
 }
 
@@ -161,7 +161,7 @@ test('visual wrangling pivot runs detailed DuckDB preview, maps output and saves
   await pop.getByLabel('Aggregation 2 source column').selectOption('value');
   await pop.getByLabel('Aggregation 2 operation').selectOption('AVG');
   await pop.getByLabel('Aggregation 2 output name').fill('Average total');
-  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await pop.getByRole('button', { name: 'Preview summary' }).click();
   await expect(pop.locator('.data-preview-note').last()).toContainText('derived query');
   await expect(pop.locator('.data-preview tbody tr').first()).toBeVisible();
   await expect(pop.getByLabel('Output Label column').first()).toHaveValue('label');
@@ -178,7 +178,7 @@ test('desktop parity: reusable wrangling recipes save and restore pivot steps', 
   await ready(page);
   const pop=page.locator('.wrangling-popover');
   await expect(pop.locator('[aria-label="Grouping 1 column"]')).toBeVisible({timeout:90000});
-  await pop.getByLabel('Pivot recipe name').fill('Category totals');
+  await pop.getByLabel('Summary recipe name').fill('Category totals');
   await pop.getByRole('button',{name:'Save recipe'}).click();
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dashbuilder.wrangling-recipes.v1')||'[]').length)).toBe(1);
   const recipeDownload=page.waitForEvent('download');
@@ -189,17 +189,17 @@ test('desktop parity: reusable wrangling recipes save and restore pivot steps', 
   portable.recipes[0].aggregations[0].column='Count';
   const recipeBuffer=Buffer.from(JSON.stringify(portable));
   await page.evaluate(()=>localStorage.removeItem('dashbuilder.wrangling-recipes.v1'));
-  await pop.getByLabel('Pivot recipe file').setInputFiles({name:'portable-recipes.json',mimeType:'application/json',buffer:recipeBuffer});
-  await expect(pop.getByLabel('Pivot recipe',{exact:true})).toContainText('Category totals');
+  await pop.getByLabel('Summary recipe file').setInputFiles({name:'portable-recipes.json',mimeType:'application/json',buffer:recipeBuffer});
+  await expect(pop.getByLabel('Summary recipe',{exact:true})).toContainText('Category totals');
   await pop.locator('[aria-label="Grouping 1 column"]').selectOption('value');
-  await pop.locator('[aria-label="Pivot recipe"]').selectOption({label:'Category totals'});
+  await pop.locator('[aria-label="Summary recipe"]').selectOption({label:'Category totals'});
   await pop.getByRole('button',{name:'Load recipe'}).click();
   await pop.getByLabel('Map recipe column Category').selectOption('label');
   await pop.getByLabel('Map recipe column Count').selectOption('value');
   await pop.getByRole('button',{name:'Apply column mapping'}).click();
   await expect(pop.locator('[aria-label="Grouping 1 column"]')).toHaveValue('label');
   await expect(pop.locator('[aria-label="Aggregation 1 source column"]')).toHaveValue('value');
-  await pop.getByRole('button',{name:'Preview pivot'}).click();
+  await pop.getByRole('button',{name:'Preview summary'}).click();
   await expect(pop.locator('.data-preview thead').last()).toContainText('label');
 });
 
@@ -235,7 +235,7 @@ test('unmapped required chart fields keep Apply disabled and invalid formula sho
   await pop.locator('[aria-label="Grouping 1 column"]').selectOption('value');
   await pop.locator('[aria-label="Aggregation 1 output name"]').fill('Count');
   await pop.locator('[aria-label="Aggregation 1 operation"]').selectOption('COUNT');
-  await pop.getByRole('button', { name: 'Preview pivot' }).click();
+  await pop.getByRole('button', { name: 'Preview summary' }).click();
   await expect(pop.getByRole('button', { name: 'Apply derived query to tile' })).toBeDisabled();
   await pop.getByLabel('Output Label column').first().selectOption('value');
   await pop.getByLabel('Output Value column').first().selectOption('Count');

@@ -28,7 +28,8 @@
 - Switch a tile among chart types supported by its current data columns
 - Named SQL parameters support local what-if analysis with `{{name}}` placeholders
 - Optional per-tile reference lines, with labels, mark targets and thresholds
-- Save and reuse local data-wrangling recipes for pivots and calculated fields
+- Save and reuse local data-wrangling recipes for grouping and calculated fields
+- Build ordered GroupBy and day/week/month Bucket chains in the Transform tab
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
 - 4 themes, 6 starter templates, save/load multi-page dashboards as JSON
 - Export to a single self-contained HTML file — email it or host it anywhere, no server needed
@@ -207,6 +208,17 @@ for the difference between the editable backup and the standalone viewer.
 HTML export carries materialized query results, all tile rows, theme and options;
 its viewer runs without SQL or network access. It rejects an export if the
 dashboard changes during preparation. Errors remain visible per tile.
+New HTML exports also contain an editable layout backup with saved queries and
+eligible source datasets. Import reads that backup without running the HTML;
+imported queries still require Run and Apply before tiles execute them. The
+500 KiB per-dataset backup budget applies, and unavailable dependencies are
+reported separately from the materialized viewer rows.
+
+The Data control's Transform tab supports ordered GroupBy and date Bucket steps,
+with full per-step counts, exclusion provenance, and up to five sample rows.
+Chains retain raw parameter references and recompile when edited; SQL-only
+queries remain editable SQL. See [Transform chains](docs/transform-chains.md)
+for the contract, ordering rules, aggregate semantics and limits.
 
 ### Exact numbers and dates
 

@@ -114,8 +114,12 @@ export async function previewTransformChain(input, parameters = [], { sampleOnly
   const revision=schema.revision;
   if(refreshSchema) chain={...chain,source:{...chain.source,schema:{columns:schema.columns,types:schema.types}}};
   else {
-    const category=type=>/^(?:U?Int|Float|Double|Decimal|BigInt)/i.test(type)?'numeric':/Date|Timestamp/i.test(type)?'date':/Utf8|Char|String/i.test(type)?'text':type;
-    if(JSON.stringify(chain.source.schema.columns)!==JSON.stringify(schema.columns)||chain.source.schema.columns.some(column=>category(chain.source.schema.types[column])!==category(schema.types[column]))) throw new Error('Transform source schema changed. Open Transform and preview again.');
+    // Arrow's WASM reader can report generic Int_/Float constructors rather
+    // than Int32/Float64. Accept those aliases, but never cross integer/float
+    // families: the saved compiler's integer SUM cast would round fractions.
+    const family=type=>/^(?:Uint|UTinyInt|USmallInt|UInteger|UBigInt)/i.test(type)?'unsigned':/^(?:Int|TinyInt|SmallInt|BigInt|HugeInt)/i.test(type)?'integer':/^(?:Float|Double|Half|Real)/i.test(type)?'float':/^(?:Timestamp|Date)/i.test(type)?'date':/^(?:Utf8|Char|String)/i.test(type)?'text':type;
+    const changed=chain.source.schema.columns.find(column=>family(chain.source.schema.types[column])!==family(schema.types[column]));
+    if(JSON.stringify(chain.source.schema.columns)!==JSON.stringify(schema.columns)||changed) throw new Error(`Transform source schema changed${changed?` (${changed}: ${chain.source.schema.types[changed]} → ${schema.types[changed]||'missing'})`:''}. Open Transform and preview again.`);
   }
   const plan=compileTransformChain(chain,{parameters});
   const run=async sql=>{

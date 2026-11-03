@@ -78,3 +78,25 @@ test('Paper export tab selection remains distinct from hover', async ({page,brow
     expect(colors).toEqual(['rgb(231, 227, 217)','rgb(74, 82, 120)']);
   } finally { await context.close(); }
 });
+
+test('Paper changes do not alter Slate states or brush', async ({page}) => {
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  const values=await page.evaluate(async () => {
+    const {setTheme}=await import('/src/themes/themes.js');
+    const holder=document.createElement('div'); holder.innerHTML='<div id="palette"><h2>Chart</h2><button class="palette-item">Item</button></div><div class="guided-actions"><button disabled>Disabled</button></div><div class="tile-chart"><svg><rect class="db-time-brush" width="10" height="10"></rect></svg></div>';
+    document.body.append(holder);
+    const tab=document.createElement('button'); tab.setAttribute('aria-selected','true'); document.querySelector('#page-tabs').append(tab);
+    const capture=() => {const css=x=>getComputedStyle(holder.querySelector(x)); return {size:css('#palette h2').fontSize,radius:css('.palette-item').borderRadius,disabled:css('.guided-actions button').opacity,tab:getComputedStyle(tab).backgroundColor,brush:css('.db-time-brush').fill};};
+    setTheme('slate'); const slate=capture(); setTheme('paper'); const paper=capture(); holder.remove(); tab.remove(); return {slate,paper};
+  });
+  expect(values.slate).toEqual({size:'13px',radius:'8px',disabled:'0.5',tab:'rgba(0, 0, 0, 0)',brush:'rgba(62, 92, 118, 0.14)'});
+  expect(values.paper).toEqual({size:'14px',radius:'6px',disabled:'0.45',tab:'rgb(74, 82, 120)',brush:'rgba(183, 191, 217, 0.3)'});
+});
+
+test('Export preserves Slate brush and tab styles', async ({page,browser}) => {
+  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.evaluate(async()=>{(await import('/src/themes/themes.js')).setTheme('slate')});
+  const pending=page.waitForEvent('download'); await clickHeaderAction(page,'#btn-export-html'); const download=await pending;
+  const context=await browser.newContext({offline:true});
+  try {const viewer=await context.newPage();await viewer.setContent(await fs.readFile(await download.path(),'utf8'));const result=await viewer.evaluate(()=>{const host=document.createElement('div');host.innerHTML='<div class="tile-chart"><svg><rect class="db-time-brush" width="10" height="10"></rect></svg></div><nav class="export-page-tabs"><button aria-selected="true">Tab</button></nav>';document.body.append(host);return {theme:document.documentElement.dataset.theme,brush:getComputedStyle(host.querySelector('.db-time-brush')).fill,tab:getComputedStyle(host.querySelector('button')).backgroundColor};});expect(result).toEqual({theme:'slate',brush:'rgba(62, 92, 118, 0.14)',tab:'rgba(0, 0, 0, 0)'});} finally {await context.close();}
+});

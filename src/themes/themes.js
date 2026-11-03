@@ -245,6 +245,7 @@ export function getThemeId() {
 /** Apply a theme's CSS variables to a document (defaults to the page). */
 export function applyTheme(theme, doc) {
   const root = (doc || document).documentElement;
+  root.setAttribute("data-theme", theme.id);
   for (const [prop, value] of Object.entries(theme.css)) {
     root.style.setProperty(prop, value);
   }

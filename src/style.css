@@ -1390,3 +1390,5 @@ body.present .tile-toolbar { display: none; }
 .tile-empty { display: flex; align-items: center; min-height: 90px; padding: 16px; border: 1px solid var(--slate-200); border-radius: 8px; background: var(--white); color: var(--slate-600); font-size: 14px; }
 .tile-filter-status { margin: 8px 12px 0; padding: 6px 9px; background: color-mix(in srgb, var(--dusk) 7%, var(--white)); color: var(--dusk); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .dashboard-filters-popover { width: min(390px, calc(100vw - 16px)); } .dashboard-parameter { grid-template-columns: 1fr auto; } .dashboard-parameter .parameter-value-label { grid-column: 1 / -1; } }
+
+.guided-stats strong, .guided-field-meta, .tpl-card-meta, .transform-count, input[type=number], output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

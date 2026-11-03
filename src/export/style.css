@@ -176,3 +176,5 @@ body {
   .export-filters { display: none; }
   .chart-data:not([open]) { display: none; }
 }
+
+.export-meta, .export-filter input[type=number], output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

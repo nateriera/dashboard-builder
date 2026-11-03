@@ -6,6 +6,7 @@
 // small text, so all of them persist — no size budget like the dataset store.
 
 import { isQueryRef, queryId } from "./sql.js";
+import { checkedChainFields } from './queryChain.js';
 
 export { isQueryRef, queryId };
 
@@ -30,7 +31,7 @@ function readAll() {
 function writeAll(next) {
   const items = {};
   for (const [id, q] of memory) {
-    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted };
+    items[id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted, ...(q.chain?{chain:q.chain,parameterDependencies:q.parameterDependencies}:{}) };
   }
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({ next, items }));
@@ -43,7 +44,9 @@ function writeAll(next) {
 }
 
 /** Save a query validated by Run. Returns {id, name}. */
-export function saveQuery({ name, sql, columns, fieldKeys, mapping, dependencies = null }) {
+export function saveQuery(input) {
+  const { name, sql, columns, fieldKeys, mapping, dependencies = null }=input;
+  const chainFields=checkedChainFields(input);
   const id = `q${Date.now().toString(36)}${seq++}`;
   const entry = {
     id,
@@ -53,7 +56,8 @@ export function saveQuery({ name, sql, columns, fieldKeys, mapping, dependencies
     sql,
     columns: columns || [],
     fieldKeys: fieldKeys || [],
-    mapping: mapping || {}
+    mapping: mapping || {},
+    ...chainFields
   };
   let persisted = false;
   if (name) {
@@ -99,8 +103,8 @@ export function pruneQueries(refs) {
 export function loadPersistedQueries() {
   const all = readAll();
   let loaded = 0;
-  for (const [id, e] of Object.entries(all.items)) {
-    if (!e || typeof e.sql !== "string") continue;
+  const records=Object.entries(all.items).filter(([,e])=>e&&typeof e.sql==='string').map(([id,e])=>[id,{...e,...checkedChainFields(e)}]);
+  for (const [id, e] of records) {
     memory.set(id, {
       id,
       trusted: !Object.hasOwn(e, 'trusted') || e.trusted === true,
@@ -109,7 +113,8 @@ export function loadPersistedQueries() {
       dependencies: e.dependencies ?? null,
       columns: Array.isArray(e.columns) ? e.columns : [],
       fieldKeys: Array.isArray(e.fieldKeys) ? e.fieldKeys : [],
-      mapping: e.mapping && typeof e.mapping === "object" ? e.mapping : {}
+      mapping: e.mapping && typeof e.mapping === "object" ? e.mapping : {},
+      ...(e.chain?checkedChainFields(e):{})
     });
     loaded++;
   }
@@ -123,7 +128,7 @@ export function inlineQueries(refs) {
     if (!isQueryRef(ref)) continue;
     const q = memory.get(queryId(ref));
     if (!q) continue;
-    inlined[q.id] = { name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted };
+    inlined[q.id] = structuredClone({ name: q.name, sql: q.sql, columns: q.columns, fieldKeys: q.fieldKeys, mapping: q.mapping, dependencies: q.dependencies ?? null, trusted: q.trusted, ...(q.chain?{chain:q.chain,parameterDependencies:q.parameterDependencies}:{}) });
   }
   return inlined;
 }
@@ -131,11 +136,12 @@ export function inlineQueries(refs) {
 /** Restore queries inlined in an imported layout file. Returns count added. */
 export function querySnapshot() { return structuredClone([...memory]); }
 export function rollbackQueries(snapshot) {
-  memory.clear(); for (const [id,q] of snapshot) memory.set(id,q);
+  memory.clear(); for (const [id,q] of structuredClone(snapshot)) memory.set(id,q);
 }
 export function restoreQueries(obj) {
   if (!obj) return 0;
-  const pending = Object.entries(obj).filter(([id]) => !memory.has(id));
+  const validated=Object.entries(obj).map(([id,e])=>[id,{...structuredClone(e),...checkedChainFields(e)}]);
+  const pending = validated.filter(([id]) => !memory.has(id));
   for (const [id,e] of pending) memory.set(id,{ ...e,id,trusted:false });
   // The import coordinator commits localStorage together with the layout.
   return pending.length;

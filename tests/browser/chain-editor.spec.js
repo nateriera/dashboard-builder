@@ -169,7 +169,7 @@ test('GA-1 editor: existing parameter picker keeps references raw and a value ch
   await expect(enabledApply(editor)).toHaveCount(0);
   await expect(editor.locator('.transform-preview tbody tr')).toHaveCount(0);
   await preview(editor).click();await expect(enabledApply(editor)).toHaveCount(1);
-  await expect(editor.locator('.transform-provenance')).toHaveText(['2 invalid/missing values excluded from Total','1 bad dates dropped']);
+  await expect(editor.locator('.transform-provenance')).toHaveText(['2 invalid/missing values excluded from Total','1 bad dates excluded from period windows']);
   await expect(editor.locator('.transform-count')).toHaveText('20 rows → 20 rows');
   await enabledApply(editor).click();
   const saved=await page.evaluate(async()=>Object.values(JSON.parse((await import('/src/data/queries.js')).serializeQueries()).items).find(query=>query.chain));

@@ -68,7 +68,7 @@ test('GB-1 Transform editor exposes all three operations and previews their conf
     const date=new Date(),local=()=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
     const yesterday=new Date(date);yesterday.setDate(yesterday.getDate()-1);
     const prior=`${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
-    return (await import('/src/data/queries.js')).saveQuery({name:'GB-1 editor source',sql:`SELECT * FROM (VALUES (1,'${local()}','A',10::DOUBLE,10::DOUBLE,5::DOUBLE),(2,'${prior}','A',5::DOUBLE,5::DOUBLE,2::DOUBLE),(3,'${local()}','B',3::DOUBLE,3::DOUBLE,1::DOUBLE)) AS t(sequence,day,team,amount,current_value,previous_value)`,columns:['sequence','day','team','amount','current_value','previous_value'],fieldKeys:[],mapping:{},dependencies:[]}).id;
+    return (await import('/src/data/queries.js')).saveQuery({name:'GB-1 editor source',sql:`SELECT * FROM (VALUES (1,'${local()}','A',10::DOUBLE,10::DOUBLE,5::DOUBLE),(2,'${prior}','A',5::DOUBLE,5::DOUBLE,2::DOUBLE),(3,'${local()}','B',3::DOUBLE,3::DOUBLE,1::DOUBLE),(4,'invalid','C',8::DOUBLE,8::DOUBLE,4::DOUBLE)) AS t(sequence,day,team,amount,current_value,previous_value)`,columns:['sequence','day','team','amount','current_value','previous_value'],fieldKeys:[],mapping:{},dependencies:[]}).id;
   });
   const layout={app:'dashboard-builder',version:1,parameters:[{name:'days',type:'number',value:2}],tiles:[{id:'period-editor',type:'table',title:'Period editor',dataset:`query:${seeded}`,x:0,y:0,w:8,h:7}]};
   await page.locator('#file-import').setInputFiles({name:'period-editor.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(layout))});
@@ -82,7 +82,7 @@ test('GB-1 Transform editor exposes all three operations and previews their conf
   const preview=editor.getByRole('button',{name:'Preview transforms',exact:true});
   await add('cumulative');await editor.getByLabel('Step 1 column',{exact:true}).selectOption('amount');
   await editor.getByLabel('Step 1 partition columns',{exact:true}).selectOption(['team']);await preview.click();
-  await expect(editor.locator('.transform-count')).toContainText('3 rows → 3 rows');
+  await expect(editor.locator('.transform-count')).toContainText('4 rows → 4 rows');
   await editor.getByRole('button',{name:'Remove step 1',exact:true}).click();
   await add('change');await editor.getByLabel('Step 1 current column',{exact:true}).selectOption('current_value');
   await editor.getByLabel('Step 1 previous column',{exact:true}).selectOption('previous_value');await preview.click();
@@ -94,6 +94,7 @@ test('GB-1 Transform editor exposes all three operations and previews their conf
   await editor.getByLabel('Step 1 current window days parameter',{exact:true}).selectOption('days');await preview.click();
   await expect(editor.locator('.transform-preview tbody tr')).toHaveCount(2);
   await expect(editor.locator('.transform-preview')).toContainText('current');await expect(editor.locator('.transform-preview')).toContainText('previous');
+  await expect(editor.locator('.transform-provenance')).toHaveText(['0 invalid/missing values excluded from amount','1 bad dates excluded from period windows']);
 });
 
 test('GB-1 periodPair + Change survives save, reload, HTML export/import, and parameter re-run',async({page,browser})=>{

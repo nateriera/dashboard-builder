@@ -28,6 +28,7 @@ export default defineConfig({
   // This config is main-app only; the export template keeps its own
   // single-file config (vite.export.config.js).
   build: {
+    assetsInlineLimit: 100 * 1024, // Bundle the three local variable fonts into the app CSS.
     rollupOptions: {
       output: {
         manualChunks(id) {

@@ -40,6 +40,20 @@ test('Between inverted bounds and type-incompatible parameter references compile
   assert.match(incompatible.steps[0].sql,/WHERE FALSE/i);
 });
 
+test('Between accepts a paired range parameter, applies open endpoints, and rejects mismatched range pairing',()=>{
+  const numericParameters=[{name:'amountRange',type:'number-range',value:{from:2,to:8}}];
+  const input=chain([{id:'range',op:'between',params:{field:'amount',mode:'numeric',lower:{param:'amountRange'},upper:{param:'amountRange'}}}]);
+  const plan=compileTransformChain(input,{parameters:numericParameters});
+  assert.equal(plan.steps[0].disabled,false);
+  assert.match(plan.steps[0].sql,/>=\s*2[\s\S]*<=\s*8/);
+  assert.deepEqual(plan.parameterDependencies,['amountRange']);
+  const open=compileTransformChain(chain([{id:'range',op:'between',params:{field:'amount',mode:'numeric',lower:{param:'amountRange'},upper:{param:'amountRange'}}}]),{parameters:[{name:'amountRange',type:'number-range',value:{from:null,to:8}}]});
+  assert.doesNotMatch(open.steps[0].sql,/>=/);
+  assert.match(open.steps[0].sql,/< =|<=\s*8/);
+  assert.throws(()=>validateTransformChain(chain([{id:'bad',op:'between',params:{field:'amount',mode:'numeric',lower:{param:'amountRange'},upper:8}}]),{parameters:numericParameters}),/same number-range parameter/i);
+  assert.throws(()=>validateTransformChain(chain([{id:'bad',op:'between',params:{field:'amount',mode:'numeric',lower:{param:'amountRange'},upper:{param:'another'}}}]),{parameters:[...numericParameters,{name:'another',type:'number',value:8}]}),/same number-range parameter/i);
+});
+
 test('Top preserves explicit direction, stable ordinal ties, and has no chart-category cap',()=>{
   const plan=compileTransformChain(chain([{id:'rank',op:'top',params:{field:'amount',n:150,direction:'desc'}}]));
   assert.equal(plan.steps[0].disabled,false);

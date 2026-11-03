@@ -1031,7 +1031,7 @@ function serializeLayout() {
   const tiles = pages.flatMap(page => page.id === currentPageId ? activeTiles : pageTileCache.get(page.id) || []);
   return {
     app: "dashboard-builder",
-    version: 4,
+    version: 5,
     rowHeight: ROW_HEIGHT,
     savedAt: new Date().toISOString(),
     defaultDataset: dashboardDefault,
@@ -1699,7 +1699,7 @@ async function exportHtml() {
     const {backup,skipped}=inlineLayoutBackup(layout);
     const payload = {
       app: "dashboard-builder",
-      version: 4,
+      version: 5,
     rowHeight: ROW_HEIGHT,
       pages:layout.pages,
       currentPageId:layout.currentPageId,

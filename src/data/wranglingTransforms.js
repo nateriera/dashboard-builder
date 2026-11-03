@@ -230,6 +230,14 @@ export function validateTransformChain(input,{parameters}={}) {
   if(parameters!==undefined) {
     const existing=new Map(validateParameters(parameters).map(parameter=>[parameter.name,parameter]));
     for(const dependency of transformParameterDependencies(chain)) if(!existing.has(dependency)) fail(`Unknown transform parameter: ${dependency}.`);
+    for(const step of steps) if(step.op==='between') {
+      const {mode,lower,upper}=step.params;
+      const lowerParameter=object(lower)?existing.get(lower.param):null,upperParameter=object(upper)?existing.get(upper.param):null;
+      const rangeType=mode==='numeric'?'number-range':'date-range';
+      if(lowerParameter?.type?.endsWith('-range')||upperParameter?.type?.endsWith('-range')) {
+        if(lower.param!==upper.param||lowerParameter?.type!==rangeType||upperParameter?.type!==rangeType) fail(`Between ${mode} range bounds must both reference the same ${rangeType} parameter.`);
+      }
+    }
     for(const step of steps) if(object(step.params.grain)&&existing.get(step.params.grain.param)?.type!=='text') fail(`Bucket parameter ${step.params.grain.param} must be text.`);
     for(const step of steps) if(step.op==='periodPair') {
       for(const window of [step.params.currentWindow,step.params.previousWindow].filter(Boolean)) {
@@ -358,9 +366,16 @@ export function compileTransformChain(input,options={}) {
   const numericValid=field=>`(${q(field)} IS NOT NULL AND isfinite(${q(field)}))`;
   const dateValid=field=>`TRY_CAST(${q(field)} AS TIMESTAMP) IS NOT NULL`;
   const isDate=type=>/DATE|TIMESTAMP|CHAR|STRING|UTF8|UNKNOWN|NULL/i.test(type||'');
-  const boundValue=input=>object(input)?parameterByName.get(input.param)?.value:input;
-  const boundSql=(input,mode)=>{
-    const raw=object(input)?`{{${input.param}}}`:mode==='date'?literal(input):String(input);
+  const boundValue=(input,endpoint)=>{
+    if(!object(input)) return input;
+    const parameter=parameterByName.get(input.param);
+    return parameter?.type?.endsWith('-range')?parameter.value[endpoint]:parameter?.value;
+  };
+  const boundSql=(input,mode,endpoint)=>{
+    const parameter=object(input)?parameterByName.get(input.param):null;
+    const rangeValue=parameter?.type?.endsWith('-range')?parameter.value[endpoint]:undefined;
+    if(rangeValue===null) return null;
+    const raw=rangeValue!==undefined?(mode==='date'?literal(rangeValue):String(rangeValue)):object(input)?`{{${input.param}}}`:mode==='date'?literal(input):String(input);
     return mode==='date'?`TRY_CAST(${raw} AS TIMESTAMP)`:raw;
   };
   const integerValue=input=>object(input)?parameterByName.get(input.param)?.value:input;
@@ -512,20 +527,23 @@ export function compileTransformChain(input,options={}) {
       ctes.push(`${q(stage)} AS (SELECT ${[...partitions,`${periodText} AS ${q(p.periodName)}`,...outputMeasures,`ROW_NUMBER() OVER (ORDER BY ${sort}) AS ${q(ordinal)}`].join(', ')} FROM ${result})`);
     } else if(step.op==='between') {
       const valid=p.mode==='numeric'?numericValid(p.field):dateValid(p.field);
-      const low=boundValue(p.lower),high=boundValue(p.upper);
+      const low=boundValue(p.lower,'from'),high=boundValue(p.upper,'to');
       if(parameters) {
         for(const boundInput of [p.lower,p.upper]) if(object(boundInput)) {
           const parameter=parameterByName.get(boundInput.param),expected=p.mode==='numeric'?'number':'text';
-          if(parameter?.type!==expected){warning=`Between ${p.mode} mode requires ${expected} bound parameters; ${boundInput.param} is incompatible.`;break;}
+          const rangeExpected=p.mode==='numeric'?'number-range':'date-range';
+          if(parameter?.type!==expected&&parameter?.type!==rangeExpected&&!(p.mode==='date'&&parameter?.type==='date')){warning=`Between ${p.mode} mode requires ${expected} or paired ${rangeExpected} bound parameters; ${boundInput.param} is incompatible.`;break;}
         }
       }
       const comparable=value=>p.mode==='numeric'?value:typeof value==='string'?Date.parse(value):NaN;
       const lowerUnknown=object(p.lower)&&!parameters,upperUnknown=object(p.upper)&&!parameters;
-      const lowerValue=lowerUnknown?null:comparable(low),upperValue=upperUnknown?null:comparable(high);
-      if(!warning&&!lowerUnknown&&!upperUnknown&&(!Number.isFinite(lowerValue)||!Number.isFinite(upperValue))) warning=`Between ${p.mode} bounds must be valid ${p.mode==='date'?'dates':'numbers'}; the result is empty.`;
-      if(!warning&&!lowerUnknown&&!upperUnknown&&lowerValue>upperValue) warning='Between lower bound exceeds upper bound; the result is empty.';
+      const lowerOpen=low===null,upperOpen=high===null;
+      const lowerValue=lowerUnknown||lowerOpen?null:comparable(low),upperValue=upperUnknown||upperOpen?null:comparable(high);
+      if(!warning&&!lowerUnknown&&!upperUnknown&&(!lowerOpen&&!Number.isFinite(lowerValue)||!upperOpen&&!Number.isFinite(upperValue))) warning=`Between ${p.mode} bounds must be valid ${p.mode==='date'?'dates':'numbers'}; the result is empty.`;
+      if(!warning&&!lowerUnknown&&!upperUnknown&&!lowerOpen&&!upperOpen&&lowerValue>upperValue) warning='Between lower bound exceeds upper bound; the result is empty.';
       const compare=p.mode==='date'?`TRY_CAST(${q(p.field)} AS TIMESTAMP)`:q(p.field);
-      const predicate=warning?'FALSE':`${valid} AND ${compare} >= ${boundSql(p.lower,p.mode)} AND ${compare} <= ${boundSql(p.upper,p.mode)}`;
+      const comparisons=[!lowerOpen?`${compare} >= ${boundSql(p.lower,p.mode,'from')}`:null,!upperOpen?`${compare} <= ${boundSql(p.upper,p.mode,'to')}`:null].filter(Boolean);
+      const predicate=warning?'FALSE':`${valid}${comparisons.length?` AND ${comparisons.join(' AND ')}`:''}`;
       ctes.push(`${q(stage)} AS (SELECT ${[...columns.map(q),q(ordinal)].join(', ')} FROM ${q(previous)} WHERE ${predicate})`);
     } else if(step.op==='pivot') {
       if(orderNeedsCheck) guards.push({stepId:step.id,sql:withSql(ctes,`SELECT COUNT(*) AS ambiguousOrder FROM (SELECT 1 FROM ${q(previous)} GROUP BY ${order.fields.map(q).join(', ')} HAVING COUNT(*) > 1) AS ambiguous`),reason:'The chosen source order fields do not uniquely order the rows. Add a tie-break field.'});

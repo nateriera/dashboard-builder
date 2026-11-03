@@ -75,7 +75,7 @@ function assertDatasetIdCase(ids) {
 /** Side-effect-free validation/migration. V1 references always remain explicit:
  * the old format cannot distinguish intent, so guessing a follower is unsafe. */
 export function validateLayout(input) {
-  if (!object(input) || input.app !== 'dashboard-builder' || ![1,2,3,4].includes(input.version)) fail('Unsupported layout app or version.');
+  if (!object(input) || input.app !== 'dashboard-builder' || ![1,2,3,4,5].includes(input.version)) fail('Unsupported layout app or version.');
   if (new TextEncoder().encode(JSON.stringify(input)).length > LIMITS.layoutBytes) fail('Layout exceeds the 32 MiB limit.');
   if (!Array.isArray(input.tiles) || input.tiles.length > LIMITS.tiles) fail('Invalid tiles or too many tiles (limit 100).');
   const data = structuredClone(input);
@@ -175,7 +175,33 @@ export function validateLayout(input) {
   const tileIds = new Set(tiles.map(tile => tile.id));
   if (filters.some(filter => filter.scope === 'page' && !pageIds.has(filter.pageId))) fail('Page-scoped filter references a missing page.');
   if (filters.some(filter => filter.targets?.some(target => !tileIds.has(target.tileId)))) fail('Filter connection references a missing tile.');
+  const validateParameterVersion = parameters => {
+    if (!Array.isArray(parameters)) return;
+    for (const parameter of parameters || []) {
+      if (!object(parameter)) continue;
+      const v5Only = !['number','text'].includes(parameter.type) || parameter.type === 'number' && (own(parameter,'step') || own(parameter,'integer'));
+      if (data.version < 5 && v5Only) fail(`Layout v${data.version} cannot use v5-only parameter type ${parameter.type} (${parameter.name}).`);
+    }
+  };
+  validateParameterVersion(data.parameters);
   const parameters = validateParameters(data.parameters);
+  const validateSelectSources = parameterList => {
+    for (const parameter of parameterList) {
+      if (!['single-select','multi-select'].includes(parameter.type)) continue;
+      const { dataset, column } = parameter.source;
+      if (dataset.startsWith('query:')) fail(`Select parameter ${parameter.name} source must be an explicit sample or uploaded dataset, not a query.`);
+      if (defaultDataset.kind === 'dataset' && dataset === defaultDataset.ref) fail(`Select parameter ${parameter.name} cannot use the dashboard default dataset; choose an explicit source.`);
+      let columns;
+      if (own(DATASETS, dataset)) columns = [...new Set(DATASETS[dataset].flatMap(row => Object.keys(row)))];
+      else {
+        const match = /^upload:([a-zA-Z0-9_-]{1,100})$/.exec(dataset);
+        if (!match || !own(datasets, match[1])) fail(`Select parameter ${parameter.name} source must name an explicit sample or uploaded dataset.`);
+        columns = datasets[match[1]].columns;
+      }
+      if (!columns.includes(column)) fail(`Select parameter ${parameter.name} source column ${column} does not exist in ${dataset}.`);
+    }
+  };
+  validateSelectSources(parameters);
   for(const query of Object.values(queries)) if(query.chain) checkedChainFields(query,{parameters});
   const savedViews = data.savedViews === undefined ? [] : data.savedViews;
   if (!Array.isArray(savedViews) || savedViews.length > 50) fail('Invalid saved views.');
@@ -193,9 +219,12 @@ export function validateLayout(input) {
     if(viewFilters.some(filter=>filter.scope==='page'&&!pageIds.has(filter.pageId)))fail('Saved view filter references a missing page.');
     const brokenParameters=view.brokenParameters===undefined?[]:view.brokenParameters;
     if(!Array.isArray(brokenParameters)||brokenParameters.length>100||brokenParameters.some(name=>typeof name!=='string'||!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))||new Set(brokenParameters).size!==brokenParameters.length) fail('Invalid saved view broken parameters.');
-    return { id: view.id, name, theme: viewTheme, currentPageId:viewPage, filters:viewFilters, parameters: validateParameters(view.parameters), ...(brokenParameters.length?{brokenParameters:[...brokenParameters]}:{}) };
+    validateParameterVersion(view.parameters);
+    const viewParameters=validateParameters(view.parameters);
+    validateSelectSources(viewParameters);
+    return { id: view.id, name, theme: viewTheme, currentPageId:viewPage, filters:viewFilters, parameters: viewParameters, ...(brokenParameters.length?{brokenParameters:[...brokenParameters]}:{}) };
   });
-  return { app: 'dashboard-builder', version: 4, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, savedViews: views, pages, currentPageId, tiles, datasets, queries };
+  return { app: 'dashboard-builder', version: 5, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, savedViews: views, pages, currentPageId, tiles, datasets, queries };
 }
 
 export function assertNoCollisions(candidate, getDataset, getQuery, existingDatasetIds = []) {

@@ -30,3 +30,8 @@ test('detached binding state is validated and removed from the active consumer r
   assert.deepEqual(parameterConsumers('growth', [query], []), []);
   assert.throws(() => validateDetachedParameterConsumers([{ kind: 'savedView', name: 'growth' }]), /Invalid detached parameter binding/);
 });
+
+test('range parameters used by both Between bounds are registered as chain consumers', () => {
+  const query={id:'q-range',name:'Range query',sql:'SELECT 1',chain:{source:{sql:'SELECT value FROM fixture'},steps:[{id:'between',op:'between',params:{field:'value',mode:'numeric',lower:{param:'amountRange'},upper:{param:'amountRange'}}}]}};
+  assert.deepEqual(parameterConsumers('amountRange',[query],[]),[{kind:'chain',id:'q-range',label:'Transform chain “Range query”'}]);
+});

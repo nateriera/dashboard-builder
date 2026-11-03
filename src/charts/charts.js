@@ -650,7 +650,6 @@ export const chartStyles = html`<style>
 .chart-data button { margin: 4px 8px; }
 .chart-transform-note { color: var(--slate-600); font-size: 12px; }
 .tile-chart .chart-transform-note { margin: 8px 0; }
-.tile-chart svg a[data-crossfilter-selected="true"] { filter: drop-shadow(0 0 3px var(--periwinkle)); }
 .tile-chart svg a[data-crossfilter-selected="false"],
 .tile-chart svg path[data-crossfilter-selected="false"] { opacity: .38; }
 .tile-chart svg .db-time-brush { fill: rgb(62 92 118 / 14%); stroke: var(--periwinkle); stroke-width: 1.25; pointer-events: none; }
@@ -664,12 +663,12 @@ export const chartStyles = html`<style>
 .db-heatmap-legend { margin: 2px 6% 4px 12%; }
 .db-heatmap-ramp { height: 9px; border-radius: 2px; }
 .db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 11px; margin-top: 3px; }
-:focus-visible { outline: 3px solid var(--periwinkle); outline-offset: 3px; }
+:focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
   .db-card {
     background: var(--white);
     border: 1px solid var(--slate-200);
     border-radius: 10px;
-    box-shadow: var(--card-shadow);
+    box-shadow: var(--shadow-card);
     padding: 24px;
     margin: 0 0 32px 0;
   }
@@ -723,7 +722,7 @@ export const chartStyles = html`<style>
     background: var(--white);
     border: 1px solid var(--slate-200);
     border-radius: 10px;
-    box-shadow: var(--card-shadow);
+    box-shadow: var(--shadow-card);
     padding: 16px;
   }
   .db-kpi-value {

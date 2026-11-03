@@ -643,6 +643,134 @@ function deltaClass(dir, invert) {
 // CSS custom properties, so it follows theme switches without re-rendering.
 // Include once per page.
 export const chartStyles = html`<style>
+@scope (:root[data-theme="paper"], :root:not([data-theme])) {
+.chart-data { margin: 8px 0; overflow: auto; }
+.chart-data table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.chart-data td, .chart-data th { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--slate-200); }
+.chart-data summary { cursor: pointer; }
+.chart-data button { margin: 4px 8px; }
+.chart-transform-note { color: var(--slate-600); font-size: 12px; }
+.tile-chart .chart-transform-note { margin: 8px 0; }
+.tile-chart svg a[data-crossfilter-selected="false"],
+.tile-chart svg path[data-crossfilter-selected="false"] { opacity: .38; }
+.tile-chart svg .db-time-brush { fill: var(--brush-fill); stroke: var(--periwinkle); stroke-width: 1.25; pointer-events: none; }
+.db-data-table { min-width: 0; }
+.db-data-table-scroll { max-width: 100%; max-height: min(60vh, 560px); overflow: auto; }
+.db-data-table-grid { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12px; }
+.db-data-table-grid th, .db-data-table-grid td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--slate-200); white-space: nowrap; }
+.db-data-table-grid th { position: sticky; top: 0; z-index: 1; background: var(--white); color: var(--slate-600); font-weight: 600; }
+.db-data-table-grid td { font-variant-numeric: tabular-nums; }
+svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.55; padding: 10px 4px; }
+.db-heatmap-legend { margin: 2px 6% 4px 12%; }
+.db-heatmap-ramp { height: 9px; border-radius: 6px; }
+.db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 12px; margin-top: 3px; }
+:focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
+  .db-card {
+    background: var(--white);
+    border: 1px solid var(--slate-200);
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+    padding: 24px;
+    margin: 0 0 32px 0;
+  }
+  .db-eyebrow {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--slate-500);
+    margin-bottom: 8px;
+  }
+  .db-chart-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 28px;
+    line-height: 1.25;
+    letter-spacing: 0.08em;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .db-chart-sub {
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--slate-600);
+    margin-bottom: 16px;
+    max-width: 60ch;
+  }
+  .db-chart-source {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--slate-500);
+    margin-top: 16px;
+  }
+  .tile-chart .db-card { padding: 16px; margin: 0; }
+  .tile-chart .db-chart-title { font-size: 19px; line-height: 1.3; }
+  .db-chart-head:empty { display: none; }
+  .db-chart-body { min-width: 0; }
+  .db-chart-body svg { max-width: 100%; }
+  .db-chart-body figure { margin: 0; }
+  .db-fig { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .db-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+    gap: 16px;
+    margin: 0;
+  }
+  .db-kpi {
+    background: var(--white);
+    border: 1px solid var(--slate-200);
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+    padding: 16px;
+  }
+  .db-kpi-value {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 28px;
+    line-height: 1.25;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 4px;
+  }
+  .db-kpi-label {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--slate-500);
+  }
+  .db-kpi-delta { font-family: var(--font-mono); font-size: 14px; margin-top: 8px; }
+  .db-delta-good { color: var(--success); }
+  .db-delta-bad { color: var(--danger); }
+  .db-donut { display: flex; flex-direction: column; align-items: center; }
+  .db-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: center;
+    margin-top: 12px; max-width: 560px;
+  }
+  .db-legend-item {
+    display: inline-flex; align-items: center;
+    font-family: var(--font-body); font-size: 14px; color: var(--slate-600);
+  }
+  .db-legend-item .db-fig { margin-left: 4px; white-space: nowrap; }
+  .db-legend-compact { display: grid; align-self: stretch; gap: 4px; margin-top: 8px; }
+  .db-legend-compact .db-legend-item { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: start; font-size: 12px; line-height: 16px; }
+  .db-legend-compact .db-swatch { margin: 2px 0 0; }
+  .db-legend-compact .db-fig { margin: 0; }
+  .db-legend-label { min-width: 0; }
+  .db-swatch {
+    display: inline-block; width: 12px; height: 12px; border-radius: 6px;
+    margin-right: 8px;
+  }
+  .db-facets { display: grid; gap: 28px 24px; margin-top: 4px; }
+  .db-facet-label {
+    font-family: var(--font-body); font-size: 12px; font-weight: 500;
+    color: var(--slate-600); margin-bottom: 2px;
+  } }
+@scope (:root[data-theme]:not([data-theme="paper"])) {
 .chart-data { margin: 8px 0; overflow: auto; }
 .chart-data table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .chart-data td, .chart-data th { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--slate-200); }
@@ -768,5 +896,5 @@ export const chartStyles = html`<style>
   .db-facet-label {
     font-family: var(--font-body); font-size: 12px; font-weight: 500;
     color: var(--slate-600); margin-bottom: 2px;
-  }
+  } }
 </style>`;

@@ -10,6 +10,8 @@ test('Paper roots agree on canonical tokens', () => {
     '--slate-200':'#E7E3D9', '--slate-300':'#9AA0AE', '--slate-400':'#9AA0AE',
     '--slate-500':'#6E7484', '--slate-600':'#3A4054', '--slate-700':'#3A4054',
     '--success':'#2F7D5B', '--warning':'#B97F26', '--danger':'#C0452F',
+    '--brush-fill':'rgba(183,191,217,.30)',
+    '--scrim':'rgba(14,31,42,.45)',
     '--shadow-card':'0 1px 3px rgba(30,35,71,.08)',
     '--shadow-overlay':'0 8px 24px rgba(30,35,71,.10)',
     '--shadow-focus':'0 0 0 3px rgba(183,191,217,.45)'

@@ -26,6 +26,8 @@ export const THEMES = [
       "--ink": "#1E2347",
       "--dusk": "#4A5278",
       "--periwinkle": "#B7BFD9",
+      "--brush-fill": "rgba(183,191,217,.30)",
+      "--scrim": "rgba(14,31,42,.45)",
       "--slate": "#E7E3D9",
       "--slate-200": "#E7E3D9",
       "--slate-300": "#9AA0AE",
@@ -243,6 +245,7 @@ export function getThemeId() {
 /** Apply a theme's CSS variables to a document (defaults to the page). */
 export function applyTheme(theme, doc) {
   const root = (doc || document).documentElement;
+  root.setAttribute("data-theme", theme.id);
   for (const [prop, value] of Object.entries(theme.css)) {
     root.style.setProperty(prop, value);
   }

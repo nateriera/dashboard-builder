@@ -139,7 +139,8 @@ export async function previewTransformChain(input, parameters = [], { sampleOnly
     const result=await run(step.diagnosticsSql),counts=result.rows[0];
     const provenance=Object.entries(counts).filter(([key])=>key.startsWith('excluded:aggregate:')).map(([key,count])=>({kind:'aggregate',name:key.slice(19),count}));
     if(step.op==='bucket') provenance.push({kind:'invalidDates',count:counts['excluded:invalidDates']});
-    const exclusions=Object.fromEntries(provenance.map(item=>[item.kind==='aggregate'?item.name:'invalidDates',item.count]));
+    if(['between','top','movingAvg','stats'].includes(step.op)) provenance.push({kind:step.op==='movingAvg'?'invalidSamples':'invalidValues',name:step.params.field,count:counts['excluded:invalidValues']});
+    const exclusions=Object.fromEntries(provenance.map(item=>[item.kind==='aggregate'?item.name:item.kind==='invalidDates'?'invalidDates':item.name,item.count]));
     steps.push({...step,rowsIn:counts.rowsIn,rowsOut:counts.rowsOut,exclusions,provenance});
   }
   const errors=[...plan.errors,...steps.filter(step=>step.disabled&&!plan.steps.find(item=>item.id===step.id)?.disabled).map(step=>`${step.id}: ${step.reason}`)];

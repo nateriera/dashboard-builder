@@ -1,4 +1,4 @@
-# Transform chains (GA-1)
+# Transform chains (Gate A)
 
 Open a tile's Data control and choose Transform. Add Group & summarize or Bucket
 dates steps, set their inputs and output names, then Preview transforms. A preview
@@ -26,6 +26,14 @@ Each step has a unique `id`, `op`, and `params`:
 
 - `groupBy`: `groups` and `aggregations`.
 - `bucket`: `dateField`, `grain`, `partitions`, `periodName`, and `aggregations`.
+- `between`: `field`, explicit `mode` (`numeric` or `date`), and inclusive
+  `lower`/`upper` bounds. A bound may be a literal or `{param: 'name'}`.
+- `top`: numeric `field`, integer `n` (literal or parameter reference), and
+  `direction` (`desc` or `asc`; defaults to `desc`).
+- `movingAvg`: numeric `field`, trailing `window` length (literal or parameter
+  reference), and optional `partitions`.
+- `stats`: numeric `field`; the step returns `count`, `min`, `max`, `mean`,
+  `median`, and `stddev` columns in one row.
 
 Each aggregation has `column` (nullable for COUNT), `operation`, and output
 `name`. Operations are SUM, COUNT, AVG, MIN, MAX, and the existing COUNT DISTINCT
@@ -57,6 +65,35 @@ Periods ascend within each partition. SUM/COUNT fill gaps only between that
 partition's valid minimum and maximum periods. AVG/MIN/MAX-only series produce
 no gap rows; with mixed measures, gap rows have null for those measures.
 
+Between does not coerce numeric text. Numeric bounds compare numeric values;
+date bounds parse with DuckDB `TRY_CAST` to timestamps. Missing/invalid field
+values are excluded and counted. Inverted or type-incompatible bounds produce
+an empty step with a visible warning.
+
+Top excludes and counts missing, nonnumeric, NaN, and infinite values. It sorts
+by the selected numeric value and then the incoming ordinal, so ties retain
+their input order. A deterministic incoming order is required; a parameter N
+must resolve to an integer of at least one. There is no chart category limit on
+Top N.
+
+MovingAvg replaces the selected field while preserving every input row and its
+order. Its trailing frame contains only rows already present (plus any explicit
+Bucket gap rows upstream); invalid samples are ignored and counted, the average
+uses only valid samples in the frame, and an all-invalid frame yields null.
+Stats excludes and counts invalid numeric values; an even-sized median averages
+its middle pair. With no valid values, count is zero and all other statistics
+are null.
+
+The existing histogram chart also handles constant data: it draws one bin
+centered on the shared value with width one and labels the range degenerate.
+
+## Bench coverage
+
+Gate A supports the sales, support, and satisfaction-trend bench dashboards
+(benches 1, 2, and 7), plus bench 3's GroupBy alternative. The support bench's
+“slowest teams” ranking uses `Top(desc)` on duration per the B6 correction.
+Between paired-period comparisons that also require Change remain Gate B work.
+
 The existing 10,000-row query budget applies. Bucket checks generated grid size
 before expanding gaps. Chains allow at most 30 steps and 20 groups/aggregations
 per step. Integer SUM stays exact within its integer output range; overflow is
@@ -84,5 +121,6 @@ viewer continues to use materialized rows without SQL execution. Editable
 backups retain the existing 500 KiB per-dataset inline budget and list omissions;
 excluded saved views remain excluded from both parts of the HTML file.
 
-This slice contains only GA-1 GroupBy and Bucket. Other Gate A operations and
-bench construction belong to GA-2; Gate B operations are outside this contract.
+Gate A contains GroupBy, Bucket, Between, Top, MovingAvg, Stats, and the
+all-equal histogram chart fix. Gate B operations—including Cumulative, Change,
+true Pivot, Histogram transform, and ratio helpers—remain outside this contract.

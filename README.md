@@ -29,7 +29,7 @@
 - Named SQL parameters support local what-if analysis with `{{name}}` placeholders
 - Optional per-tile reference lines, with labels, mark targets and thresholds
 - Save and reuse local data-wrangling recipes for grouping and calculated fields
-- Build ordered GroupBy and day/week/month Bucket chains in the Transform tab
+- Build ordered GroupBy, day/week/month Bucket, Between, Top, MovingAvg, and Stats chains in the Transform tab
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
 - 4 themes, 6 starter templates, save/load multi-page dashboards as JSON
 - Export to a single self-contained HTML file — email it or host it anywhere, no server needed

@@ -4,7 +4,7 @@ import { substituteParameters, validateParameters } from './parameters.js';
 import { LIMITS } from './limits.js';
 
 /** Chain v1 is the editable source; SQL returned by compileTransformChain is
- * an unresolved execution artifact. Only groupBy/bucket are GA-1 operations. */
+ * an unresolved execution artifact. */
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = message => { throw new Error(message); };
 const own = (value,key) => Object.hasOwn(value,key);
@@ -30,6 +30,19 @@ function aggregates(input) {
     return {column,operation,name:name(item.name,'output name')};
   });
 }
+function parameterReference(input,label) {
+  if(!object(input)) return null;
+  shape(input,['param'],`${label} reference`);
+  if(typeof input.param!=='string'||!/^[A-Za-z_][A-Za-z0-9_]*$/.test(input.param)) fail(`Invalid ${label} parameter reference.`);
+  return {param:input.param};
+}
+function bound(input,mode,label) {
+  const reference=parameterReference(input,label);
+  if(reference)return reference;
+  if(mode==='numeric'&&typeof input==='number'&&Number.isFinite(input))return input;
+  if(mode==='date'&&typeof input==='string'&&input.length<=1000)return input;
+  fail(`Invalid ${mode} ${label} bound.`);
+}
 function rawParameterNames(sql) {
   const names=[...new Set([...sql.matchAll(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g)].map(match=>match[1]))];
   // Reuse the execution boundary's context/adjacency checks; discard its
@@ -38,7 +51,11 @@ function rawParameterNames(sql) {
   return names;
 }
 export function transformParameterDependencies(chain) {
-  return [...new Set([...rawParameterNames(chain.source.sql || ''),...chain.steps.flatMap(step=>object(step.params.grain)?[step.params.grain.param]:[])])];
+  const operationRefs=chain.steps.flatMap(step=>{
+    const params=step.params||{};
+    return [params.grain,params.lower,params.upper,params.n,params.window].filter(object).map(reference=>reference.param);
+  });
+  return [...new Set([...rawParameterNames(chain.source.sql || ''),...operationRefs])];
 }
 
 export function validateTransformChain(input,{parameters}={}) {
@@ -79,11 +96,35 @@ export function validateTransformChain(input,{parameters}={}) {
       shape(step.params,['dateField','grain','partitions','aggregations','periodName'],'Bucket parameters');
       let grain=step.params.grain || 'day';
       if(object(grain)) {
-        shape(grain,['param'],'grain reference');
-        if(typeof grain.param!=='string'||!/^[A-Za-z_][A-Za-z0-9_]*$/.test(grain.param)) fail('Invalid bucket parameter reference.');
-        grain={param:grain.param};
+        grain=parameterReference(grain,'bucket grain');
       } else if(!['day','week','month'].includes(grain)) fail('Bucket grain must be day, week, or month.');
       return {id:step.id,op:step.op,params:{dateField:name(step.params.dateField),grain,partitions:fields(step.params.partitions||[],'partition fields'),aggregations:aggregates(step.params.aggregations),periodName:name(step.params.periodName||'period','period name')}};
+    }
+    if(step.op==='between') {
+      shape(step.params,['field','mode','lower','upper'],'Between parameters');
+      const mode=step.params.mode||'numeric';
+      if(!['numeric','date'].includes(mode))fail('Between mode must be numeric or date.');
+      return {id:step.id,op:step.op,params:{field:name(step.params.field),mode,lower:bound(step.params.lower,mode,'lower'),upper:bound(step.params.upper,mode,'upper')}};
+    }
+    if(step.op==='top') {
+      shape(step.params,['field','n','direction'],'Top parameters');
+      const n=parameterReference(step.params.n,'Top N')||step.params.n;
+      if(typeof n==='number'&&!Number.isFinite(n))fail('Invalid Top N.');
+      if(typeof n!=='number'&&!object(n))fail('Top N must be a number or parameter reference.');
+      const direction=step.params.direction||'desc';
+      if(!['desc','asc'].includes(direction))fail('Top direction must be desc or asc.');
+      return {id:step.id,op:step.op,params:{field:name(step.params.field),n,direction}};
+    }
+    if(step.op==='movingAvg') {
+      shape(step.params,['field','window','partitions'],'MovingAvg parameters');
+      const window=parameterReference(step.params.window,'MovingAvg window')||step.params.window;
+      if(typeof window!=='number'||!Number.isFinite(window))if(!object(window))fail('MovingAvg window must be a number or parameter reference.');
+      if(typeof window==='number'&&(!Number.isInteger(window)||window<1))fail('MovingAvg window must be an integer of at least 1.');
+      return {id:step.id,op:step.op,params:{field:name(step.params.field),window,partitions:fields(step.params.partitions||[],'partition fields')}};
+    }
+    if(step.op==='stats') {
+      shape(step.params,['field'],'Stats parameters');
+      return {id:step.id,op:step.op,params:{field:name(step.params.field)}};
     }
     fail(`Unsupported transform operation: ${step.op}.`);
   });
@@ -123,8 +164,11 @@ const withSql=(ctes,select)=>`WITH ${ctes.join(',\n')}\n${select}`;
 export function compileTransformChain(input,options={}) {
   const chain=validateTransformChain(input,options);
   const parameterDependencies=transformParameterDependencies(chain);
+  const parameters=options.parameters===undefined?null:validateParameters(options.parameters);
+  const parameterByName=new Map((parameters||[]).map(parameter=>[parameter.name,parameter]));
   let columns=[...chain.source.schema.columns],types={...chain.source.schema.types};
-  const allNames=[...columns,...chain.steps.flatMap(step=>[...(step.params.aggregations||[]).map(agg=>agg.name),step.params.periodName].filter(Boolean))].map(name=>name.toLowerCase());
+  const statColumns=['count','min','max','mean','median','stddev'];
+  const allNames=[...columns,...chain.steps.flatMap(step=>[...(step.params.aggregations||[]).map(agg=>agg.name),step.params.periodName,...(step.op==='stats'?statColumns:[])].filter(Boolean))].map(name=>name.toLowerCase());
   let ordinal='__transform_ordinal';while(allNames.includes(ordinal.toLowerCase()))ordinal+='_';
   let prefix='__transform';while(chain.source.table?.toLowerCase().startsWith(prefix))prefix+='_';
   let ordered=!!chain.source.order,orderNeedsCheck=chain.source.order?.kind==='columns';
@@ -137,30 +181,47 @@ export function compileTransformChain(input,options={}) {
   let previous=sourceName,blocked=false;
   const steps=[],guards=[];
   const output=(name,cols=columns)=>`SELECT ${cols.map(q).join(', ')} FROM ${q(name)} ORDER BY ${q(ordinal)}`;
+  const numericValid=field=>`(${q(field)} IS NOT NULL AND isfinite(${q(field)}))`;
+  const dateValid=field=>`TRY_CAST(${q(field)} AS TIMESTAMP) IS NOT NULL`;
+  const isDate=type=>/DATE|TIMESTAMP|CHAR|STRING|UTF8|UNKNOWN|NULL/i.test(type||'');
+  const boundValue=input=>object(input)?parameterByName.get(input.param)?.value:input;
+  const boundSql=(input,mode)=>{
+    const raw=object(input)?`{{${input.param}}}`:mode==='date'?literal(input):String(input);
+    return mode==='date'?`TRY_CAST(${raw} AS TIMESTAMP)`:raw;
+  };
+  const integerValue=input=>object(input)?parameterByName.get(input.param)?.value:input;
   for(const [index,step] of chain.steps.entries()) {
-    const p=step.params,params=p.aggregations;
-    const inputs=step.op==='groupBy'?[...p.groups,...params.map(agg=>agg.column).filter(Boolean)]:[p.dateField,...p.partitions,...params.map(agg=>agg.column).filter(Boolean)];
+    const p=step.params,params=p.aggregations||[];
+    const inputs=step.op==='groupBy'?[...p.groups,...params.map(agg=>agg.column).filter(Boolean)]:step.op==='bucket'?[p.dateField,...p.partitions,...params.map(agg=>agg.column).filter(Boolean)]:step.op==='stats'?[p.field]:step.op==='movingAvg'?[p.field,...p.partitions]:[p.field];
     const missing=inputs.find(field=>!columns.includes(field));
-    const names=[...(step.op==='groupBy'?p.groups:[...p.partitions,p.periodName]),...params.map(agg=>agg.name)];
+    const names=step.op==='groupBy'?[...p.groups,...params.map(agg=>agg.name)]:step.op==='bucket'?[...p.partitions,p.periodName,...params.map(agg=>agg.name)]:step.op==='stats'?statColumns:[...columns];
     let reason=blocked?'A preceding step is disabled.':missing?`Input column ${missing} is unavailable after the preceding step.`:'';
+    let warning=null;
     if(!reason&&new Set(names.map(name=>name.toLowerCase())).size!==names.length) reason='Transform output column names must be unique.';
-    if(!reason&&step.op==='groupBy'&&p.groups.length&&!ordered) reason='GroupBy needs a deterministic incoming order. Choose source order fields.';
-    if(!reason&&step.op==='bucket'&&!/DATE|TIMESTAMP|CHAR|STRING|UTF8|UNKNOWN|NULL/i.test(types[p.dateField]||'')) reason='Bucket requires a date, timestamp, or date-string column.';
+    const orderSensitive=step.op==='top'||step.op==='movingAvg'||step.op==='groupBy'&&p.groups.length>0;
+    if(!reason&&orderSensitive&&!ordered) reason=`${step.op==='groupBy'?'GroupBy':step.op==='movingAvg'?'MovingAvg':'Top'} needs a deterministic incoming order. Choose source order fields.`;
+    if(!reason&&step.op==='bucket'&&!isDate(types[p.dateField])) reason='Bucket requires a date, timestamp, or date-string column.';
     if(!reason&&step.op==='bucket'&&object(p.grain)&&options.parameters!==undefined) {
-      const parameter=options.parameters.find(parameter=>parameter.name===p.grain.param);
+      const parameter=parameterByName.get(p.grain.param);
       if(parameter?.type!=='text'||!['day','week','month'].includes(parameter.value)) reason=`Bucket parameter ${p.grain.param} must be text with value day, week, or month.`;
+    }
+    if(!reason&&step.op==='between'&&(p.mode==='numeric'?!numeric(types[p.field]):!isDate(types[p.field]))) reason=`Between ${p.mode} mode is incompatible with ${types[p.field]||'unknown'} column ${p.field}.`;
+    if(!reason&&(step.op==='top'||step.op==='movingAvg'||step.op==='stats')&&!numeric(types[p.field])) reason=`${step.op==='top'?'Top':step.op==='movingAvg'?'MovingAvg':'Stats'} requires a numeric column.`;
+    if(!reason&&step.op==='movingAvg'&&object(p.window)) {
+      const parameter=parameterByName.get(p.window.param);
+      if(options.parameters!==undefined&&(parameter?.type!=='number'||!Number.isInteger(parameter.value)||parameter.value<1)) reason=`MovingAvg window ${p.window.param} must be a numeric integer of at least 1.`;
     }
     const inputSql=withSql(ctes,output(previous));
     if(reason) {steps.push({...step,disabled:true,reason,inputSql,sql:null,diagnosticsSql:null,inputColumns:[...columns],columns:[...columns]});blocked=true;continue;}
     const stage=`${prefix}_${index+1}`,inputColumns=[...columns];
     const measures=params.map(agg=>({...agg,...aggregateSql(agg,types)}));
     if(step.op==='groupBy') {
-      if(p.groups.length&&orderNeedsCheck) {
+      if(orderSensitive&&orderNeedsCheck) {
         guards.push({stepId:step.id,sql:withSql(ctes,`SELECT COUNT(*) AS ambiguousOrder FROM (SELECT 1 FROM ${q(previous)} GROUP BY ${order.fields.map(q).join(', ')} HAVING COUNT(*) > 1) AS ambiguous`),reason:'The chosen source order fields do not uniquely order the rows. Add a tie-break field.'});
       }
       const selections=[...p.groups.map(field=>`${blank(field)} AS ${q(field)}`),...measures.map(agg=>`${agg.expression} AS ${q(agg.name)}`),`COALESCE(MIN(${q(ordinal)}), 0) AS ${q(ordinal)}`];
       ctes.push(`${q(stage)} AS (SELECT ${selections.join(', ')} FROM ${q(previous)}${p.groups.length?' GROUP BY '+p.groups.map(q).join(', '):''})`);
-    } else {
+    } else if(step.op==='bucket') {
       const grain=object(p.grain)?`{{${p.grain.param}}}`:literal(p.grain);
       const valid=`${stage}_valid`,actual=`${stage}_actual`,bounds=`${stage}_bounds`,grid=`${stage}_grid`;
       let period='__transform_period';while(allNames.includes(period.toLowerCase())||period===ordinal)period+='_';
@@ -186,13 +247,60 @@ export function compileTransformChain(input,options={}) {
       const outputMeasures=measures.map(agg=>`${fill?(['SUM','COUNT'].includes(agg.operation)?`COALESCE(a.${q(agg.name)}, 0)`:`a.${q(agg.name)}`):q(agg.name)} AS ${q(agg.name)}`);
       const sort=[...p.partitions.map(field=>`${selectPrefix}${q(field)} NULLS FIRST`),periodValue].join(', ');
       ctes.push(`${q(stage)} AS (SELECT ${[...partitions,`${periodText} AS ${q(p.periodName)}`,...outputMeasures,`ROW_NUMBER() OVER (ORDER BY ${sort}) AS ${q(ordinal)}`].join(', ')} FROM ${result})`);
+    } else if(step.op==='between') {
+      const valid=p.mode==='numeric'?numericValid(p.field):dateValid(p.field);
+      const low=boundValue(p.lower),high=boundValue(p.upper);
+      if(parameters) {
+        for(const boundInput of [p.lower,p.upper]) if(object(boundInput)) {
+          const parameter=parameterByName.get(boundInput.param),expected=p.mode==='numeric'?'number':'text';
+          if(parameter?.type!==expected){warning=`Between ${p.mode} mode requires ${expected} bound parameters; ${boundInput.param} is incompatible.`;break;}
+        }
+      }
+      const comparable=value=>p.mode==='numeric'?value:typeof value==='string'?Date.parse(value):NaN;
+      const lowerUnknown=object(p.lower)&&!parameters,upperUnknown=object(p.upper)&&!parameters;
+      const lowerValue=lowerUnknown?null:comparable(low),upperValue=upperUnknown?null:comparable(high);
+      if(!warning&&!lowerUnknown&&!upperUnknown&&(!Number.isFinite(lowerValue)||!Number.isFinite(upperValue))) warning=`Between ${p.mode} bounds must be valid ${p.mode==='date'?'dates':'numbers'}; the result is empty.`;
+      if(!warning&&!lowerUnknown&&!upperUnknown&&lowerValue>upperValue) warning='Between lower bound exceeds upper bound; the result is empty.';
+      const compare=p.mode==='date'?`TRY_CAST(${q(p.field)} AS TIMESTAMP)`:q(p.field);
+      const predicate=warning?'FALSE':`${valid} AND ${compare} >= ${boundSql(p.lower,p.mode)} AND ${compare} <= ${boundSql(p.upper,p.mode)}`;
+      ctes.push(`${q(stage)} AS (SELECT ${[...columns.map(q),q(ordinal)].join(', ')} FROM ${q(previous)} WHERE ${predicate})`);
+    } else if(step.op==='top') {
+      if(orderNeedsCheck) guards.push({stepId:step.id,sql:withSql(ctes,`SELECT COUNT(*) AS ambiguousOrder FROM (SELECT 1 FROM ${q(previous)} GROUP BY ${order.fields.map(q).join(', ')} HAVING COUNT(*) > 1) AS ambiguous`),reason:'The chosen source order fields do not uniquely order the rows. Add a tie-break field.'});
+      const valid=numericValid(p.field),rawN=integerValue(p.n);
+      if(object(p.n)&&parameters) {
+        const parameter=parameterByName.get(p.n.param);
+        if(parameter?.type!=='number')warning=`Top N parameter ${p.n.param} must be numeric; the result is empty.`;
+      }
+      if(!warning&&rawN!==undefined&&(!Number.isInteger(rawN)||rawN<1))warning='Top N must be an integer of at least 1; the result is empty.';
+      const orderBy=`${q(p.field)} ${p.direction.toUpperCase()}, ${q(ordinal)} ASC`;
+      const candidates=warning?`SELECT ${[...columns.map(q),q(ordinal)].join(', ')} FROM ${q(previous)} WHERE FALSE`:`SELECT ${[...columns.map(q),q(ordinal)].join(', ')} FROM ${q(previous)} WHERE ${valid} ORDER BY ${orderBy} LIMIT ${object(p.n)?`{{${p.n.param}}}`:p.n}`;
+      ctes.push(`${q(stage)} AS (SELECT ${columns.map(q).join(', ')}, ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS ${q(ordinal)} FROM (${candidates}) AS top_rows)`);
+    } else if(step.op==='movingAvg') {
+      if(orderNeedsCheck) guards.push({stepId:step.id,sql:withSql(ctes,`SELECT COUNT(*) AS ambiguousOrder FROM (SELECT 1 FROM ${q(previous)} GROUP BY ${order.fields.map(q).join(', ')} HAVING COUNT(*) > 1) AS ambiguous`),reason:'The chosen source order fields do not uniquely order the rows. Add a tie-break field.'});
+      const window=object(p.window)?`{{${p.window.param}}}`:String(p.window);
+      const frame=object(p.window)?`(${window} - 1)`:String(p.window-1);
+      const partition=p.partitions.length?`PARTITION BY ${p.partitions.map(q).join(', ')} `:'';
+      const average=`AVG(CASE WHEN ${numericValid(p.field)} THEN ${q(p.field)} END) OVER (${partition}ORDER BY ${q(ordinal)} ROWS BETWEEN ${frame} PRECEDING AND CURRENT ROW)`;
+      ctes.push(`${q(stage)} AS (SELECT ${columns.map(field=>field===p.field?`${average} AS ${q(field)}`:q(field)).join(', ')}, ${q(ordinal)} FROM ${q(previous)})`);
+    } else if(step.op==='stats') {
+      const valid=numericValid(p.field),value=`CASE WHEN ${valid} THEN CAST(${q(p.field)} AS DOUBLE) END`;
+      const aggregateSql=`COUNT(${value}) AS ${q('count')}, MIN(${value}) AS ${q('min')}, MAX(${value}) AS ${q('max')}, AVG(${value}) AS ${q('mean')}, MEDIAN(${value}) AS ${q('median')}, STDDEV_POP(${value}) AS ${q('stddev')}`;
+      ctes.push(`${q(stage)} AS (SELECT ${aggregateSql}, 0::BIGINT AS ${q(ordinal)} FROM ${q(previous)})`);
     }
     const exclusions=measures.filter(agg=>agg.exclusion).map(agg=>`(SELECT COUNT(*) FROM ${q(step.op==='bucket'?`${stage}_valid`:previous)} WHERE ${agg.exclusion}) AS ${q('excluded:aggregate:'+agg.name)}`);
     if(step.op==='bucket') exclusions.push(`(SELECT COUNT(*) FROM ${q(previous)} WHERE TRY_CAST(${q(p.dateField)} AS TIMESTAMP) IS NULL) AS ${q('excluded:invalidDates')}`);
+    if(['between','top','movingAvg','stats'].includes(step.op)) {
+      const valid=step.op==='between'&&p.mode==='date'?dateValid(p.field):numericValid(p.field);
+      exclusions.push(`(SELECT COUNT(*) FROM ${q(previous)} WHERE NOT (${valid})) AS ${q('excluded:invalidValues')}`);
+    }
     const diagnosticsSql=withSql(ctes,`SELECT (SELECT COUNT(*) FROM ${q(previous)}) AS rowsIn, (SELECT COUNT(*) FROM ${q(stage)}) AS rowsOut${exclusions.length?', '+exclusions.join(', '):''}`);
-    columns=names;types=Object.fromEntries([...names.slice(0,names.length-measures.length).map(field=>[field,'Utf8']),...measures.map(agg=>[agg.name,agg.type])]);
-    steps.push({...step,disabled:false,reason:null,inputSql,sql:withSql(ctes,output(stage)),diagnosticsSql,inputColumns,columns:[...columns],types:{...types}});
-    previous=stage;ordered=true;orderNeedsCheck=false;
+    if(step.op==='groupBy') {columns=names;types=Object.fromEntries([...p.groups.map(field=>[field,'Utf8']),...measures.map(agg=>[agg.name,agg.type])]);ordered=true;orderNeedsCheck=false;}
+    else if(step.op==='bucket') {columns=names;types=Object.fromEntries([...p.partitions.map(field=>[field,'Utf8']),[p.periodName,'Utf8'],...measures.map(agg=>[agg.name,agg.type])]);ordered=true;orderNeedsCheck=false;}
+    else if(step.op==='movingAvg') types={...types,[p.field]:'Float64'};
+    else if(step.op==='stats') {columns=statColumns;types={count:'Int64',min:'Float64',max:'Float64',mean:'Float64',median:'Float64',stddev:'Float64'};ordered=true;orderNeedsCheck=false;}
+    else if(step.op==='top') {ordered=true;orderNeedsCheck=false;}
+    steps.push({...step,disabled:false,reason:null,warning,inputSql,sql:withSql(ctes,output(stage)),diagnosticsSql,inputColumns,columns:[...columns],types:{...types}});
+    previous=stage;
   }
   const errors=steps.filter(step=>step.disabled).map(step=>`${step.id}: ${step.reason}`);
   for(const column of Object.values(chain.outputMapping)) if(!columns.includes(column)) errors.push(`Output mapping column ${column} is unavailable.`);

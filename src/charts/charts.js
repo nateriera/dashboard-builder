@@ -158,16 +158,15 @@ function domainWithReference(values, referenceValue, baseDomain = null, includeZ
   return [lo - padding, hi + padding];
 }
 
-function histogramBinCounts(rows, field, bins) {
+function histogramBins(rows, field, bins) {
   const values = rows.map(row => row[field]).filter(value => typeof value === "number" && Number.isFinite(value));
-  if (!values.length) return [0];
-  const [lo, hi] = numericExtent(values);
+  if (!values.length) return {bins:[],degenerate:false};
+  let lo=values[0],hi=values[0];for(const value of values){lo=Math.min(lo,value);hi=Math.max(hi,value);}
+  if (lo === hi) return {bins:[{x0:lo-.5,x1:lo+.5,count:values.length}],degenerate:true};
   const count = Math.max(1, Math.round(Number(bins) || 1));
-  if (lo === hi) return [values.length];
-  const width = (hi - lo) / count;
-  const counts = Array(count).fill(0);
+  const width = (hi - lo) / count, counts = Array(count).fill(0);
   for (const value of values) counts[Math.min(count - 1, Math.floor((value - lo) / width))]++;
-  return counts;
+  return {bins:counts.map((value,index)=>({x0:lo+index*width,x1:index===count-1?hi:lo+(index+1)*width,count:value})),degenerate:false};
 }
 
 /** Theme-aware reference line and optional label at the value-axis endpoint. */
@@ -389,8 +388,11 @@ export function stackedColumnChart(data, { mode = "stacked", width = 640, height
 }
 
 export function histogramChart(data, { value = "value", bins = 20, width = 640, height, xLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {
-  const counts = histogramBinCounts(data, value, bins);
-  return themedPlot(theme,{width,height,marginLeft:56,x:{label:xLabel??null},y:{label:"Count",grid:true,tickFormat:fmtInt.format.bind(fmtInt),domain:domainWithReference(counts,referenceValue,null,true)},marks:[Plot.rectY(data,Plot.binX({y:"count"},{x:value,thresholds:bins,tip:true})),Plot.ruleY([0],{stroke:theme.chart.border}),...referenceMarks("y",referenceValue,referenceLabel,theme,{x:axisMaximum(data,value),y:Number(referenceValue)})]});
+  const result=histogramBins(data,value,bins),counts=result.bins.map(bin=>bin.count);
+  const plot=themedPlot(theme,{width,height,marginLeft:56,x:{label:xLabel??null},y:{label:"Count",grid:true,tickFormat:fmtInt.format.bind(fmtInt),domain:domainWithReference(counts,referenceValue,null,true)},marks:[Plot.rectY(result.bins,{x1:"x0",x2:"x1",y:"count",tip:true,ariaLabel:d=>`${d.count} values from ${d.x0} to ${d.x1}`}),Plot.ruleY([0],{stroke:theme.chart.border}),...referenceMarks("y",referenceValue,referenceLabel,theme,{x:axisMaximum(data,value),y:Number(referenceValue)})]});
+  const root=document.createElement("div");root.className="db-histogram";root.dataset.binCount=String(result.bins.length);root.dataset.degenerate=String(result.degenerate);root.append(plot);
+  if(result.degenerate){const label=document.createElement("p");label.className="db-histogram-degenerate";label.textContent="Degenerate range — one bin centered on the value (width 1).";root.append(label);}
+  return root;
 }
 
 export function boxplotChart(data, { label = "label", value = "value", width = 640, height, yLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {

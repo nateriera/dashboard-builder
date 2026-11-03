@@ -107,7 +107,13 @@ export function runQueryDetailed(sql) { return coordinator.runDetailed(sql); }
 
 /** Full SQL counts/provenance plus at most five editor sample rows. This
  * shares the serialized execution/revision fence with ordinary SQL queries. */
-export async function previewTransformChain(input, parameters = [], { sampleOnly = true, refreshSchema = true } = {}) {
+const APP_LOCAL_DATE_MARKER="CAST('__DASHBOARD_BUILDER_APP_LOCAL_DATE__' AS DATE)";
+function appLocalDate(now=new Date()) {
+  const year=now.getFullYear(),month=String(now.getMonth()+1).padStart(2,'0'),day=String(now.getDate()).padStart(2,'0');
+  return `${year}-${month}-${day}`;
+}
+
+export async function previewTransformChain(input, parameters = [], { sampleOnly = true, refreshSchema = true, now = new Date() } = {}) {
   let chain=validateTransformChain(input,{parameters});
   const source=chain.source.sql?`(${prepareStatement(chain.source.sql)}) AS source_schema`:'"'+chain.source.table.replaceAll('"','""')+'"';
   const schema=await runQueryDetailed(substituteParameters(`SELECT * FROM ${source} LIMIT 0`,parameters));
@@ -123,7 +129,8 @@ export async function previewTransformChain(input, parameters = [], { sampleOnly
   }
   const plan=compileTransformChain(chain,{parameters});
   const run=async sql=>{
-    const result=await runQueryDetailed(substituteParameters(sql,parameters));
+    const executionSql=sql.replaceAll(APP_LOCAL_DATE_MARKER,`DATE '${appLocalDate(now)}'`);
+    const result=await runQueryDetailed(substituteParameters(executionSql,parameters));
     if(result.revision!==revision||datasetVersion()!==revision) throw new Error('Datasets changed during transform preview. Run again.');
     return result;
   };
@@ -139,8 +146,11 @@ export async function previewTransformChain(input, parameters = [], { sampleOnly
     const result=await run(step.diagnosticsSql),counts=result.rows[0];
     const provenance=Object.entries(counts).filter(([key])=>key.startsWith('excluded:aggregate:')).map(([key,count])=>({kind:'aggregate',name:key.slice(19),count}));
     if(step.op==='bucket') provenance.push({kind:'invalidDates',count:counts['excluded:invalidDates']});
+    if(step.op==='periodPair') provenance.push({kind:'invalidDates',count:counts['excluded:invalidDates']});
+    if(step.op==='cumulative') provenance.push({kind:'cumulativeInvalids',name:step.params.field,count:counts['excluded:invalidValues']});
+    if(step.op==='change') for(const cause of ['previousZero','previousInvalid','currentInvalid']) provenance.push({kind:`change:${cause}`,name:step.params.outputName,count:counts[`excluded:change:${cause}`]});
     if(['between','top','movingAvg','stats'].includes(step.op)) provenance.push({kind:step.op==='movingAvg'?'invalidSamples':'invalidValues',name:step.params.field,count:counts['excluded:invalidValues']});
-    const exclusions=Object.fromEntries(provenance.map(item=>[item.kind==='aggregate'?item.name:item.kind==='invalidDates'?'invalidDates':item.name,item.count]));
+    const exclusions=Object.fromEntries(provenance.map(item=>[item.kind==='aggregate'?item.name:item.kind==='invalidDates'?'invalidDates':item.kind.startsWith('change:')?item.kind:item.name,item.count]));
     steps.push({...step,rowsIn:counts.rowsIn,rowsOut:counts.rowsOut,exclusions,provenance});
   }
   const errors=[...plan.errors,...steps.filter(step=>step.disabled&&!plan.steps.find(item=>item.id===step.id)?.disabled).map(step=>`${step.id}: ${step.reason}`)];

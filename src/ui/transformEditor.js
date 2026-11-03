@@ -48,14 +48,18 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
   }
   function defaults(op,columns,types) {
     const value=columns.find(column=>aggregationOptions(types[column]).includes('SUM'))||null;
+    const date=columns.find(column=>/date|time/i.test(column)||/Date|Timestamp/i.test(types[column]))||columns[0];
     if(op==='groupBy') {
       const group=columns.find(column=>!aggregationOptions(types[column]).includes('SUM'));
       return {groups:group?[group]:[],aggregations:[{column:value,operation:value?'SUM':'COUNT',name:group==='value'?'total':'value'}]};
     }
-    if(op==='bucket')return {dateField:columns.find(column=>/date|time/i.test(column)||/Date|Timestamp/i.test(types[column]))||columns[0],grain:'day',partitions:[],aggregations:[{column:value,operation:value?'SUM':'COUNT',name:'value'}],periodName:'period'};
+    if(op==='bucket')return {dateField:date,grain:'day',partitions:[],aggregations:[{column:value,operation:value?'SUM':'COUNT',name:'value'}],periodName:'period'};
     if(op==='between')return {field:value||columns[0],mode:'numeric',lower:0,upper:100};
     if(op==='top')return {field:value||columns[0],n:5,direction:'desc'};
     if(op==='movingAvg')return {field:value||columns[0],window:7,partitions:[]};
+    if(op==='cumulative')return {field:value||columns[0],partitions:[]};
+    if(op==='change')return {currentField:value||columns[0],previousField:value||columns[0],outputName:'change_pct'};
+    if(op==='periodPair')return {dateField:date,categoryField:null,measureField:value||columns[0],aggregate:value?'SUM':'COUNT',currentWindow:{kind:'relative',days:30},previousWindow:null,outputCurrent:'current',outputPrevious:'previous'};
     return {field:value||columns[0]};
   }
   function numericParameterNames(){return validateParameters(getParameters()).filter(parameter=>parameter.type==='number').map(parameter=>parameter.name);}
@@ -71,6 +75,14 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
     box.append(select(`Step ${index+1} ${label} kind`,[['literal','Literal'],['parameter','Existing parameter']],ref?'parameter':'literal',kind=>mutate(()=>{onChange(kind==='parameter'?{param:available[0]||''}:mode==='numeric'?0:'2026-01-01');})));
     if(ref)box.append(select(`Step ${index+1} ${label} parameter`,available,value.param,next=>mutate(()=>{onChange({param:next});})));
     else box.append(input(`Step ${index+1} ${label}`,value,next=>mutate(()=>{onChange(next);},false),mode==='numeric'?{type:'number',step:'any'}:{}));
+  }
+  function renderPeriodWindow(box,index,label,window,onChange) {
+    box.append(select(`Step ${index+1} ${label} window kind`,[['relative','Relative days'],['range','Date range']],window.kind,kind=>mutate(()=>{onChange(kind==='relative'?{kind,days:30}:{kind,start:'2026-01-01',end:'2026-01-31'});} )));
+    if(window.kind==='relative')renderNumericValue(box,index,`${label} window days`,window.days,value=>{window.days=value;});
+    else {
+      renderBound(box,index,`${label} start date`,window.start,'date',value=>{window.start=value;});
+      renderBound(box,index,`${label} end date`,window.end,'date',value=>{window.end=value;});
+    }
   }
   function renderAggregates(box,step,index,columns) {
     for(const [aggIndex,aggregate] of step.params.aggregations.entries()) {
@@ -94,7 +106,7 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
     for(const [index,step] of chain.steps.entries()) {
       const metadata=plan.steps[index],columns=metadata?.inputColumns||chain.source.schema.columns;
       const box=element('fieldset',undefined,'transform-step');box.append(element('legend',`Step ${index+1}`));
-      box.append(select(`Step ${index+1} operation`,[['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats']],step.op,op=>mutate(()=>{step.op=op;step.params=defaults(op,columns,index?plan.steps[index-1]?.types||plan.types:chain.source.schema.types);})));
+      box.append(select(`Step ${index+1} operation`,[['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats'],['cumulative','Cumulative'],['change','Change'],['periodPair','Paired periods']],step.op,op=>mutate(()=>{step.op=op;step.params=defaults(op,columns,index?plan.steps[index-1]?.types||plan.types:chain.source.schema.types);} )));
       const actions=element('div',undefined,'transform-step-actions');
       for(const [down,label] of [[false,'up'],[true,'down']])actions.append(button(down?'Move down':'Move up',`Move step ${index+1} ${label}`,()=>mutate(()=>{const next=index+(down?1:-1);[chain.steps[index],chain.steps[next]]=[chain.steps[next],chain.steps[index]];}),down?index===chain.steps.length-1:index===0));
       actions.append(button('Remove step',`Remove step ${index+1}`,()=>mutate(()=>{chain.steps.splice(index,1);})));box.append(actions);
@@ -120,6 +132,25 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
         renderNumericValue(box,index,'window',step.params.window,value=>{step.params.window=value;});
         box.append(select(`Step ${index+1} partition columns`,columns,step.params.partitions,fields=>mutate(()=>{step.params.partitions=fields;}),{multiple:true}));
       } else if(step.op==='stats')box.append(select(`Step ${index+1} column`,columns,step.params.field,value=>mutate(()=>{step.params.field=value;})));
+      else if(step.op==='cumulative') {
+        box.append(select(`Step ${index+1} column`,columns,step.params.field,value=>mutate(()=>{step.params.field=value;})));
+        box.append(select(`Step ${index+1} partition columns`,columns,step.params.partitions,fields=>mutate(()=>{step.params.partitions=fields;}),{multiple:true}));
+      } else if(step.op==='change') {
+        const numericColumns=columns.filter(column=>aggregationOptions(metadata?.types?.[column]||plan.types?.[column]).includes('SUM'));
+        box.append(select(`Step ${index+1} current column`,numericColumns,step.params.currentField,value=>mutate(()=>{step.params.currentField=value;})));
+        box.append(select(`Step ${index+1} previous column`,numericColumns,step.params.previousField,value=>mutate(()=>{step.params.previousField=value;})));
+        box.append(input(`Step ${index+1} output name`,step.params.outputName,value=>mutate(()=>{step.params.outputName=value;},false)));
+      } else if(step.op==='periodPair') {
+        box.append(select(`Step ${index+1} date column`,columns,step.params.dateField,value=>mutate(()=>{step.params.dateField=value;})));
+        box.append(select(`Step ${index+1} category column`,columns,step.params.categoryField||'',value=>mutate(()=>{step.params.categoryField=value||null;}),{empty:true}));
+        box.append(select(`Step ${index+1} measure column`,columns,step.params.measureField,value=>mutate(()=>{step.params.measureField=value;})));
+        box.append(select(`Step ${index+1} aggregate`,[['SUM','Sum'],['COUNT','Count rows'],['AVG','Average']],step.params.aggregate,value=>mutate(()=>{step.params.aggregate=value;})));
+        renderPeriodWindow(box,index,'current',step.params.currentWindow,value=>{step.params.currentWindow=value;});
+        box.append(select(`Step ${index+1} previous window`,[['default','Immediately preceding equal-length window'],['explicit','Choose previous window']],step.params.previousWindow?'explicit':'default',value=>mutate(()=>{step.params.previousWindow=value==='default'?null:structuredClone(step.params.currentWindow);} )));
+        if(step.params.previousWindow)renderPeriodWindow(box,index,'previous',step.params.previousWindow,value=>{step.params.previousWindow=value;});
+        box.append(input(`Step ${index+1} current output name`,step.params.outputCurrent,value=>mutate(()=>{step.params.outputCurrent=value;},false)));
+        box.append(input(`Step ${index+1} previous output name`,step.params.outputPrevious,value=>mutate(()=>{step.params.outputPrevious=value;},false)));
+      }
       if(step.op==='groupBy'||step.op==='bucket')renderAggregates(box,step,index,columns);
       const actual=result?.steps.find(item=>item.id===step.id);
       const reason=actual?.reason||metadata?.reason;
@@ -127,11 +158,11 @@ export function createTransformEditor({panel,entry,source,chain:initial,getParam
       const warning=actual?.warning||metadata?.warning;
       if(warning){const node=element('p','Warning: '+warning,'transform-warning data-warning');node.setAttribute('role','alert');box.append(node);}
       if(actual?.rowsIn!=null)box.append(element('p',`${actual.rowsIn.toLocaleString()} rows → ${actual.rowsOut.toLocaleString()} rows`,'transform-count'));
-      for(const count of actual?.provenance||[])box.append(element('p',count.kind==='invalidDates'?`${count.count.toLocaleString()} bad dates dropped`:count.kind==='invalidSamples'?`${count.count.toLocaleString()} invalid/missing samples ignored in ${count.name}`:`${count.count.toLocaleString()} invalid/missing values excluded from ${count.name}`,'transform-provenance'));
+      for(const count of actual?.provenance||[])box.append(element('p',count.kind==='invalidDates'?`${count.count.toLocaleString()} ${step.op==='periodPair'?'bad dates excluded from period windows':'bad dates dropped'}`:count.kind==='cumulativeInvalids'?`${count.count.toLocaleString()} invalid/missing contributions treated as 0 in ${count.name}`:count.kind.startsWith('change:')?`${count.count.toLocaleString()} ${count.kind.slice(7)} Change values render as null`:count.kind==='invalidSamples'?`${count.count.toLocaleString()} invalid/missing samples ignored in ${count.name}`:`${count.count.toLocaleString()} invalid/missing values excluded from ${count.name}`,'transform-provenance'));
       panel.append(box);
     }
     const add=element('div',undefined,'transform-add');
-    const operation=element('select');operation.setAttribute('aria-label','New transform operation');for(const [value,label] of [['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats']]){const option=element('option',label);option.value=value;operation.append(option);}
+    const operation=element('select');operation.setAttribute('aria-label','New transform operation');for(const [value,label] of [['groupBy','Group & summarize'],['bucket','Bucket dates'],['between','Between'],['top','Top'],['movingAvg','Moving average'],['stats','Stats'],['cumulative','Cumulative'],['change','Change'],['periodPair','Paired periods']]){const option=element('option',label);option.value=value;operation.append(option);}
     add.append(operation,button('Add step',null,()=>mutate(()=>{chain.steps.push({id:stepId(),op:operation.value,params:defaults(operation.value,plan.columns,plan.types)});}),chain.steps.length>=30));panel.append(add);
     if(!entry.dynamicFields) {
       const mapping=element('div',undefined,'data-mapping');mapping.append(element('strong','Chart output mapping'));

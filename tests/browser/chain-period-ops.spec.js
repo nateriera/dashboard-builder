@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -128,7 +129,7 @@ test('GB-1 periodPair + Change survives save, reload, HTML export/import, and pa
   expect(payload.layout.queries[seeded.id].sql).toContain('{{limit}}');expect(payload.layout.queries[seeded.id].sql).toContain('{{days}}');
   expect(payload.layout.queries[seeded.id].chain.steps[0].params).toMatchObject({measureField:'amount',currentWindow:{kind:'relative',days:{param:'days'}},previousWindow:null});
 
-  const context=await browser.newContext();
+  const context=await browser.newContext(); await configureImportContext(context);
   try {
     const imported=await context.newPage();await ready(imported);
     await imported.locator('#file-import').setInputFiles({name:'period-export.html',mimeType:'text/html',buffer:Buffer.from(html)});
@@ -150,3 +151,5 @@ test('GB-1 periodPair + Change survives save, reload, HTML export/import, and pa
     expect(record.chain.steps).toEqual(seeded.chain.steps);expect(record.trusted).toBe(true);
   } finally {await context.close();}
 });
+
+acceptImportConfirmation(test);

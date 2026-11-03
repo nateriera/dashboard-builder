@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction, focusHeaderAction } from './header-actions.js';
@@ -45,7 +46,7 @@ test('R2: query JSON carries uploaded inputs into empty storage; HTML works offl
   await reviewImportedQuery(page);
   await expect(page.locator('.tile-chart svg')).toBeVisible(); await expect(page.locator('.tile-chart')).toContainText('30');
   const json=await jsonExport(page); expect(json.datasets.sales.rows).toEqual(upload.rows);
-  const context=await browser.newContext(); const fresh=await context.newPage(); await ready(fresh); await importJSON(fresh,json);
+  const context=await browser.newContext(); await configureImportContext(context); const fresh=await context.newPage(); await ready(fresh); await importJSON(fresh,json);
   await reviewImportedQuery(fresh);
   await expect(fresh.locator('.tile-chart svg')).toBeVisible(); await expect(fresh.locator('.tile-chart')).toContainText('USD');
   const downloaded=fresh.waitForEvent('download'); await fresh.locator('#btn-export-html').click();
@@ -195,3 +196,5 @@ test('R6/R9: worker upload, keyboard save/import/export and cancel remain operab
   await page.locator('.data-popover input[type=file]').setInputFiles({name:'large.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
   await page.getByRole('button',{name:'Cancel upload'}).click(); await expect(page.locator('.data-error').first()).toContainText('cancelled');
 });
+
+acceptImportConfirmation(test);

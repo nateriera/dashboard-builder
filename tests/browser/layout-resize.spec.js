@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -147,9 +148,11 @@ test('legacy geometry, user template and offline HTML preserve row contract', as
   expect(templates.at(-1).rowHeight).toBe(24);
   const dl=page.waitForEvent('download'); await page.locator('#btn-export-html').click();
   const file=await dl, html=await fs.readFile(await file.path(),'utf8');
-  const context=await browser.newContext({offline:true,viewport:{width:1440,height:900}});
+  const context=await browser.newContext({offline:true,viewport:{width:1440,height:900}}); await configureImportContext(context);
   const viewer=await context.newPage(); await viewer.setContent(html); await expect(viewer.locator('.export-tile svg').first()).toBeVisible();
   expect(await viewer.locator('.export-tile').evaluate(e=>e.getBoundingClientRect().height)).toBe(336);
   await viewer.emulateMedia({media:'print'}); await viewer.pdf({path:'docs/diagnostics/layout-resize-2026-10-01/verified-print.pdf'});
   await context.close();
 });
+
+acceptImportConfirmation(test);

@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 
 const fixtureSql=`SELECT i AS sequence,
@@ -177,3 +178,5 @@ test('GA-1 editor: existing parameter picker keeps references raw and a value ch
   expect(saved.sql).toContain('{{grain}}');
   expect(saved.parameterDependencies).toContain('grain');
 });
+
+acceptImportConfirmation(test);

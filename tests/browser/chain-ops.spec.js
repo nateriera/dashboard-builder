@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 
 async function ready(page) {
@@ -294,3 +295,5 @@ test('GA-2 bench #2 support: ticket counts, median resolution, weekly counts, sa
   const chain=await page.evaluate(async()=>Object.values(JSON.parse((await import('/src/data/queries.js')).serializeQueries()).items).map(query=>query.chain).find(value=>value?.steps.some(step=>step.op==='top')));
   expect(chain.steps[1]).toMatchObject({op:'top',params:{field:'duration',direction:'desc'}});
 });
+
+acceptImportConfirmation(test);

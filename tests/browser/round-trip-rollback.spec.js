@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 
 const layoutKey = 'dashboard-builder:layout:v1';
@@ -91,3 +92,5 @@ for (const persisted of [true, false]) {
     expect(after.memory).toEqual(after.durable);
   });
 }
+
+acceptImportConfirmation(test);

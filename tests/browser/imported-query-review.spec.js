@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -147,3 +148,5 @@ test('T1: imported queries stay blocked through page/filter/parameter changes, e
   await page.getByRole('tab',{name:'Detail',exact:true}).click();
   await expectReview(page.locator('.grid-stack-item[gs-id="inactive-query"]'));
 });
+
+acceptImportConfirmation(test);

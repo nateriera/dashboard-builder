@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -34,7 +35,7 @@ test('R1: an app-created treemap parent mapping exports and imports intact in an
   const id = exported.tiles[0].dataset.slice('upload:'.length);
   expect(exported.datasets[id].mapping).toEqual({ label: 'label', value: 'value', parent: 'parent' });
 
-  const context = await browser.newContext();
+  const context = await browser.newContext(); await configureImportContext(context);
   try {
     const fresh = await context.newPage();
     await ready(fresh);
@@ -87,3 +88,5 @@ for (const scenario of removalCases) {
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).filters)).toEqual(scenario.expected);
   });
 }
+
+acceptImportConfirmation(test);

@@ -1599,6 +1599,7 @@ fileInput.addEventListener("change", () => {
     try {
       const data = validateLayout(decodeLayoutFile(file.name,reader.result));
       assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
+      if (!window.confirm("Importing replaces the current dashboard (all pages). A recovery copy of the current state will be kept. Continue?")) { fileInput.value = ""; return; }
       const previous = serializeLayout();
       const queriesBefore = querySnapshot();
       const layoutRaw = localStorage.getItem(STORAGE_KEY);

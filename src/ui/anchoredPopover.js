@@ -28,11 +28,13 @@ export function anchorPopover(popover, anchor) {
   changes.observe(popover, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'class'] });
   window.addEventListener('resize', schedule);
   document.addEventListener('scroll', schedule, true);
+  document.addEventListener('pointermove', schedule, true);
   schedule();
   return () => {
     cancelAnimationFrame(frame);
     resize.disconnect(); changes.disconnect();
     window.removeEventListener('resize', schedule);
     document.removeEventListener('scroll', schedule, true);
+    document.removeEventListener('pointermove', schedule, true);
   };
 }

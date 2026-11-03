@@ -2769,3 +2769,4 @@ body.present .tile-toolbar { display: none; }
 .tile-filter-status[data-state="highlight"] { border-left-color: var(--success); }
 @media (max-width: 480px) { .dashboard-filters-popover { width: min(390px, calc(100vw - 16px)); } .dashboard-parameter { grid-template-columns: 1fr auto; } .dashboard-parameter .parameter-value-label { grid-column: 1 / -1; } }
 }
+body.present #page-tabs { display: none; }

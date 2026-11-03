@@ -41,7 +41,7 @@ function buildSuggestions(profile) {
   return suggestions.slice(0, 3);
 }
 
-function closeGuidedStart() {
+export function closeGuidedStart() {
   if (!activeDialog) return;
   const dialog = activeDialog;
   activeDialog = null;

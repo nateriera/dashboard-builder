@@ -1,4 +1,5 @@
 import { focusDialog } from "./focus.js";
+import { anchorPopover } from "./anchoredPopover.js";
 // Dashboard-wide default dataset popover: pick one CSV (or sample) that all
 // charts follow, instead of binding data tile by tile. Tiles with an explicit
 // per-tile dataset keep it; tiles on the default re-resolve on every render.
@@ -13,12 +14,14 @@ import { profileRows } from "../data/profile.js";
 import { listDatasets } from "../data/store.js";
 
 let releaseFocus = null;
+let releasePosition = null;
 let popEl = null;
 let popAnchor = null;
 
 export function closeDashboardPopover() {
   if (popEl) {
     releaseFocus?.(); releaseFocus = null;
+    releasePosition?.(); releasePosition = null;
     popEl.remove();
     popEl = null;
     popAnchor = null;
@@ -225,18 +228,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, onSelect, 
   pop.append(head, body);
   document.body.appendChild(pop);
 
-  const r = anchor.getBoundingClientRect();
-  const M = 8;
-  requestAnimationFrame(() => {
-    const pw = pop.offsetWidth;
-    const ph = pop.offsetHeight;
-    let left = Math.min(r.left, window.innerWidth - pw - M);
-    let top = r.bottom + 6;
-    if (top + ph > window.innerHeight - M) top = Math.max(M, r.top - ph - 6);
-    pop.style.left = Math.max(M, left) + "px";
-    pop.style.top = top + "px";
-    pop.style.visibility = "visible";
-  });
+  releasePosition = anchorPopover(pop, anchor);
 
   popEl = pop;
   releaseFocus = focusDialog(pop,anchor);

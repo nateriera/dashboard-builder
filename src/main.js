@@ -48,10 +48,11 @@ import { toggleDataPopover, closeDataPopover } from "./ui/dataPopover.js";
 import { paintQueryReview } from "./ui/queryReview.js";
 import { toggleDashboardPopover, closeDashboardPopover } from "./ui/dashboardDataPopover.js";
 import { toggleThemePopover, closeThemePopover } from "./ui/themePopover.js";
-import { openTemplateGallery } from "./ui/templateGallery.js";
-import { openGuidedStart } from "./ui/guidedStart.js";
+import { openTemplateGallery, closeTemplateGallery } from "./ui/templateGallery.js";
+import { openGuidedStart, closeGuidedStart } from "./ui/guidedStart.js";
 import { resolveTileTitle } from "./tiles/titles.js";
-import { toggleFiltersPopover } from "./ui/filtersPopover.js";
+import { toggleFiltersPopover, closeFiltersPopover } from "./ui/filtersPopover.js";
+import { closeWranglingPopover } from "./ui/dataWranglingPopover.js";
 import { chartData } from "./ui/chartData.js";
 import { profileRows } from './data/profile.js';
 import { timeBrushPoints as brushPoints, timeBrushSelection } from './charts/timeMarks.js';
@@ -1723,7 +1724,14 @@ function setPresent(on) {
     closeDataPopover();
     closeDashboardPopover();
     closeThemePopover();
+    closeFiltersPopover();
+    closeWranglingPopover();
+    closeTemplateGallery();
+    closeGuidedStart();
+    gridEl.tabIndex = -1;
+    gridEl.focus({ preventScroll: true });
   } else {
+    btnPresent.focus();
     showFirstRunHint();
   }
   // Charts keep their rendered width; re-render in case chrome changes it.

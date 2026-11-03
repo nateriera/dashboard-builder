@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -118,3 +119,5 @@ for (const collision of ['within file','with resident data']) {
     await expect(page.locator('.tile')).toHaveCount(1);
   });
 }
+
+acceptImportConfirmation(test);

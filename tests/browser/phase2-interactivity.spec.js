@@ -1,3 +1,4 @@
+import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -581,3 +582,5 @@ test('Phase 2 sort then top-N keeps the selected categories and whole stacked gr
   await fs.mkdir('docs/screenshots/phase2', { recursive: true });
   await bar.screenshot({ path: 'docs/screenshots/phase2/sort-top-n.png' });
 });
+
+acceptImportConfirmation(test);

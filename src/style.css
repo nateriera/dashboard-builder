@@ -292,6 +292,7 @@ body.present .first-run-hint { display: none; }
 
 /* ── Tile toolbar ───────────────────────────────────────────────────── */
 .tile-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -303,6 +304,20 @@ body.present .first-run-hint { display: none; }
 }
 
 .tile-toolbar:active { cursor: grabbing; }
+
+.tile-remove-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--paper);
+  cursor: default;
+}
+.tile-remove-confirm .tpl-confirm-q { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 
 .tile-title {
   flex: 1 1 auto;

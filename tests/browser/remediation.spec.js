@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction, focusHeaderAction } from './header-actions.js';
@@ -27,7 +28,7 @@ test('R1/R3/R9: totals, units, explicit binding reload and keyboard dialog focus
   await page.keyboard.press('Shift+Tab');
   expect(await page.evaluate(()=>document.querySelector('.data-popover').contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Escape'); await expect(added.locator('.tile-data-btn')).toBeFocused();
-  await added.locator('.tile-remove').focus(); await page.keyboard.press('Enter'); await expect(page.locator('.tile')).toHaveCount(before);
+  await added.locator('.tile-remove').focus(); await page.keyboard.press('Enter'); await expect(added.getByRole('button',{name:'Cancel',exact:true})).toBeFocused(); await added.getByRole('button',{name:'Remove',exact:true}).click(); await expect(page.locator('.tile')).toHaveCount(before);
   const data=envelope([tile('categorical',{tileOptions:{xLabel:'USD'}})],{revenue:upload});
   data.defaultDataset={kind:'dataset',ref:'upload:revenue'};
   await importJSON(page,data); await expect(page.locator('#status')).toContainText('Imported');
@@ -45,7 +46,7 @@ test('R2: query JSON carries uploaded inputs into empty storage; HTML works offl
   await reviewImportedQuery(page);
   await expect(page.locator('.tile-chart svg')).toBeVisible(); await expect(page.locator('.tile-chart')).toContainText('30');
   const json=await jsonExport(page); expect(json.datasets.sales.rows).toEqual(upload.rows);
-  const context=await browser.newContext(); const fresh=await context.newPage(); await ready(fresh); await importJSON(fresh,json);
+  const context=await browser.newContext(); await configureImportContext(context); const fresh=await context.newPage(); await ready(fresh); await importJSON(fresh,json);
   await reviewImportedQuery(fresh);
   await expect(fresh.locator('.tile-chart svg')).toBeVisible(); await expect(fresh.locator('.tile-chart')).toContainText('USD');
   const downloaded=fresh.waitForEvent('download'); await fresh.locator('#btn-export-html').click();
@@ -195,3 +196,5 @@ test('R6/R9: worker upload, keyboard save/import/export and cancel remain operab
   await page.locator('.data-popover input[type=file]').setInputFiles({name:'large.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
   await page.getByRole('button',{name:'Cancel upload'}).click(); await expect(page.locator('.data-error').first()).toContainText('cancelled');
 });
+
+acceptImportConfirmation(test);

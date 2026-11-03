@@ -310,9 +310,31 @@ function buildTileContent(type, meta) {
   removeBtn.title = "Remove tile";
   removeBtn.setAttribute("aria-label", "Remove tile");
   removeBtn.addEventListener("click", () => {
-    const widgetEl = tile.closest(".grid-stack-item");
-    if (widgetEl) grid.removeWidget(widgetEl);
-    document.querySelector(".palette-item")?.focus();
+    const name = meta.title?.trim() || entry.label || meta.type;
+    const actions = document.createElement("div");
+    actions.className = "tile-remove-confirm";
+    actions.setAttribute("role", "group");
+    actions.setAttribute("aria-label", `Remove tile ${name}?`);
+    const question = document.createElement("span");
+    question.className = "tpl-confirm-q";
+    question.textContent = `Remove tile “${name}”?`;
+    const cancel = document.createElement("button");
+    cancel.type = "button"; cancel.className = "tpl-confirm-no"; cancel.textContent = "Cancel";
+    const confirm = document.createElement("button");
+    confirm.type = "button"; confirm.className = "tpl-confirm-yes"; confirm.textContent = "Remove";
+    const dismiss = () => { actions.remove(); removeBtn.focus(); };
+    cancel.addEventListener("click", dismiss);
+    actions.addEventListener("keydown", event => { if (event.key === "Escape") { event.stopPropagation(); dismiss(); } });
+    confirm.addEventListener("click", () => {
+      const widgetEl = tile.closest(".grid-stack-item");
+      if (widgetEl) grid.removeWidget(widgetEl);
+      document.querySelector(".palette-item")?.focus();
+    });
+    actions.addEventListener("pointerdown", event => event.stopPropagation());
+    actions.addEventListener("mousedown", event => event.stopPropagation());
+    actions.append(question, cancel, confirm);
+    toolbar.append(actions);
+    cancel.focus();
   });
 
   const inspectSelected = document.createElement("button");
@@ -1052,8 +1074,9 @@ function replaceLayout(candidate, { fit = false } = {}) {
 
 // ── Persistence: autosave + explicit save ────────────────────────────────
 let saveTimer = null;
+let protectUnreadableSave = false;
 function scheduleAutosave() {
-  if (bulkLoading) return;
+  if (bulkLoading || protectUnreadableSave) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
@@ -1066,6 +1089,7 @@ function scheduleAutosave() {
 }
 
 function saveNow() {
+  if (protectUnreadableSave) { setStatus("Save blocked to protect the unreadable dashboard."); return; }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
     setStatus("Saved " + new Date().toLocaleTimeString());
@@ -1318,7 +1342,7 @@ function applyDashboardDefault(dd, statusMsg) {
   if (statusMsg) setStatus(statusMsg);
 }
 async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
-  if (grid.save(false).length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
+  if (serializeLayout().tiles.length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
   try {
     const original = getDataset(id);
     const raw = original?.raw || (original ? { columns: original.columns, rows: original.rows } : null);
@@ -1389,31 +1413,36 @@ if (btnData) {
         setStatus(`Dashboard data: ${dashboardDefaultName()}`);
       },
       onUpload: async ({ name, columns, rows, profile }) => {
-        profile ??= profileRows(columns, rows);
-        const { id } = saveDataset({
-          name,
-          columns,
-          rows,
-          fieldKeys: [],
-          mapping: {},
-          raw: { columns, rows }
-        });
-        const persisted = await persistDataset(id);
-        openGuidedStart({
-          id,
-          name,
-          profile,
-          onUseData: () => applyDashboardDefault(
-            { kind: "dataset", ref: `upload:${id}` },
-            persisted
-              ? `Dashboard data: ${name}`
-              : `Dashboard data: ${name} — browser storage unavailable, kept for this session only.`
-          ),
-          onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
-          onKeep: () => setStatus(persisted
-            ? `Upload saved: ${name}. Current dashboard kept.`
-            : `Upload available for this session only: ${name}. Current dashboard kept.`)
-        });
+        try {
+          profile ??= profileRows(columns, rows);
+          const { id } = saveDataset({
+            name,
+            columns,
+            rows,
+            fieldKeys: [],
+            mapping: {},
+            raw: { columns, rows }
+          });
+          const persisted = await persistDataset(id);
+          openGuidedStart({
+            id,
+            name,
+            profile,
+            onUseData: () => applyDashboardDefault(
+              { kind: "dataset", ref: `upload:${id}` },
+              persisted
+                ? `Dashboard data: ${name}`
+                : `Dashboard data: ${name} — browser storage unavailable, kept for this session only.`
+            ),
+            onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
+            onKeep: () => setStatus(persisted
+              ? `Upload saved: ${name}. Current dashboard kept.`
+              : `Upload available for this session only: ${name}. Current dashboard kept.`)
+          });
+        } catch (error) {
+          setStatus(`Dashboard upload failed: ${error.message || error}`);
+          throw error;
+        }
       }
     });
   });
@@ -1599,6 +1628,7 @@ fileInput.addEventListener("change", () => {
     try {
       const data = validateLayout(decodeLayoutFile(file.name,reader.result));
       assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
+      if (!window.confirm("Importing replaces the current dashboard (all pages). A recovery copy of the current state will be kept. Continue?")) { fileInput.value = ""; return; }
       const previous = serializeLayout();
       const queriesBefore = querySnapshot();
       const layoutRaw = localStorage.getItem(STORAGE_KEY);
@@ -1648,16 +1678,11 @@ fileInput.addEventListener("change", () => {
 
 document.getElementById("btn-clear").addEventListener("click", () => {
   if (!grid.save(false).length) return;
-  if (window.confirm("Remove all tiles from the grid?")) {
-    grid.removeAll();
-    tileMeta.clear();
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* storage unavailable; grid is still cleared */
-    }
-    setStatus("Grid cleared");
-  }
+  const name = pages.find(page => page.id === currentPageId)?.name || "current page";
+  if (!window.confirm(`Clear current page “${name}”? This removes its tiles.`)) return;
+  grid.removeAll();
+  tileMeta.clear();
+  saveNow();
 });
 
 // ── Present mode ─────────────────────────────────────────────────────────
@@ -1750,8 +1775,10 @@ function starterLayout() {
   try {loadPersistedQueries();} // validate before any query tile renders
   catch(error) {queryLoadIssue=`Saved queries could not be loaded: ${error.message} Stored data retained; import a valid backup to recover.`;}
   let restored = false;
+  let raw = null;
+  let corruptMessage = "";
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       loadLayout(JSON.parse(raw));
       restored = true;
@@ -1761,11 +1788,38 @@ function starterLayout() {
       );
     }
   } catch {
-    restored = false; // corrupt or unreadable save: fall through to starter
+    restored = false;
+    let retained = false;
+    if (raw !== null) {
+      try {
+        const key = STORAGE_KEY + ":corrupt:" + Date.now() + ":" + Math.random().toString(36).slice(2);
+        localStorage.setItem(key, raw);
+        if (localStorage.getItem(key) !== raw) throw new Error("Recovery verification failed");
+        retained = true;
+      } catch { /* Do not overwrite the only available copy. */ }
+    }
+    protectUnreadableSave = !retained;
+    corruptMessage = retained
+      ? "Your saved dashboard could not be read. A copy was kept; the starter is being shown."
+      : "Your saved dashboard could not be read. Its original is protected; the starter is being shown. Saving is disabled.";
+    const notice = document.createElement("div");
+    notice.dataset.corruptNotice = "";
+    notice.setAttribute("role", "alert");
+    notice.append(document.createTextNode(corruptMessage + " "));
+    if (raw !== null) {
+      const getCopy = document.createElement("button");
+      getCopy.type = "button"; getCopy.textContent = "Download retained copy";
+      getCopy.onclick = () => download("unreadable-dashboard.json", raw);
+      notice.append(getCopy);
+    }
+    const dismiss = document.createElement("button");
+    dismiss.type = "button"; dismiss.textContent = "Dismiss";
+    dismiss.onclick = () => notice.remove();
+    notice.append(dismiss); statusEl.after(notice);
   }
   if (!restored) {
     loadLayout(starterLayout());
-    setStatus("Starter dashboard loaded");
+    setStatus(corruptMessage || "Starter dashboard loaded");
   }
   const issues = storageIssues();
   if (issues.length) {
@@ -1774,6 +1828,6 @@ function starterLayout() {
     retry.onclick = async () => { await loadPersistedDatasets(); setStatus(storageIssues().join("; ") || "Migration verified."); };
     statusEl.after(retry);
   }
-  setStatus(`${queryLoadIssue||statusMessage} · build ${BUILD}`);
+  setStatus(`${[corruptMessage, queryLoadIssue].filter(Boolean).join(" ") || statusMessage} · build ${BUILD}`);
   showFirstRunHint();
 })();

@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 
@@ -88,7 +89,7 @@ for (const kind of ['upload', 'query']) {
       const downloading = page.waitForEvent('download');
       await page.locator('#btn-export-html').click();
       const html = await fs.readFile(await (await downloading).path(), 'utf8');
-      const context = await browser.newContext();
+      const context = await browser.newContext(); await configureImportContext(context);
       try {
         await context.setOffline(true);
         const offline = await context.newPage();
@@ -131,3 +132,5 @@ test('S3: guided chart datasets retain every raw column and source views preserv
   await expectSourceData(tile);
   await expectSelectedSource(tile);
 });
+
+acceptImportConfirmation(test);

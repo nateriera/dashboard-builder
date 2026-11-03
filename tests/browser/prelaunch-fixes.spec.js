@@ -1,3 +1,4 @@
+import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -216,7 +217,7 @@ test('docs #6: JSON backup is editable in the composer and HTML viewer opens off
   const html = await fs.readFile(await htmlFile.path(), 'utf8');
   expect(html).toContain('dashboard-export');
   expect(html).not.toContain('__DASHBOARD_PAYLOAD__');
-  const context = await browser.newContext();
+  const context = await browser.newContext(); await configureImportContext(context);
   const viewer = await context.newPage();
   await viewer.route('**/*', route => route.abort());
   await context.setOffline(true);
@@ -225,3 +226,5 @@ test('docs #6: JSON backup is editable in the composer and HTML viewer opens off
   await viewer.screenshot({ path: 'docs/screenshots/html-sharing-viewer.png' });
   await context.close();
 });
+
+acceptImportConfirmation(test);

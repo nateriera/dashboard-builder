@@ -1,4 +1,4 @@
-import { acceptImportConfirmation } from './accept-import.js';
+import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -584,3 +584,4 @@ test('Phase 2 sort then top-N keeps the selected categories and whole stacked gr
 });
 
 acceptImportConfirmation(test);
+acceptExportSnapshotConfirmation(test);

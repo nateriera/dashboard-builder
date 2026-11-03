@@ -69,6 +69,20 @@ body {
   margin: 4px 0 0;
 }
 
+.export-freeze-notice {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--slate-600);
+}
+.export-freeze-notice p { margin: 0; }
+.export-freeze-notice p + p { margin-top: 6px; }
+.export-frozen-parameters { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 8px 0 0; }
+.export-frozen-parameters dt { font-weight: 600; }
+.export-frozen-parameters dd { margin: 0; font-family: var(--font-mono); }
+
 .export-filters {
   display: flex;
   flex-wrap: wrap;

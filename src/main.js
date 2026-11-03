@@ -56,6 +56,7 @@ import { chartData } from "./ui/chartData.js";
 import { profileRows } from './data/profile.js';
 import { timeBrushPoints as brushPoints, timeBrushSelection } from './charts/timeMarks.js';
 import { partitionExportViews } from './export/savedViews.js';
+import { referencedParameterNames } from './data/parameterSql.js';
 import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows } from './data/dataQuality.js';
 import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
 
@@ -1535,7 +1536,29 @@ async function exportHtml() {
 
     const layout=serializeLayout();
     const exportViews=partitionExportViews(layout.savedViews,layout.parameters);
-    if(exportViews.excluded.length && !window.confirm('These saved views will be excluded from the HTML export because their parameters differ from the materialized values:\n' + exportViews.excluded.map(view=>`- ${view.name}: ${view.reason}`).join('\n') + '\nContinue exporting the matching views?')) {
+    const parameterNames = new Set();
+    for (const savedTile of layout.tiles) {
+      if (!isQueryRef(savedTile.dataset)) continue;
+      const query = getQuery(queryId(savedTile.dataset));
+      if (!query) continue;
+      const names = query.chain
+        ? (query.parameterDependencies || [])
+        : referencedParameterNames(query.sql || '');
+      for (const name of names) parameterNames.add(name);
+    }
+    const frozenParameters = layout.parameters
+      .filter(parameter => parameterNames.has(parameter.name))
+      .map(parameter => ({ name: parameter.name, value: parameter.value }));
+    const viewerViews = exportViews.viewerViews;
+    const exportedAt = new Date().toISOString();
+    const confirmations = [];
+    if (frozenParameters.length) {
+      confirmations.push('This export is a data snapshot. SQL-referencing parameters are frozen at their current values:\n' + frozenParameters.map(parameter => `- ${parameter.name}: ${JSON.stringify(parameter.value)}`).join('\n'));
+    }
+    if (exportViews.excluded.length) {
+      confirmations.push('These saved views will be disabled in the HTML export because their parameters differ from the materialized values:\n' + exportViews.excluded.map(view=>`- ${view.name}: ${view.reason}`).join('\n'));
+    }
+    if (confirmations.length && !window.confirm(confirmations.join('\n\n') + '\n\nContinue exporting?')) {
       setStatus('HTML export cancelled.');
       return;
     }
@@ -1568,18 +1591,19 @@ async function exportHtml() {
       });
     }
 
-    const {backup,skipped}=inlineLayoutBackup({...layout,savedViews:exportViews.included});
+    const {backup,skipped}=inlineLayoutBackup(layout);
     const payload = {
       app: "dashboard-builder",
       version: 4,
     rowHeight: ROW_HEIGHT,
       pages:layout.pages,
       currentPageId:layout.currentPageId,
-      savedViews:exportViews.included,
+      savedViews:viewerViews,
       kind: "dashboard-export",
       layout: backup,
       title: serializeLayout().title || "Dashboard",
-      exportedAt: new Date().toISOString(),
+      exportedAt,
+      frozenParameters,
       theme: getThemeId(),
       filters: filters.map(filter => ({ ...filter, values: [...filter.values], targets: filter.targets?.map(target => ({ ...target })) })),
       tiles

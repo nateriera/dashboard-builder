@@ -95,7 +95,7 @@ test('S7: category multiselect survives deselection, Apply, reopening and editin
   await expect(pop.getByRole('checkbox',{name:'C',exact:true})).toBeChecked();
 });
 
-test('S10: HTML export names parameter-mismatched views before saving, supports cancel and exports truthful matching views', async ({page,browser}) => {
+test('S1-A E1/E2: HTML export discloses frozen parameters, keeps differing views disabled, and preserves every view in the editable backup', async ({page,browser}) => {
   await ready(page);
   const qid=await page.evaluate(async()=> (await import('/src/data/queries.js')).saveQuery({name:'Forecast',sql:"SELECT 'Revenue' AS label, CAST({{growth}} AS DOUBLE) * 10 AS value",columns:['label','value'],fieldKeys:['label','value'],mapping:{label:'label',value:'value'},dependencies:[]}).id);
   const growth=value=>({name:'growth',type:'number',value}),region={name:'region',type:'text',value:'North'};
@@ -108,8 +108,9 @@ test('S10: HTML export names parameter-mismatched views before saving, supports 
   await page.locator('#btn-export-html').click();
   await expect(page.locator('#status')).toContainText('HTML export cancelled');
   expect(downloads).toBe(0);expect(messages).toHaveLength(1);
-  expect(messages[0]).toContain('Old growth 1');expect(messages[0]).toContain('growth');
-  expect(messages[0]).toContain('No region');expect(messages[0]).toContain('region');
+  expect(messages[0]).toContain('SQL-referencing parameters are frozen');expect(messages[0]).toContain('growth: 2');
+  expect(messages[0]).toContain('Old growth 1');expect(messages[0]).toContain('growth (saved 1; exported 2)');
+  expect(messages[0]).toContain('No region');expect(messages[0]).toContain('region (saved not set; exported "North")');
   expect(messages[0]).not.toContain('Matching growth 2');
   const retained=await page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).savedViews.map(view=>view.name));
   expect(retained).toEqual(views.map(view=>view.name));
@@ -117,16 +118,42 @@ test('S10: HTML export names parameter-mismatched views before saving, supports 
   const html=await fs.readFile(await (await downloading).path(),'utf8');
   expect(messages).toHaveLength(2);
   const payload=JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
-  expect(payload.savedViews.map(view=>view.name)).toEqual(['Matching growth 2']);
+  expect(payload.savedViews.map(view=>view.name)).toEqual(views.map(view=>view.name));
+  expect(payload.savedViews.map(view=>view.disabled)).toEqual([true,false,true]);
+  expect(payload.savedViews[0].disabledReason).toContain('growth (saved 1; exported 2)');
+  expect(payload.savedViews[2].disabledReason).toContain('region (saved not set; exported "North")');
+  expect(payload.frozenParameters).toEqual([{name:'growth',value:2}]);
+  const viewValues=list=>list.map(({name,parameters})=>({name,parameters}));
+  expect(viewValues(payload.layout.savedViews)).toEqual(viewValues(views));
+  expect(payload.exportedAt).toBeTruthy();
+  expect(viewValues(await page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).savedViews))).toEqual(viewValues(views));
   expect(payload.tiles[0].rows).toEqual([{label:'Revenue',value:20}]);
   const context=await browser.newContext(); await configureImportContext(context);
   try {
     await context.setOffline(true);const offline=await context.newPage();await offline.setContent(html,{waitUntil:'load'});
-    await offline.getByLabel('Saved dashboard view',{exact:true}).selectOption('matching');
+    await expect(offline.locator('.export-freeze-notice')).toContainText('Data snapshot as of');
+    await expect(offline.locator('.export-freeze-notice')).toContainText('SQL-referencing parameters are frozen');
+    await expect(offline.locator('.export-frozen-parameters')).toContainText('growth');
+    await expect(offline.locator('.export-frozen-parameters')).toContainText('2');
+    const viewSelect=offline.getByLabel('Saved dashboard view',{exact:true});
+    const options= viewSelect.locator('option:not([value=""])');
+    await expect(options).toHaveCount(3);
+    await expect(options.nth(0)).toHaveAttribute('disabled','');
+    await expect(options.nth(0)).toContainText('Disabled');
+    await expect(options.nth(0)).toContainText('growth (saved 1; exported 2)');
+    await expect(options.nth(1)).not.toHaveAttribute('disabled');
+    await expect(options.nth(2)).toHaveAttribute('disabled','');
+    await viewSelect.selectOption('matching');
     await offline.getByRole('button',{name:'Apply view',exact:true}).click();
     await expect(offline.locator('.tile-chart svg')).toContainText('20');
-    expect(await offline.getByLabel('Saved dashboard view',{exact:true}).locator('option:not([value=""])').allTextContents()).toEqual(['Matching growth 2']);
+    await offline.evaluate(()=>{const select=document.querySelector('[aria-label="Saved dashboard view"]');select.value='old';});
+    await offline.getByRole('button',{name:'Apply view',exact:true}).click();
+    await expect(offline.locator('.tile-chart svg')).toContainText('20');
   } finally {await context.close();}
+  await page.locator('#file-import').setInputFiles({name:'honest-export.html',mimeType:'text/html',buffer:Buffer.from(html)});
+  await expect(page.locator('#status')).toContainText('Imported');
+  const restored=await page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).savedViews);
+  expect(viewValues(restored)).toEqual(viewValues(views));
 });
 
 acceptImportConfirmation(test);

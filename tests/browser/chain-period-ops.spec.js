@@ -1,4 +1,4 @@
-import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
+import { acceptExportSnapshotConfirmation, acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
@@ -153,3 +153,4 @@ test('GB-1 periodPair + Change survives save, reload, HTML export/import, and pa
 });
 
 acceptImportConfirmation(test);
+acceptExportSnapshotConfirmation(test);

@@ -1,7 +1,7 @@
 import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 const rowCount = 3001;
 const firstDay = Date.UTC(2020, 0, 1);
@@ -129,7 +129,7 @@ for (const type of ['line', 'area']) {
 
     // Export before brushing so each surface starts from the same full rows.
     const downloading = page.waitForEvent('download');
-    await clickHeaderAction(page, '#btn-export-html');
+    await shareHtml(page);
     const html = await fs.readFile(await (await downloading).path(), 'utf8');
     const selected = await brushVisibleRecords(page, source);
     await expectOriginalRecords(target, selected);

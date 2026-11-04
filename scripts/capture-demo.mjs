@@ -39,7 +39,7 @@ try {
   await page.waitForFunction(()=>!document.querySelector('.data-sql-run')?.disabled,{timeout:60000});
   if(!await apply.isEnabled()) throw Error('SQL Apply not enabled');
   await shot(2200);await apply.click();await page.waitForTimeout(400);await shot(1800);
-  const downloadPromise=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const downloadPromise=page.waitForEvent('download');await page.locator('#btn-export-html').click();await shot(1200);await page.getByRole('dialog',{name:'Share as HTML'}).getByRole('button',{name:'Download dashboard HTML'}).click();
   const download=await downloadPromise;await download.saveAs(`${out}/demo-export.html`);await shot(1800);
   await writeFile(`${out}/capture.json`,JSON.stringify({before,after,query:'SELECT label, value FROM categorical ORDER BY value DESC LIMIT 5',export:download.suggestedFilename(),frames},null,2));
   for(const name of ['Executive overview','Trend deep dive','Geographic snapshot']) {

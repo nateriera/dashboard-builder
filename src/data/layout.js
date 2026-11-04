@@ -7,6 +7,7 @@ import { validateParameters } from './parameters.js';
 import { validateParameterBindings } from './parameterBindings.js';
 import { checkedChainFields } from './queryChain.js';
 import { validateDetachedParameterConsumers } from './parameterConsumers.js';
+import { validateLayoutMeta } from './layoutMeta.js';
 
 const own = (o,k) => Object.hasOwn(o,k);
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -260,7 +261,8 @@ export function validateLayout(input) {
     validateSelectSources(viewParameters);
     return { id: view.id, name, theme: viewTheme, currentPageId:viewPage, filters:viewFilters, parameters: viewParameters, ...(brokenParameters.length?{brokenParameters:[...brokenParameters]}:{}) };
   });
-  return { app: 'dashboard-builder', version: 5, rowHeight: ROW_HEIGHT, theme, defaultDataset, filters, parameters, savedViews: views, pages, currentPageId, tiles, datasets, queries };
+  const meta = validateLayoutMeta(data.meta);
+  return { app: 'dashboard-builder', version: 5, rowHeight: ROW_HEIGHT, ...(meta ? { meta } : {}), theme, defaultDataset, filters, parameters, savedViews: views, pages, currentPageId, tiles, datasets, queries };
 }
 
 export function assertNoCollisions(candidate, getDataset, getQuery, existingDatasetIds = []) {

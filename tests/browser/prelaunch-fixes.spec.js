@@ -1,7 +1,7 @@
 import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 const envelope = (tiles, datasets = {}, queries = {}) => ({
   app: 'dashboard-builder', version: 1, theme: 'paper', tiles, datasets, queries
@@ -207,7 +207,7 @@ test('docs #6: JSON backup is editable in the composer and HTML viewer opens off
   await page.screenshot({ path: 'docs/screenshots/json-backup-composer.png' });
 
   const htmlDownload = page.waitForEvent('download');
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   const htmlFile = await htmlDownload;
   const html = await fs.readFile(await htmlFile.path(), 'utf8');
   expect(html).toContain('dashboard-export');

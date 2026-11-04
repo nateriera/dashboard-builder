@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 async function assertPaperFonts(page) {
   const result = await page.evaluate(async () => {
@@ -38,7 +38,7 @@ test('Paper app and generated export resolve the same bundled fonts and palette'
   expect(fontRequests.filter(url => !url.startsWith(new URL(page.url()).origin))).toEqual([]);
   if (process.env.UX1_BUILT) expect(fontRequests).toEqual([]);
   const downloadPromise = page.waitForEvent('download');
-  await clickHeaderAction(page, '#btn-export-html');
+  await shareHtml(page);
   const download = await downloadPromise;
   const context = await browser.newContext({ offline: true });
   try {
@@ -66,16 +66,20 @@ test('Paper controls show canonical hover, disabled, scrim and tab states', asyn
   expect(states[1]).not.toEqual(states[0]);
 });
 
-test('Paper export tab selection remains distinct from hover', async ({page,browser}) => {
+test('Paper export tabs use canonical tokens: slate hover, dusk outline on the targeted page heading (UX-7 V4)', async ({page,browser}) => {
   await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
-  const pending=page.waitForEvent('download'); await clickHeaderAction(page,'#btn-export-html');
+  const pending=page.waitForEvent('download'); await shareHtml(page);
   const download=await pending; const context=await browser.newContext({offline:true});
   try {
     const viewer=await context.newPage(); await viewer.setContent(await fs.readFile(await download.path(),'utf8'));
-    await viewer.evaluate(() => {const nav=document.createElement('nav'); nav.className='export-page-tabs'; nav.innerHTML='<button>Hover</button><button aria-selected="true">Selected</button>'; document.body.append(nav);});
-    const buttons=viewer.locator('.export-page-tabs button'); await buttons.first().hover();
-    const colors=await buttons.evaluateAll(nodes=>nodes.map(node=>getComputedStyle(node).backgroundColor));
-    expect(colors).toEqual(['rgb(231, 227, 217)','rgb(74, 82, 120)']);
+    await viewer.evaluate(() => {const nav=document.createElement('nav'); nav.className='export-page-tabs'; nav.innerHTML='<a href="#page-x">Hover</a><a href="#page-y">Rest</a>'; const heading=document.createElement('h2'); heading.className='export-page-heading'; heading.id='page-x'; heading.textContent='X'; document.body.append(nav, heading);});
+    const links=viewer.locator('.export-page-tabs a'); await links.first().hover();
+    const colors=await links.evaluateAll(nodes=>nodes.map(node=>getComputedStyle(node).backgroundColor));
+    expect(colors).toEqual(['rgb(231, 227, 217)','rgb(255, 255, 255)']);
+    await links.first().click();
+    await expect(viewer.locator('#page-x')).toHaveCSS('outline-color','rgb(74, 82, 120)');
+    const css=await viewer.evaluate(()=>[...document.querySelectorAll('style')].map(style=>style.textContent).join('\n'));
+    expect(css).not.toMatch(/#d8d2c2|#c9803a/i);
   } finally { await context.close(); }
 });
 
@@ -96,7 +100,7 @@ test('Paper changes do not alter Slate states or brush', async ({page}) => {
 test('Export preserves Slate brush and tab styles', async ({page,browser}) => {
   await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.evaluate(async()=>{(await import('/src/themes/themes.js')).setTheme('slate')});
-  const pending=page.waitForEvent('download'); await clickHeaderAction(page,'#btn-export-html'); const download=await pending;
+  const pending=page.waitForEvent('download'); await shareHtml(page); const download=await pending;
   const context=await browser.newContext({offline:true});
-  try {const viewer=await context.newPage();await viewer.setContent(await fs.readFile(await download.path(),'utf8'));const result=await viewer.evaluate(()=>{const host=document.createElement('div');host.innerHTML='<div class="tile-chart"><svg><rect class="db-time-brush" width="10" height="10"></rect></svg></div><nav class="export-page-tabs"><button aria-selected="true">Tab</button></nav>';document.body.append(host);return {theme:document.documentElement.dataset.theme,brush:getComputedStyle(host.querySelector('.db-time-brush')).fill,tab:getComputedStyle(host.querySelector('button')).backgroundColor};});expect(result).toEqual({theme:'slate',brush:'rgba(62, 92, 118, 0.14)',tab:'rgba(0, 0, 0, 0)'});} finally {await context.close();}
+  try {const viewer=await context.newPage();await viewer.setContent(await fs.readFile(await download.path(),'utf8'));const result=await viewer.evaluate(()=>{const host=document.createElement('div');host.innerHTML='<div class="tile-chart"><svg><rect class="db-time-brush" width="10" height="10"></rect></svg></div><nav class="export-page-tabs"><a href="#page-x">Tab</a></nav>';document.body.append(host);return {theme:document.documentElement.dataset.theme,brush:getComputedStyle(host.querySelector('.db-time-brush')).fill,tab:getComputedStyle(host.querySelector('.export-page-tabs a')).backgroundColor};});expect(result).toEqual({theme:'slate',brush:'rgba(62, 92, 118, 0.14)',tab:'rgba(0, 0, 0, 0)'});} finally {await context.close();}
 });

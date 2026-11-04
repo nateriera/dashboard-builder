@@ -1,7 +1,7 @@
 import { acceptExportSnapshotConfirmation, acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 const layoutKey='dashboard-builder:layout:v1', queryKey='dashbuilder.queries.v1';
 const sourceSql="SELECT 0 AS ordinal, 'West' AS region, CAST({{factor}} AS DOUBLE) AS value UNION ALL SELECT 1, 'West', CAST(4 AS DOUBLE) UNION ALL SELECT 2, 'East', CAST(3 AS DOUBLE)";
@@ -33,7 +33,7 @@ async function seed(page) {
 }
 
 async function exportHtml(page) {
-  const downloading=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const downloading=page.waitForEvent('download');await shareHtml(page);
   return fs.readFile(await(await downloading).path(),'utf8');
 }
 function payloadOf(html) {

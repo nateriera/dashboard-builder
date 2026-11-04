@@ -1,7 +1,7 @@
 import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');
@@ -71,7 +71,7 @@ for (const format of ['html','json']) {
     await page.locator('#file-import').setInputFiles({name:'nonfinite.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(layout))});
     await expect(page.locator('#status')).toContainText('Imported');
     const downloading = page.waitForEvent('download');
-    await clickHeaderAction(page, format === 'html' ? '#btn-export-html' : '#btn-export');
+    if (format === 'html') await shareHtml(page); else await clickHeaderAction(page, '#btn-export');
     const text = await fs.readFile(await (await downloading).path(), 'utf8');
     const data = format === 'json' ? JSON.parse(text) : JSON.parse(text.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
     const rows = format === 'json' ? data.datasets[id].rows : data.tiles[0].rows;

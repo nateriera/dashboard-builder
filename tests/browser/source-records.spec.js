@@ -1,6 +1,7 @@
 import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { shareHtml } from './header-actions.js';
 
 const sourceRows = [
   { label:'Original A',region:'Mapped A',value:'12',extra:'Keep A' },
@@ -87,7 +88,7 @@ for (const kind of ['upload', 'query']) {
 
     if (kind === 'query') {
       const downloading = page.waitForEvent('download');
-      await page.locator('#btn-export-html').click();
+      await shareHtml(page);
       const html = await fs.readFile(await (await downloading).path(), 'utf8');
       const context = await browser.newContext(); await configureImportContext(context);
       try {

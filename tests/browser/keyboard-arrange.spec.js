@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { shareHtml } from './header-actions.js';
 
 const layoutKey = 'dashboard-builder:layout:v1';
 
@@ -148,7 +149,7 @@ test('a minimum-size 1×1 tile persists explicit dimensions through reload', asy
   await expect.poll(async () => geometry(page.locator('.grid-stack-item'))).toMatchObject({ w: 1, h: 1 });
 });
 
-test('a Down move persists its open-space gap in the exported viewer', async ({ page }) => {
+test('a Down move persists in the export payload while the viewer packs rows at content height (UX-7 V5)', async ({ page }) => {
   await ready(page);
   const tile = page.locator('.grid-stack-item');
   const button = tile.getByRole('button', { name: /Move and resize/ });
@@ -160,21 +161,23 @@ test('a Down move persists its open-space gap in the exported viewer', async ({ 
   await expect.poll(async () => (await persisted(page, tile))?.y).toBe(initial.y + 1);
   const id = await tile.getAttribute('gs-id');
   const downloading = page.waitForEvent('download');
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   const download = await downloading;
   const html = await fs.readFile(await download.path(), 'utf8');
+  const payload = JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+  expect(payload.tiles.find(item => item.id === id).y).toBe(initial.y + 1);
   const viewer = await page.context().newPage();
   await viewer.setContent(html);
   const exportedTile = viewer.locator(`.export-tile[data-tile-id="${id}"]`);
   await expect(exportedTile).toBeVisible();
-  expect(await exportedTile.evaluate(el => getComputedStyle(el).gridRowStart)).toBe(String(initial.y + 2));
-  const viewerGrid = viewer.locator('.export-grid:not([hidden])');
+  // The editor's open-space gap does not become empty rows in the export.
+  expect(await exportedTile.evaluate(el => getComputedStyle(el).gridRowStart)).toBe('1');
+  const viewerGrid = viewer.locator('.export-grid');
   const [gridTop, tileTop] = await Promise.all([
     viewerGrid.evaluate(el => el.getBoundingClientRect().top),
     exportedTile.evaluate(el => el.getBoundingClientRect().top)
   ]);
-  const saved = await persisted(page, tile);
-  expect(tileTop - gridTop).toBe(saved.y * 24 + 12);
+  expect(tileTop - gridTop).toBe(12);
   await viewer.close();
 });
 

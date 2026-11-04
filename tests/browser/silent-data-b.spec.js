@@ -1,7 +1,7 @@
 import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');
@@ -27,7 +27,7 @@ test('S6: donut Other selects its folded original records in the composer and of
   const raw = {columns:['label','region','value','record'],rows:rows.map(row=>({label:`Original ${row.label}`,region:row.label,value:String(row.value),record:`ID-${row.label}`}))};
   const layout = {app:'dashboard-builder',version:1,tiles:[tile('donut','donut','upload:folded'),tile('target','bar','upload:folded',6)],datasets:{folded:{name:'Folded',columns:raw.columns,fieldKeys:['label','value'],mapping:{label:'region',value:'value'},rows,raw}}};
   await importLayout(page,layout);
-  const downloading = page.waitForEvent('download'); await page.locator('#btn-export-html').click();
+  const downloading = page.waitForEvent('download'); await shareHtml(page);
   const html = await fs.readFile(await (await downloading).path(),'utf8');
   const context = await browser.newContext(); await configureImportContext(context);
   try {
@@ -105,7 +105,7 @@ test('S1-A E1/E2: HTML export discloses frozen parameters, keeps differing views
   let accept=false,downloads=0;const messages=[];
   page.on('download',()=>downloads++);
   page.on('dialog',async dialog=>{messages.push(dialog.message());if(accept)await dialog.accept();else await dialog.dismiss();});
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   await expect(page.locator('#status')).toContainText('HTML export cancelled');
   expect(downloads).toBe(0);expect(messages).toHaveLength(1);
   expect(messages[0]).toContain('SQL-referencing parameters are frozen');expect(messages[0]).toContain('growth: 2');
@@ -114,7 +114,7 @@ test('S1-A E1/E2: HTML export discloses frozen parameters, keeps differing views
   expect(messages[0]).not.toContain('Matching growth 2');
   const retained=await page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).savedViews.map(view=>view.name));
   expect(retained).toEqual(views.map(view=>view.name));
-  accept=true;const downloading=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  accept=true;const downloading=page.waitForEvent('download');await shareHtml(page);
   const html=await fs.readFile(await (await downloading).path(),'utf8');
   expect(messages).toHaveLength(2);
   const payload=JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);

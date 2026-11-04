@@ -1,7 +1,7 @@
 import { acceptExportSnapshotConfirmation, acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
@@ -122,7 +122,7 @@ test('GB-1 periodPair + Change survives save, reload, HTML export/import, and pa
   await expect(firstTile.locator('.db-data-table')).toContainText('10');
   await clickHeaderAction(page,'#btn-save');await page.reload();await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await expect(page.locator('.db-data-table tbody tr')).toHaveCount(2,{timeout:90000});
-  const downloadEvent=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const downloadEvent=page.waitForEvent('download');await shareHtml(page);
   const html=await fs.readFile(await(await downloadEvent).path(),'utf8');
   const payload=JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
   expect(payload.layout.queries[seeded.id].chain).toEqual(seeded.chain);

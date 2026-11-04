@@ -1,7 +1,7 @@
 import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 const tile = (id, type, dataset, y, tileOptions = {}) => ({
   id, type, title: id.replace(/(^|-)([a-z])/g, (_, separator, letter) => `${separator ? ' ' : ''}${letter.toUpperCase()}`), source: 'Bundled sample data', dataset,
@@ -85,7 +85,7 @@ test('Phase 2 filters apply by source field, persist, export resolved rows, and 
   await page.locator('#btn-filters').click();
 
   const htmlDownload = page.waitForEvent('download');
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   const htmlFile = await htmlDownload;
   const htmlText = await fs.readFile(await htmlFile.path(), 'utf8');
   const payload = exportPayload(htmlText);
@@ -145,7 +145,7 @@ test('Desktop parity: saved views capture and restore filters across reloads', a
   await page.locator('#saved-view-picker').selectOption({ label: 'Housing view' });
   await page.locator('#btn-apply-view').click();
   await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(1 rows)');
-  const htmlDownload=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const htmlDownload=page.waitForEvent('download');await shareHtml(page);
   const htmlFile=await htmlDownload, html=await fs.readFile(await htmlFile.path(),'utf8'), payload=exportPayload(html);
   expect(payload.savedViews.map(view=>view.name)).toEqual(['All cases','Housing view']);
   const offline=await page.context().newPage();await offline.setContent(html);
@@ -194,17 +194,25 @@ test('Desktop parity: pages retain separate tile layouts and page-scoped filters
   expect(backup.tiles.map(item => item.pageId)).toEqual([backup.pages[0].id, backup.pages[1].id]);
 
   const htmlDownload = page.waitForEvent('download');
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   const htmlFile = await htmlDownload;
   const htmlPayload=exportPayload(await fs.readFile(await htmlFile.path(),'utf8'));
   expect(htmlPayload.version).toBe(5);
   expect(htmlPayload.layout.version).toBe(5);
   const exported = await context.newPage();
   await exported.setContent(await fs.readFile(await htmlFile.path(), 'utf8'));
-  await expect(exported.locator('.export-page-tabs')).toBeVisible();
-  await expect(exported.locator('.export-grid:visible .export-tile')).toHaveCount(1);
-  await exported.getByRole('tab', { name: 'Page 1' }).click();
-  await expect(exported.locator('.export-grid:visible .export-tile')).toHaveCount(1);
+  // UX-7 V4: every page renders in one document; navigation is anchors, nothing is hidden.
+  await expect(exported.locator('.export-page-tabs a')).toHaveText(['Page 1', 'Detail']);
+  await expect(exported.locator('.export-page')).toHaveCount(2);
+  await expect(exported.locator('.export-grid:visible .export-tile')).toHaveCount(2);
+  const [overview, detail] = [exported.locator('.export-page').nth(0), exported.locator('.export-page').nth(1)];
+  await expect(overview.locator('.chart-data summary')).toContainText('(8 rows)');
+  await expect(detail.locator('.chart-data summary')).toContainText('(1 rows)');
+  // The page-scoped filter appears only in its page's group.
+  await expect(overview.locator('.export-filters')).toHaveCount(0);
+  await expect(detail.locator('.export-filters').getByLabel('label values')).toBeVisible();
+  await exported.locator('.export-page-tabs a', { hasText: 'Detail' }).click();
+  await expect(detail.locator('h2.export-page-heading')).toHaveCSS('outline-style', 'solid');
 });
 
 test('Desktop parity: configured mark destinations navigate with the selected value in editor and offline viewer', async ({ page, context }) => {
@@ -221,16 +229,18 @@ test('Desktop parity: configured mark destinations navigate with the selected va
   await page.locator('.grid-stack-item[gs-id="source-page-chart"] .tile-chart svg [aria-label^="Category: "]').first().click();
   await expect(page.locator('.grid-stack-item[gs-id="detail-page-chart"] .chart-data summary')).toContainText('(8 rows)');
 
-  const htmlDownload=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const htmlDownload=page.waitForEvent('download');await shareHtml(page);
   const file=await htmlDownload, exported=await context.newPage(), html=await fs.readFile(await file.path(),'utf8');
   const payload=exportPayload(html);expect(payload.tiles.find(item=>item.id==='detail-page-chart').rows[0]).toHaveProperty('label');
   await exported.setContent(html);
   await expect(exported.locator('.export-page-tabs')).toBeVisible();
-  await exported.getByRole('tab',{name:'Overview'}).click();
-  await exported.locator('.export-grid:visible .export-tile svg [aria-label^="Category: "]').first().click();
-  await expect(exported.locator('.export-page-tabs button[aria-selected="true"]')).toHaveText('Detail');
-  await expect(exported.locator('.export-crossfilter-chip')).toHaveCount(1);
-  await expect(exported.locator('.export-grid:visible .chart-data summary')).toContainText('(1 rows)');
+  await exported.locator('.export-tile[data-tile-id="source-page-chart"] svg [aria-label^="Category: "]').first().click();
+  // UX-7 V4: the destination is reached by its page anchor; no tab state, no hidden pages.
+  await expect.poll(()=>exported.evaluate(()=>location.hash)).toBe('#page-detail');
+  await expect(exported.locator('#page-detail')).toHaveCSS('outline-style','solid');
+  // One shared selection, shown on the source page and the page it filters.
+  await expect(exported.locator('.export-crossfilter-chip')).toHaveCount(2);
+  await expect(exported.locator('.export-tile[data-tile-id="detail-page-chart"] .chart-data summary')).toContainText('(1 rows)');
 });
 
 test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and toggle off', async ({ page }) => {
@@ -336,7 +346,7 @@ test('Desktop parity: explicit field mapping highlights differently named chart 
   await expect(target.locator('.tile-chart svg a[data-crossfilter-selected="true"]')).toHaveCount(1);
   await expect(target.locator('.tile-chart svg a[data-crossfilter-selected="false"]')).toHaveCount(1);
   await source.locator('.tile-chart svg [aria-label^="Category: Housing"]').click();
-  const download=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const download=page.waitForEvent('download');await shareHtml(page);
   const html=await fs.readFile(await (await download).path(),'utf8');
   const offline=await page.context().newPage();
   await offline.route('**/mapped-fields.html',route=>route.fulfill({status:200,contentType:'text/html',body:html}));
@@ -441,7 +451,7 @@ test('Desktop parity: offline viewer supports time-series brushing and reset', a
   await ready(page);
   await importJSON(page,envelope([tile('offline-brush-source','line','timeseries',0),tile('offline-brush-target','line','timeseries',16)]));
   const download=page.waitForEvent('download');
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   const html=await fs.readFile(await (await download).path(),'utf8');
   const offline=await page.context().newPage();
   await offline.route('**/offline-brush.html',route=>route.fulfill({status:200,contentType:'text/html',body:html}));
@@ -455,7 +465,7 @@ test('Desktop parity: offline viewer supports time-series brushing and reset', a
   await expect(target.locator('.chart-data summary')).not.toContainText('(0 rows)');
   await expect(source.locator('.tile-chart svg[viewBox] .db-time-brush')).toHaveCount(1);
   await expect(offline.locator('.export-crossfilter-chip')).toContainText('Offline Brush Source: date');
-  await offline.getByRole('button',{name:'Reset filters'}).click();
+  await offline.getByRole('button',{name:'Restore exported filters'}).click();
   await expect(target.locator('.chart-data summary')).toContainText('(24 rows)');
   await expect(source.locator('.tile-chart svg[viewBox] .db-time-brush')).toHaveCount(0);
   await expect(offline.locator('.export-crossfilter-chip')).toHaveCount(0);
@@ -533,7 +543,7 @@ test('Phase 2 SQL parameters define, substitute, re-run, export, and report miss
   ]);
 
   const htmlDownload = page.waitForEvent('download');
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   const htmlFile = await htmlDownload;
   const payload = exportPayload(await fs.readFile(await htmlFile.path(), 'utf8'));
   expect(payload.tiles.find(item => item.title === 'Parameterized Chart').rows).toEqual([{ label: "O'Brien", value: 25680 }]);

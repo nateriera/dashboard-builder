@@ -1,7 +1,7 @@
 import { acceptImportConfirmation } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 const datasets={
   table:'categorical',stackedBar:'stacked',stackedColumn:'stacked',histogram:'scatter',
@@ -82,7 +82,7 @@ test('Phase 1 tiles bind samples, save annotations, export offline, and capture 
     await page.locator('.grid-stack-item[gs-id="table"]').screenshot({path:`docs/screenshots/phase1/table-theme-${i+1}.png`});
   }
 
-  const htmlDownload=page.waitForEvent('download');await page.locator('#btn-export-html').click();
+  const htmlDownload=page.waitForEvent('download');await shareHtml(page);
   const htmlFile=await htmlDownload,html=await fs.readFile(await htmlFile.path(),'utf8');
   expect(html).not.toContain('__DASHBOARD_PAYLOAD__');
   const exported=await page.context().newPage();

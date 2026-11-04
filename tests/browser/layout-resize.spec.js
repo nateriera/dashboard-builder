@@ -1,7 +1,7 @@
 import { acceptImportConfirmation, configureImportContext } from './accept-import.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 const key = 'dashboard-builder:layout:v1';
 async function ready(page) {
@@ -147,11 +147,13 @@ test('legacy geometry, user template and offline HTML preserve row contract', as
   },current.tiles);
   expect(templates.at(-1).tiles[0].h).toBe(15);
   expect(templates.at(-1).rowHeight).toBe(24);
-  const dl=page.waitForEvent('download'); await page.locator('#btn-export-html').click();
+  const dl=page.waitForEvent('download'); await shareHtml(page);
   const file=await dl, html=await fs.readFile(await file.path(),'utf8');
   const context=await browser.newContext({offline:true,viewport:{width:1440,height:900}}); await configureImportContext(context);
   const viewer=await context.newPage(); await viewer.setContent(html); await expect(viewer.locator('.export-tile svg').first()).toBeVisible();
-  expect(await viewer.locator('.export-tile').evaluate(e=>e.getBoundingClientRect().height)).toBe(336);
+  // UX-7 V5: the editor's fixed tile height (15 rows = 336px) does not carry into the export; the card is content height.
+  const exported=await viewer.locator('.export-tile').evaluate(e=>({tile:e.getBoundingClientRect().height,card:e.querySelector('.export-card').getBoundingClientRect().height,gridRow:getComputedStyle(e).gridRowEnd}));
+  expect(exported.tile).toBe(exported.card); expect(exported.tile).not.toBe(336); expect(exported.gridRow).toBe('2');
   await viewer.emulateMedia({media:'print'}); await viewer.pdf({path:'docs/diagnostics/layout-resize-2026-10-01/verified-print.pdf'});
   await context.close();
 });

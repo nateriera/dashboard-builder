@@ -64,6 +64,8 @@ import { blankingNotice, droppedCount, withDroppedCount, materializeExportRows }
 import { retainSourceRows, sourceRowsFor } from './data/rowProvenance.js';
 import { anchorPopover } from './ui/anchoredPopover.js';
 import { focusDialog } from './ui/focus.js';
+import { openShareModal } from './ui/shareModal.js';
+import { exportMetaFacts } from './data/layoutMeta.js';
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -326,6 +328,7 @@ let dashboardDefault = { kind: "samples" };
 let filters = [];
 let parameters = [];
 let savedViews = [];
+let dashboardMeta; // UX-7 D1: optional {title, preparedBy, dataPeriod}, collected at share time
 let pages = [{ id:'page-1', name:'Page 1' }];
 let currentPageId = 'page-1';
 let pageTileCache = new Map([['page-1', []]]);
@@ -1258,6 +1261,7 @@ function serializeLayout() {
     version: 5,
     rowHeight: ROW_HEIGHT,
     savedAt: new Date().toISOString(),
+    ...(dashboardMeta ? { meta: { ...dashboardMeta } } : {}),
     defaultDataset: dashboardDefault,
     filters,
     parameters,
@@ -1284,6 +1288,7 @@ function loadLayout(data, { fit = false } = {}) {
     filters = data.filters || [];
     parameters = data.parameters || [];
     savedViews = data.savedViews || [];
+    dashboardMeta = data.meta ? { ...data.meta } : undefined;
     refreshSavedViews();
     refreshDashboardButton();
     if (data.theme) {
@@ -2052,8 +2057,10 @@ async function exportHtml() {
       savedViews:viewerViews,
       kind: "dashboard-export",
       layout: backup,
-      title: serializeLayout().title || "Dashboard",
+      ...(layout.meta ? { meta: { ...layout.meta } } : {}),
+      title: exportMetaFacts(layout.meta).title,
       exportedAt,
+      exportedAtOffset: -new Date(exportedAt).getTimezoneOffset(),
       frozenParameters,
       parameters: structuredClone(layout.parameters),
       theme: getThemeId(),
@@ -2086,7 +2093,19 @@ async function exportHtml() {
   }
 }
 
-document.getElementById("btn-export-html").addEventListener("click", exportHtml);
+// UX-7 V1: Share as HTML first collects the title block metadata. The values
+// persist with the layout (D1) and prefill the modal next time; the existing
+// export confirmations stay inside exportHtml, after Download.
+document.getElementById("btn-export-html").addEventListener("click", event => {
+  openShareModal({
+    meta: dashboardMeta,
+    trigger: event.currentTarget,
+    onDownload: meta => {
+      if (JSON.stringify(meta) !== JSON.stringify(dashboardMeta)) { dashboardMeta = meta; scheduleAutosave(); }
+      exportHtml();
+    }
+  });
+});
 
 const fileInput = document.getElementById("file-import");
 document.getElementById("btn-import").addEventListener("click", () => fileInput.click());

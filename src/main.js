@@ -120,6 +120,9 @@ const grid = GridStack.init(
     animate: false,
     float: true,
     margin: 12,
+    // Accept drops from the palette (GridStack's default is false, and
+    // `true` only matches .grid-stack-item, which palette cards are not).
+    acceptWidgets: ".palette-item",
     // Drag tiles by their toolbar so chart tooltips/legends stay clickable.
     draggable: { handle: ".tile-toolbar" },
     alwaysShowResizeHandle: true,

@@ -39,7 +39,7 @@ to 500 KiB; larger or missing dependencies are listed before download. If you
 continue with an omitted dependency, the JSON retains the broken reference and
 records it in `omittedDependencies`.
 
-**Export HTML** materializes the chart rows in a standalone viewer. The viewer
+**Share as HTML** materializes the chart rows in a standalone viewer. The viewer
 can be opened offline, but it is for viewing; use the composer to edit the
 dashboard. See [JSON backup vs HTML sharing](json-backup-html-sharing.md) for
 the differences.

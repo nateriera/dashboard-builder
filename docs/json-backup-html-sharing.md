@@ -1,12 +1,14 @@
 # JSON backup or HTML sharing?
 
 Both exports use the current dashboard and bundled sample data. The screenshots
-below were captured from the built-in starter dashboard.
+below were captured from the built-in starter dashboard. **Share as HTML** is in
+the header; **Export JSON** and **Import JSON / HTML** are in the **More actions**
+menu.
 
 | Export | Use it for | What it contains |
 | --- | --- | --- |
 | **Export JSON** | An editable backup to import into Dashboard Builder | Layout, bindings, options, saved SQL, and eligible uploaded inputs. Each upload has a 500 KiB inline budget. |
-| **Export HTML** | Sharing a finished dashboard as a viewer, with an embedded editable backup | A single HTML file with materialized tile rows, theme, options, and a layout backup. The viewer opens without the composer, SQL engine, or network access. |
+| **Share as HTML** | Sharing a finished dashboard as a viewer, with an embedded editable backup | A single HTML file with materialized tile rows, theme, options, and a layout backup. The viewer opens without the composer, SQL engine, or network access. |
 
 ![The built-in dashboard after loading the saved JSON backup; it remains editable in the composer](screenshots/json-backup-composer.png)
 
@@ -14,8 +16,8 @@ below were captured from the built-in starter dashboard.
 
 ## JSON backup details
 
-Choose **Export JSON** to save a dashboard backup. To load it later, choose
-**Import JSON / HTML** and select that file; the restored dashboard stays editable in
+Open **More actions** and choose **Export JSON** to save a dashboard backup. To
+load it later, choose **More actions** → **Import JSON / HTML** and select that file; the restored dashboard stays editable in
 the composer. The screenshot above shows the built-in dashboard after loading
 its backup. Built-in sample bindings remain references to the samples bundled
 with the app. Uploaded datasets are included only when available and within
@@ -29,12 +31,12 @@ button. Follow [Map a CSV to a chart](csv-mapping-walkthrough.md).
 
 ## HTML sharing details
 
-Use **Export HTML** for a portable viewer. The export materializes the rows for
+Use **Share as HTML** in the header for a portable viewer. The export materializes the rows for
 each tile, so recipients do not need the source upload or SQL query to view the
 charts. The viewer has no composer, SQL tab, upload controls, or promise of
 offline composer startup. New HTML exports also embed the editable layout,
 saved queries (including transform chains), and eligible source uploads. Choose
-**Import JSON / HTML** in Dashboard Builder to restore that backup; import reads
+**More actions** → **Import JSON / HTML** in Dashboard Builder to restore that backup; import reads
 only its embedded JSON and never executes the HTML. Imported queries require
 Run and Apply before they can execute in tiles.
 

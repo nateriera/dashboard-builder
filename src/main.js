@@ -198,6 +198,29 @@ document.addEventListener("pointerdown", noteUserAction, true);
 document.addEventListener("keydown", noteUserAction, true);
 document.addEventListener("click", noteUserAction, true);
 
+// Cancel restores every tile that was on the page at entry, not only the arranged
+// tile: moving one tile can push neighbours, and those must return too. Tiles
+// added or removed mid-session are out of scope and are skipped.
+function restoreEntryLayout(session) {
+  const changed = [];
+  for (const [widget, geom] of session.entryLayout) {
+    const node = widget.gridstackNode;
+    if (!widget.isConnected || !node) continue;
+    if (node.x === geom.x && node.y === geom.y && node.w === geom.w && node.h === geom.h) continue;
+    changed.push([widget, geom]);
+  }
+  if (changed.length) {
+    grid.batchUpdate(true);
+    try {
+      for (const [widget, geom] of changed) grid.update(widget, geom);
+    } finally {
+      grid.batchUpdate(false);
+    }
+  }
+  const meta = tileMeta.get(session.id);
+  if (meta) meta.sizing = session.sizing;
+}
+
 function finishArrangement({ restore = false, focus = true, announce = true } = {}) {
   const session = arrangementSession;
   if (!session) return;
@@ -207,11 +230,7 @@ function finishArrangement({ restore = false, focus = true, announce = true } = 
   pendingArrangementAnnouncement = "";
   session.widget.classList.remove("tile-arranging");
   session.button.setAttribute("aria-pressed", "false");
-  if (restore && session.widget.isConnected) {
-    grid.update(session.widget, session.geometry);
-    const meta = tileMeta.get(session.id);
-    if (meta) meta.sizing = session.sizing;
-  }
+  if (restore) restoreEntryLayout(session);
   if (focus && session.button.isConnected) session.button.focus();
   if (announce) setStatus(restore ? `Canceled arranging ${session.title}.` : `Finished arranging ${session.title}.`);
 }
@@ -220,12 +239,18 @@ function beginArrangement(widget, button, meta) {
   if (arrangementSession) finishArrangement();
   const node = widget.gridstackNode;
   if (!node) return;
+  // Snapshot every tile's geometry at entry so Escape can return the whole page.
+  const entryLayout = new Map();
+  for (const item of grid.getGridItems()) {
+    const itemNode = item.gridstackNode;
+    if (itemNode) entryLayout.set(item, { x: itemNode.x, y: itemNode.y, w: itemNode.w, h: itemNode.h });
+  }
   arrangementSession = {
     id: meta.id,
     title: meta.title?.trim() || meta.type,
     widget,
     button,
-    geometry: { x: node.x, y: node.y, w: node.w, h: node.h },
+    entryLayout,
     sizing: meta.sizing
   };
   widget.classList.add("tile-arranging");

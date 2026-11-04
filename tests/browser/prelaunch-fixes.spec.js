@@ -12,7 +12,7 @@ const tile = (dataset = 'categorical', opts = {}) => ({
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 
 async function dismissHint(page) {
@@ -83,31 +83,26 @@ test('prelaunch: starter templates show bundled images and user templates keep s
   await page.locator('.tpl-modal').screenshot({ path: 'docs/screenshots/template-gallery-previews.png' });
 });
 
-test('prelaunch: first-run hint is non-modal, does not shift the grid, persists dismissal, and stays out of present mode', async ({ page }) => {
+test('UX-6: palette guidance persists dismissal and can be restored from More actions', async ({ page }) => {
   await ready(page);
-  const hint = page.locator('.first-run-hint');
+  const hint = page.locator('#palette-guidance');
   await expect(hint).toBeVisible();
-  await expect(hint).toContainText('Charts: drag one onto the grid or click to add it.');
-  await expect(hint).toContainText('Data button binds samples, uploads, or SQL');
-  await expect(hint).toContainText('Export HTML');
+  await expect(hint).toContainText('Build a page');
+  await expect(hint).toContainText('Choose a chart to add it, or drag it onto the page grid.');
+  await expect(hint).toContainText('Share as HTML creates a single file that opens offline.');
   const before = await page.locator('#grid-wrap').boundingBox();
-  await page.screenshot({ path: 'docs/screenshots/first-run-hint.png' });
   await page.locator('.palette-item[data-tile-type="dot"]').click();
   await expect(page.locator('.tile')).toHaveCount(6);
-  await hint.getByRole('button', { name: 'Got it' }).click();
+  await hint.getByRole('button', { name: 'Hide tips' }).click();
   await expect(hint).toBeHidden();
-  expect(await page.evaluate(() => localStorage.getItem('dashbuilder.seenHint.v1'))).toBe('1');
+  expect(await page.evaluate(() => localStorage.getItem('dashboard-builder:palette-guidance-dismissed:v1'))).toBe('1');
   expect(await page.locator('#grid-wrap').boundingBox()).toEqual(before);
   await page.reload();
-  await expect(page.locator('#status')).toContainText('build');
-  await expect(page.locator('.first-run-hint')).toHaveCount(0);
-
-  await page.evaluate(() => localStorage.removeItem('dashbuilder.seenHint.v1'));
-  await page.reload();
-  await expect(page.locator('.first-run-hint')).toBeVisible();
-  await page.locator('#btn-present').click();
-  await expect(page.locator('body')).toHaveClass(/present/);
-  await expect(page.locator('.first-run-hint')).toHaveCount(0);
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
+  await expect(page.locator('#palette-guidance')).toBeHidden();
+  await page.locator('.header-more > summary').click();
+  await page.locator('#btn-show-guidance').click();
+  await expect(page.locator('#palette-guidance')).toBeVisible();
 });
 
 test('prelaunch: slow DuckDB loading shows progressive status without changing the fast path', async ({ page }) => {

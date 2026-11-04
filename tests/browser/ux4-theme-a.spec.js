@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 
 test('filters popover enters, escapes and restores focus to its trigger', async ({page}) => {
@@ -54,5 +54,5 @@ test('present mode closes editor popovers, hides page navigation and restores fo
   await exit.focus(); await expect(exit).toBeFocused();
   await exit.click();
   await expect(page.locator('#page-tabs')).toBeVisible();
-  await expect(trigger).toBeFocused();
+  await expect(page.locator('.header-more > summary')).toBeFocused();
 });

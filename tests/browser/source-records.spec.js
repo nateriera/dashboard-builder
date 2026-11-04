@@ -10,7 +10,7 @@ const sourceCsv = 'label,region,value,extra\nOriginal A,Mapped A,12,Keep A\nOrig
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 
 async function emptyDashboard(page) {

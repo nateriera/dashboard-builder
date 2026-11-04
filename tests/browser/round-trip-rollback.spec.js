@@ -20,7 +20,7 @@ async function importLayout(page, input) {
 for (const persisted of [true, false]) {
   test(`round-trip R4: dataset rollback failure still restores ${persisted ? 'existing' : 'absent'} storage keys and preserves the import error`, async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#status')).toContainText('build');
+    await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
     await importLayout(page, layout([tile('prior', 'categorical')]));
     await expect(page.locator('#status')).toContainText('Imported');
     const before = await page.evaluate(async ({ layoutKey, queryKey, persisted }) => {

@@ -14,7 +14,7 @@ const envelope = tiles => ({
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint = page.locator('.first-run-hint');
   if (await hint.isVisible().catch(() => false)) await hint.getByRole('button', { name: 'Got it' }).click();
 }
@@ -60,12 +60,12 @@ test('desktop toolbar fits, keeps primary actions visible, and groups secondary 
   }
 });
 
-test('first-run help stays in the palette and never covers dashboard charts', async ({ page }) => {
+test('palette guidance stays in the palette and never covers dashboard charts', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
-  const hint = page.locator('.first-run-hint');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
+  const hint = page.locator('#palette-guidance');
   await expect(hint).toBeVisible();
-  await expect(hint).toContainText('Charts: drag one onto the grid or click to add it.');
+  await expect(hint).toContainText('Choose a chart to add it, or drag it onto the page grid.');
   expect(await hint.evaluate(el => !!el.closest('#palette'))).toBe(true);
   const overlaps = await hint.evaluate(el => {
     const a = el.getBoundingClientRect();
@@ -75,7 +75,7 @@ test('first-run help stays in the palette and never covers dashboard charts', as
     });
   });
   expect(overlaps).toBe(false);
-  await hint.getByRole('button', { name: 'Got it' }).click();
+  await hint.getByRole('button', { name: 'Hide tips' }).click();
   await expect(hint).toBeHidden();
 });
 

@@ -16,7 +16,7 @@ for (const action of ['Add grouping', 'Add aggregation']) {
 
 async function openParameterizedWrangling(page, kind = 'pivot', sql = 'SELECT {{label}} AS label, CAST({{factor}} AS DOUBLE) AS value') {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.evaluate(async ({ kind, sql }) => {
     const { saveQuery } = await import('/src/data/queries.js');
     const { toggleWranglingPopover } = await import('/src/ui/dataWranglingPopover.js');
@@ -116,7 +116,7 @@ test('wrangling integrity: Apply rechecks parameter tokens even without a dirty 
 
 test('parameterized wrangling preserves placeholders, never rescans values, and follows parameter changes', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.evaluate(async () => {
     const { saveQuery } = await import('/src/data/queries.js');
     const { toggleWranglingPopover } = await import('/src/ui/dataWranglingPopover.js');
@@ -145,7 +145,7 @@ test('parameterized wrangling preserves placeholders, never rescans values, and 
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.locator('.tile').filter({ hasText: 'Requests by category' }).locator('.tile-data-btn').click();
   await page.getByRole('button', { name: 'Group & summarize', exact: true }).click();
   await expect(page.locator('.wrangling-popover')).toBeVisible();
@@ -206,7 +206,7 @@ test('desktop parity: reusable wrangling recipes save and restore pivot steps', 
 test('calculated-field entry opens formula panel, validates formula and applies derived field', async ({ page }) => {
   test.setTimeout(120000);
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.locator('.tile').filter({ hasText: 'Requests by category' }).locator('.tile-data-btn').click();
   await page.getByRole('button', { name: 'Calculated field', exact: true }).click();
   const pop = page.locator('.wrangling-popover');

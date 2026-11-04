@@ -22,7 +22,7 @@ const scenario = {
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint = page.locator('.first-run-hint');
   if (await hint.isVisible()) await hint.getByRole('button',{name:'Got it'}).click();
 }
@@ -107,7 +107,7 @@ test('T1: imported queries stay blocked through page/filter/parameter changes, e
   await expectNoExecution(page);
 
   await clickHeaderAction(page,'#btn-save');
-  await expect(page.locator('#status')).toContainText('Saved');
+  await expect(page.locator('#status')).toContainText('Changes saved in this browser');
   await page.reload();
   await expectReview(active);
   await expectNoExecution(page);
@@ -139,7 +139,7 @@ test('T1: imported queries stay blocked through page/filter/parameter changes, e
   expect(await page.evaluate(() => window.queryMarkupRan)).toBeUndefined();
 
   await clickHeaderAction(page,'#btn-save');
-  await expect(page.locator('#status')).toContainText('Saved');
+  await expect(page.locator('#status')).toContainText('Changes saved in this browser');
   await page.reload();
   await expect(active.locator('.db-data-table tbody tr')).toHaveCount(2);
   await expect(active.locator('.db-data-table')).toContainText('60');

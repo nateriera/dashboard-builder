@@ -16,7 +16,7 @@ const envelope = tiles => ({
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint = page.locator('.first-run-hint');
   if (await hint.isVisible().catch(() => false)) await hint.getByRole('button', { name: 'Got it' }).click();
 }
@@ -77,9 +77,9 @@ test('Phase 2 filters apply by source field, persist, export resolved rows, and 
   expect(backup.filters).toEqual([{ id: expect.any(String), field: 'label', op: 'is', values: ['Housing'] }]);
 
   await clickHeaderAction(page, '#btn-save');
-  await expect(page.locator('#status')).toContainText('Saved');
+  await expect(page.locator('#status')).toContainText('Changes saved in this browser');
   await page.reload();
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.locator('#btn-filters').click();
   await expect(page.locator('.dashboard-filter-chip')).toContainText('label is Housing');
   await page.locator('#btn-filters').click();
@@ -120,11 +120,13 @@ test('Phase 2 filters apply by source field, persist, export resolved rows, and 
 test('Desktop parity: saved views capture and restore filters across reloads', async ({ page }) => {
   await ready(page);
   await importJSON(page, envelope([tile('view-chart', 'bar', 'categorical', 0)]));
+  await page.locator('#btn-saved-views').click();
   page.once('dialog', dialog => dialog.accept('All cases'));
   await page.locator('#btn-save-view').click();
   await page.locator('#btn-filters').click();
   await addCategoryFilter(page, 'label', 'Housing');
   await page.locator('#btn-filters').click();
+  await page.locator('#btn-saved-views').click();
   page.once('dialog', dialog => dialog.accept('Housing view'));
   await page.locator('#btn-save-view').click();
   await expect(page.locator('#saved-view-picker')).toHaveValue(/view-/);
@@ -133,10 +135,12 @@ test('Desktop parity: saved views capture and restore filters across reloads', a
   await page.getByRole('button', { name: 'Remove label filter' }).click();
   await page.locator('#btn-filters').click();
   await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(8 rows)');
+  await page.locator('#btn-saved-views').click();
   await page.locator('#btn-apply-view').click();
   await expect(page.locator('.grid-stack-item[gs-id="view-chart"] .chart-data summary')).toContainText('(1 rows)');
   await clickHeaderAction(page, '#btn-save');
   await page.reload();
+  await page.locator('#btn-saved-views').click();
   await expect(page.locator('#saved-view-picker')).toContainText('Housing view');
   await page.locator('#saved-view-picker').selectOption({ label: 'Housing view' });
   await page.locator('#btn-apply-view').click();
@@ -251,7 +255,7 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
   await fs.mkdir('docs/screenshots/phase2', { recursive: true });
   await popover.screenshot({ path: 'docs/screenshots/phase2/crossfilter-chip.png' });
   await page.locator('#btn-filters').click();
-  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  await donut.locator('.tile-chart svg a[href^="#db-crossfilter:"]').first().press('Enter');
   await expect(donut.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(1 rows)');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
   const independent = await openFilters(page);
@@ -264,7 +268,7 @@ test('Phase 2 bar and donut cross-filters exclude their source, show a chip, and
   await expect(oneLeft.locator('[data-crossfilter-chip="true"]').first()).toContainText('Category Donut');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(1 rows)');
   await page.locator('#btn-filters').click();
-  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  await donut.locator('.tile-chart svg a[href^="#db-crossfilter:"]').first().press('Enter');
   await expect(donut.locator('.tile-inspect-selected')).toBeVisible();
   await expect(donut.locator('.chart-drillthrough')).toHaveCount(1);
   await expect(donut.locator('.chart-drillthrough')).not.toHaveAttribute('open','');
@@ -282,7 +286,7 @@ test('Desktop parity: cross-filter selections from different source charts remai
   const otherBar=page.locator('.grid-stack-item[gs-id="other-bar"]');
   const donut=page.locator('.grid-stack-item[gs-id="category-donut"]');
   await sourceBar.locator('.tile-chart svg [aria-label^="Category: "]').first().click();
-  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  await donut.locator('.tile-chart svg a[href^="#db-crossfilter:"]').first().press('Enter');
   const popover=await openFilters(page);
   await expect(popover.locator('[data-crossfilter-chip="true"]')).toHaveCount(2);
   await expect(popover.locator('[data-crossfilter-chip="true"]').first()).toContainText('Source Bar');
@@ -293,7 +297,7 @@ test('Desktop parity: cross-filter selections from different source charts remai
   await expect(remaining.locator('[data-crossfilter-chip="true"]')).toHaveCount(1);
   await expect(remaining.locator('[data-crossfilter-chip="true"]')).toContainText('Category Donut');
   await page.locator('#btn-filters').click();
-  await donut.locator('.tile-chart svg path[data-crossfilter-values]').first().click({position:{x:20,y:20}});
+  await donut.locator('.tile-chart svg a[href^="#db-crossfilter:"]').first().press('Enter');
   await expect(otherBar.locator('.chart-data summary')).toContainText('(8 rows)');
 });
 
@@ -394,7 +398,7 @@ test('Desktop parity: date range controls filter a tile and chart type switching
   await chart.getByLabel('Chart type').selectOption('area');
   await expect(chart.locator('.chart-data:not(.chart-drillthrough) summary')).toContainText('(4 rows)');
   await clickHeaderAction(page, '#btn-save');
-  await expect(page.locator('#status')).toContainText('Saved');
+  await expect(page.locator('#status')).toContainText('Changes saved in this browser');
   await page.reload();
   await expect(page.locator('.grid-stack-item[gs-id="monthly-trend"] .chart-data summary')).toContainText('(4 rows)');
 });
@@ -485,9 +489,9 @@ test('Phase 2 SQL parameters define, substitute, re-run, export, and report miss
 
   await page.locator('#btn-filters').click();
   await clickHeaderAction(page, '#btn-save');
-  await expect(page.locator('#status')).toContainText('Saved');
+  await expect(page.locator('#status')).toContainText('Changes saved in this browser');
   await page.reload();
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   popover = await openFilters(page, 'Parameters');
   await expect(popover.getByLabel('Value for growth')).toHaveValue('1');
   await expect(popover.getByLabel('Value for owner')).toHaveValue("O'Brien");

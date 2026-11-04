@@ -42,7 +42,7 @@ function fixture(type) {
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint = page.locator('.first-run-hint');
   if (await hint.isVisible()) await hint.getByRole('button', { name: 'Got it' }).click();
 }
@@ -134,7 +134,7 @@ for (const type of ['line', 'area']) {
     const selected = await brushVisibleRecords(page, source);
     await expectOriginalRecords(target, selected);
     await clickHeaderAction(page, '#btn-save');
-    await page.reload(); await expect(page.locator('#status')).toContainText('build');
+    await page.reload(); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
     await expectOriginalRecords(target, selected);
 
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } }); await configureImportContext(context);

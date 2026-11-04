@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import { clickHeaderAction } from './header-actions.js';
 
 async function ready(page) {
-  await page.goto('/');await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint=page.locator('.first-run-hint');if(await hint.isVisible())await hint.getByRole('button',{name:'Got it'}).click();
 }
 
@@ -120,7 +120,7 @@ test('GB-1 periodPair + Change survives save, reload, HTML export/import, and pa
   const firstTile=page.locator('.grid-stack-item[gs-id="period-table"]');
   await expect(firstTile.locator('.db-data-table tbody tr')).toHaveCount(2,{timeout:90000});
   await expect(firstTile.locator('.db-data-table')).toContainText('10');
-  await clickHeaderAction(page,'#btn-save');await page.reload();await expect(page.locator('#status')).toContainText('build');
+  await clickHeaderAction(page,'#btn-save');await page.reload();await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await expect(page.locator('.db-data-table tbody tr')).toHaveCount(2,{timeout:90000});
   const downloadEvent=page.waitForEvent('download');await page.locator('#btn-export-html').click();
   const html=await fs.readFile(await(await downloadEvent).path(),'utf8');

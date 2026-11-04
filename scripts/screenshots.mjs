@@ -6,8 +6,8 @@
 //
 // The script launches headless Chromium via puppeteer-core (no browser
 // download — it uses a Chrome/Chromium already on the machine) and captures
-// the three screenshots referenced by the README. Themes are seeded through
-// localStorage before the app boots, the same key the app itself uses.
+// the composer, theme-picker and Dusk screenshots. Themes are chosen through
+// the app's own Theme picker (More actions → Theme).
 //
 // The production build is loaded over file:// with
 // --allow-file-access-from-files (ES modules are blocked on file://
@@ -44,12 +44,6 @@ function findChrome() {
 async function capture(browser, { theme, clickThemeButton, out, width = 1440, height = 900 }) {
   const page = await browser.newPage();
   await page.setViewport({ width, height, deviceScaleFactor: 2 });
-  if (theme) {
-    await page.evaluateOnNewDocument(
-      (id) => localStorage.setItem("dashbuilder.theme.v1", id),
-      theme
-    );
-  }
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(pageUrl, { timeout: 60000 });
@@ -59,9 +53,30 @@ async function capture(browser, { theme, clickThemeButton, out, width = 1440, he
     { timeout: 30000 }
   );
   await new Promise((r) => setTimeout(r, 800));
-  if (clickThemeButton) {
+  // Since UX-6 the Theme button lives in the "More actions" disclosure, and
+  // the starter layout applies its own saved theme at load, so a theme is
+  // chosen through the real picker rather than seeded into storage.
+  const openThemePicker = async () => {
+    await page.click(".header-more > summary");
+    await page.waitForSelector("#btn-theme", { visible: true, timeout: 10000 });
     await page.click("#btn-theme");
     await page.waitForSelector(".theme-popover", { timeout: 10000 });
+    await page.evaluate(() => { document.querySelector(".header-more").open = false; });
+  };
+  if (theme) {
+    await openThemePicker();
+    await page.evaluate((id) => {
+      const option = [...document.querySelectorAll(".theme-popover .theme-option")]
+        .find((b) => b.textContent.toLowerCase().includes(id));
+      if (!option) throw new Error(`theme option ${id} not found`);
+      option.click();
+    }, theme);
+    await page.waitForFunction((id) => document.documentElement.dataset.theme === id, { timeout: 10000 }, theme);
+    await page.waitForFunction(() => !document.querySelector(".theme-popover"), { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 800));
+  }
+  if (clickThemeButton) {
+    await openThemePicker();
     await new Promise((r) => setTimeout(r, 400));
   }
   await page.screenshot({ path: join(outDir, out) });

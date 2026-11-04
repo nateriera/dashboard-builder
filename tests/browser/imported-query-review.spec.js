@@ -2,7 +2,7 @@ import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './ac
 import { acceptErroredTileExportConfirmation } from './accept-errored-export.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction } from './header-actions.js';
+import { clickHeaderAction, shareHtml } from './header-actions.js';
 
 const querySql = `SELECT label, value * {{factor}} AS value FROM upload_sales /* <img src=x onerror="window.queryMarkupRan=true"> */`;
 const queryName = 'Imported sales query';
@@ -95,7 +95,7 @@ test('T1: imported queries stay blocked through page/filter/parameter changes, e
   await expectNoExecution(page);
 
   downloading = page.waitForEvent('download');
-  await page.locator('#btn-export-html').click();
+  await shareHtml(page);
   download = await downloading;
   const html = await fs.readFile(await download.path(),'utf8');
   const payload = JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);

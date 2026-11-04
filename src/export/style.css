@@ -53,37 +53,30 @@ body {
 }
 
 .export-head {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .export-head h1 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 28px;
+  font-size: 32px;
   letter-spacing: 0.08em;
   margin: 0;
 }
 
 .export-meta {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 12px;
-  color: var(--slate-500);
-  margin: 4px 0 0;
+  color: var(--dusk);
+  margin: 8px 0 0;
 }
 
 .export-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 8px 12px;
-  margin: 0 0 16px;
-  padding: 12px;
-  border: 1px solid var(--slate-200);
-  border-radius: 6px;
-  background: var(--white);
+  display: grid;
+  gap: 8px;
+  margin: 0 0 24px;
 }
 
-.export-filters h2 { flex-basis: 100%; font: 400 16px var(--font-display); margin: 0; }
 .export-filter { display: grid; gap: 4px; color: var(--slate-600); font-size: 12px; }
 .export-filter input, .export-filter select, .export-filters button {
   min-height: 34px;
@@ -101,25 +94,22 @@ body {
 .export-filters button { cursor: pointer; }
 .export-crossfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex-basis: 100%; }
 .export-crossfilters[hidden] { display: none; }
-.export-page-tabs { display:flex; gap:4px; border-bottom:1px solid var(--slate-200); margin:0 0 16px; }
 .export-saved-views { display:flex; align-items:end; gap:8px; margin:0 0 16px; }
 .export-saved-views label { display:grid; gap:4px; color:var(--slate-600); font-size:12px; }
 .export-saved-views select, .export-saved-views button { min-height:34px; border:1px solid var(--slate-300); border-radius: 6px; background:var(--white); color:var(--ink); font:inherit; padding:4px 8px; }
 .export-saved-views button { cursor:pointer; }
-.export-page-tabs button { font:inherit; color:var(--slate-600); background:transparent; border:0; border-bottom:2px solid transparent; padding:8px 12px; cursor:pointer; }
-.export-page-tabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--periwinkle); font-weight:600; }
-.export-grid[hidden] { display:none; }
 .export-crossfilters button { min-height: 30px; border-color: var(--slate-300); background: var(--slate-50); color: var(--slate-700); }
 .chart-data-tools { display: flex; gap: 8px; margin: 8px 0; }
 .chart-data-tools input { min-width: 160px; flex: 1; }
 .chart-data th button { border: 0; padding: 4px 4px; background: transparent; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 :focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
 
-/* Row height includes the gutters, matching GridStack's physical geometry. */
+/* UX-7 V5: rows pack at content height; column spans come from the editor. */
 .export-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-rows: var(--grid-row-height, 24px);
+  grid-auto-rows: auto;
+  align-items: start;
   gap: 0;
 }
 
@@ -171,22 +161,58 @@ body {
 }
 
 @media print {
-  body { background: var(--white); }
+  body { background: var(--white); color: var(--ink); }
   #export-root { max-width: none; padding: 0; }
-  .export-grid { display: block; }
-  .export-tile { margin: 0 0 24px; display: block; break-inside: avoid; break-after: page; }
-  .export-tile:last-child { break-after: auto; }
+  .export-grid { display: block; margin: 0 !important; }
+  .export-tile { margin: 0 0 24px; display: block; break-inside: avoid; }
   .export-tile .tile-chart { overflow: visible; }
-  .export-filters { display: none; }
-  .chart-data:not([open]) { display: none; }
+  .export-page + .export-page { break-before: page; }
+  .export-card { box-shadow: none; border: 1px solid var(--slate-200); background: var(--white); }
+  .export-card-footer { border-top-color: var(--slate-200); }
+  .export-badge, .export-page-tabs, .export-saved-views, .export-filters, .export-restore, .chart-data, .chart-drillthrough { display: none !important; }
+  .export-print-filters:not([hidden]) { display: block; margin: 0 0 16px; color: var(--ink); }
+  .export-page-heading:target { outline: none !important; }
 }
 
-.export-meta, .export-filter input[type=number], output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.export-filter input[type=number], output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
-.export-filters, .export-tile-error { padding: 24px; }
-.export-page-tabs button:hover { background: var(--slate); }
-.export-page-tabs button[aria-selected="true"] { background: var(--dusk); color: var(--white); }
+.export-tile-error { padding: 24px; }
 button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
+
+/* UX-7 V2: title block — plain ivory, one accent moment (the badge). */
+.export-badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--periwinkle); color: var(--ink); font: 500 12px var(--font-body); letter-spacing: 0.02em; }
+.export-head h1 { margin: 12px 0 8px; line-height: 1.2; }
+.export-fact { margin: 0; font: 14px var(--font-body); color: var(--ink); }
+.export-note { margin: 8px 0 0; font-size: 14px; color: var(--slate-600); max-width: 72ch; }
+.export-head .export-freeze-notice { margin-top: 16px; }
+.export-saved-views { margin: 0 0 24px; }
+
+/* UX-7 V4: one document, tab-shaped anchor navigation, no hidden pages. */
+.export-page-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 24px; border-bottom: 1px solid var(--slate-200); }
+.export-page-tabs a { display: inline-block; padding: 8px 12px; border: 1px solid var(--slate-200); border-bottom: 0; border-radius: 6px 6px 0 0; background: var(--white); color: var(--ink); font: 14px var(--font-body); text-decoration: none; overflow-wrap: anywhere; }
+.export-page-tabs a:hover { background: var(--slate); }
+.export-page { margin: 0 0 24px; }
+.export-page-heading { margin: 0 0 24px; font: 400 24px var(--font-display); letter-spacing: 0.04em; scroll-margin-top: 16px; }
+.export-page-heading:target { outline: 2px solid var(--dusk); outline-offset: 4px; border-radius: 2px; }
+
+/* UX-7 V3: filters as a compact control group, not a card. */
+.export-filters-heading { margin: 0; font: 400 16px var(--font-display); letter-spacing: 0.04em; }
+.export-filters-caption { margin: 0; color: var(--slate-600); font-size: 12px; }
+.export-filter-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.export-filters > .export-restore { justify-self: start; }
+.export-print-filters { display: none; }
+
+/* UX-7 V5: content-height cards; editor row heights do not carry over. */
+.export-tile .tile-chart { overflow: visible; }
+.export-tile .export-card { margin: 0; }
+.export-grid { margin: -12px; }
+.export-page > .export-notice { padding: 0; margin: 0; }
+.export-card .db-chart-title { margin: 0 0 4px; }
+.export-card-footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--slate-200); display: grid; gap: 4px; }
+.export-card-footer p { margin: 0; color: var(--slate-600); font-size: 12px; }
+.export-card-footer .chart-data { margin-top: 4px; }
+.export-card .export-tile-empty, .export-card .export-tile-error { border: 0; padding: 16px 0; min-height: 0; background: transparent; }
+.export-tile .db-kpi-value { font-size: 32px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 }
 
 @scope (:root[data-theme]:not([data-theme="paper"])){/* Static export viewer — theme-driven via CSS custom properties (overridden
@@ -215,22 +241,22 @@ body {
 }
 
 .export-head {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .export-head h1 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 28px;
+  font-size: 32px;
   letter-spacing: 0.08em;
   margin: 0;
 }
 
 .export-meta {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 12px;
-  color: var(--slate-500);
-  margin: 4px 0 0;
+  color: var(--dusk);
+  margin: 8px 0 0;
 }
 
 .export-freeze-notice {
@@ -248,18 +274,11 @@ body {
 .export-frozen-parameters dd { margin: 0; font-family: var(--font-mono); }
 
 .export-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 10px 14px;
-  margin: 0 0 20px;
-  padding: 14px;
-  border: 1px solid var(--slate-200);
-  border-radius: 8px;
-  background: var(--white);
+  display: grid;
+  gap: 8px;
+  margin: 0 0 24px;
 }
 
-.export-filters h2 { flex-basis: 100%; font: 400 16px var(--font-display); margin: 0; }
 .export-filter { display: grid; gap: 4px; color: var(--slate-600); font-size: 12px; }
 .export-filter input, .export-filter select, .export-filters button {
   min-height: 34px;
@@ -277,25 +296,22 @@ body {
 .export-filters button { cursor: pointer; }
 .export-crossfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-basis: 100%; }
 .export-crossfilters[hidden] { display: none; }
-.export-page-tabs { display:flex; gap:6px; border-bottom:1px solid var(--slate-200); margin:0 0 16px; }
 .export-saved-views { display:flex; align-items:end; gap:8px; margin:0 0 16px; }
 .export-saved-views label { display:grid; gap:4px; color:var(--slate-600); font-size:12px; }
 .export-saved-views select, .export-saved-views button { min-height:34px; border:1px solid var(--slate-300); border-radius:5px; background:var(--white); color:var(--ink); font:inherit; padding:5px 8px; }
 .export-saved-views button { cursor:pointer; }
-.export-page-tabs button { font:inherit; color:var(--slate-600); background:transparent; border:0; border-bottom:2px solid transparent; padding:8px 12px; cursor:pointer; }
-.export-page-tabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--periwinkle); font-weight:600; }
-.export-grid[hidden] { display:none; }
 .export-crossfilters button { min-height: 30px; border-color: var(--slate-300); background: var(--slate-50); color: var(--slate-700); }
 .chart-data-tools { display: flex; gap: 8px; margin: 8px 0; }
 .chart-data-tools input { min-width: 160px; flex: 1; }
 .chart-data th button { border: 0; padding: 3px 5px; background: transparent; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
 :focus-visible { outline: none; box-shadow: var(--shadow-focus) !important; }
 
-/* Row height includes the gutters, matching GridStack's physical geometry. */
+/* UX-7 V5: rows pack at content height; column spans come from the editor. */
 .export-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-rows: var(--grid-row-height, 24px);
+  grid-auto-rows: auto;
+  align-items: start;
   gap: 0;
 }
 
@@ -347,13 +363,51 @@ body {
 }
 
 @media print {
-  body { background: var(--white); }
+  body { background: var(--white); color: var(--ink); }
   #export-root { max-width: none; padding: 0; }
-  .export-grid { display: block; }
-  .export-tile { margin: 0 0 24px; display: block; break-inside: avoid; break-after: page; }
-  .export-tile:last-child { break-after: auto; }
+  .export-grid { display: block; margin: 0 !important; }
+  .export-tile { margin: 0 0 24px; display: block; break-inside: avoid; }
   .export-tile .tile-chart { overflow: visible; }
-  .export-filters { display: none; }
-  .chart-data:not([open]) { display: none; }
+  .export-page + .export-page { break-before: page; }
+  .export-card { box-shadow: none; border: 1px solid var(--slate-200); background: var(--white); }
+  .export-card-footer { border-top-color: var(--slate-200); }
+  .export-badge, .export-page-tabs, .export-saved-views, .export-filters, .export-restore, .chart-data, .chart-drillthrough { display: none !important; }
+  .export-print-filters:not([hidden]) { display: block; margin: 0 0 16px; color: var(--ink); }
+  .export-page-heading:target { outline: none !important; }
 }
+
+/* UX-7 V2: title block — plain ivory, one accent moment (the badge). */
+.export-badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--periwinkle); color: var(--ink); font: 500 12px var(--font-body); letter-spacing: 0.02em; }
+.export-head h1 { margin: 12px 0 8px; line-height: 1.2; }
+.export-fact { margin: 0; font: 14px var(--font-body); color: var(--ink); }
+.export-note { margin: 8px 0 0; font-size: 14px; color: var(--slate-600); max-width: 72ch; }
+.export-head .export-freeze-notice { margin-top: 16px; }
+.export-saved-views { margin: 0 0 24px; }
+
+/* UX-7 V4: one document, tab-shaped anchor navigation, no hidden pages. */
+.export-page-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 24px; border-bottom: 1px solid var(--slate-200); }
+.export-page-tabs a { display: inline-block; padding: 8px 12px; border: 1px solid var(--slate-200); border-bottom: 0; border-radius: 6px 6px 0 0; background: transparent; color: var(--ink); font: 14px var(--font-body); text-decoration: none; overflow-wrap: anywhere; }
+.export-page-tabs a:hover { background: var(--slate); }
+.export-page { margin: 0 0 24px; }
+.export-page-heading { margin: 0 0 24px; font: 400 24px var(--font-display); letter-spacing: 0.04em; scroll-margin-top: 16px; }
+.export-page-heading:target { outline: 2px solid var(--dusk); outline-offset: 4px; border-radius: 2px; }
+
+/* UX-7 V3: filters as a compact control group, not a card. */
+.export-filters-heading { margin: 0; font: 400 16px var(--font-display); letter-spacing: 0.04em; }
+.export-filters-caption { margin: 0; color: var(--slate-600); font-size: 12px; }
+.export-filter-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.export-filters > .export-restore { justify-self: start; }
+.export-print-filters { display: none; }
+
+/* UX-7 V5: content-height cards; editor row heights do not carry over. */
+.export-tile .tile-chart { overflow: visible; }
+.export-tile .export-card { margin: 0; }
+.export-grid { margin: -12px; }
+.export-page > .export-notice { padding: 0; margin: 0; }
+.export-card .db-chart-title { margin: 0 0 4px; }
+.export-card-footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--slate-200); display: grid; gap: 4px; }
+.export-card-footer p { margin: 0; color: var(--slate-600); font-size: 12px; }
+.export-card-footer .chart-data { margin-top: 4px; }
+.export-card .export-tile-empty, .export-card .export-tile-error { border: 0; padding: 16px 0; min-height: 0; background: transparent; }
+.export-tile .db-kpi-value { font-size: 32px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 }

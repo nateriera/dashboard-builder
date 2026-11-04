@@ -2,7 +2,7 @@ import { acceptImportConfirmation, configureImportContext } from './accept-impor
 import { acceptErroredTileExportConfirmation } from './accept-errored-export.js';
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { clickHeaderAction, focusHeaderAction } from './header-actions.js';
+import { clickHeaderAction, focusHeaderAction, shareHtml } from './header-actions.js';
 
 const upload = { name:'Revenue',columns:['label','value'],rows:[{label:'North',value:12},{label:'South',value:30}],fieldKeys:['label','value'],mapping:{label:'label',value:'value'},raw:null };
 const envelope = (tiles,datasets={},queries={}) => ({app:'dashboard-builder',version:1,theme:'paper',tiles,datasets,queries});
@@ -50,7 +50,7 @@ test('R2: query JSON carries uploaded inputs into empty storage; HTML works offl
   const context=await browser.newContext(); await configureImportContext(context); const fresh=await context.newPage(); await ready(fresh); await importJSON(fresh,json);
   await reviewImportedQuery(fresh);
   await expect(fresh.locator('.tile-chart svg')).toBeVisible(); await expect(fresh.locator('.tile-chart')).toContainText('USD');
-  const downloaded=fresh.waitForEvent('download'); await fresh.locator('#btn-export-html').click();
+  const downloaded=fresh.waitForEvent('download'); await shareHtml(fresh);
   const download=await downloaded, html=await fs.readFile(await download.path(),'utf8');
   expect(html).toContain('North'); expect(html).not.toContain('__DASHBOARD_PAYLOAD__');
   await fresh.route('**/*',route=>route.abort()); await context.setOffline(true); await fresh.setContent(html,{waitUntil:'load'});

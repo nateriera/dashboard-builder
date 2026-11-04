@@ -94,7 +94,7 @@ test('slice 2 renders every live parameter type through its bound filter and res
     if(item.type==='number-range'||item.type==='date-range')await item.change(control,root);else await item.change(control,root);
     await expect(page.locator('.db-data-table tbody tr')).toHaveCount(1);
     await expect(page.locator('.db-data-table tbody tr')).toContainText(item.changed);
-    await root.getByRole('button',{name:'Reset filters'}).click();
+    await root.getByRole('button',{name:'Restore exported filters'}).click();
     await expect(page.locator('.db-data-table tbody tr')).toHaveCount(item.rows.length===3?2:1);
     await expect(page.locator('.db-data-table')).toContainText(item.default);
   }
@@ -142,7 +142,7 @@ test('slice 2 binds a filter, syncs values, surfaces multi-value conflict, and d
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).parameters[0].bindings)).toBeUndefined();
 });
 
-test('slice 2 applies saved-view filter state around bound controls and reset returns to export defaults',async({page})=>{
+test('slice 2 applies saved-view filter state around bound controls; Restore returns to the applied view (UX-7 D3)',async({page})=>{
   await page.goto('/');
   const template=await page.evaluate(async()=>await(await fetch('/export-template.html')).text());
   const payload={version:5,title:'Saved view bindings',currentPageId:'page-1',pages:[{id:'page-1',name:'Dashboard'}],
@@ -156,8 +156,18 @@ test('slice 2 applies saved-view filter state around bound controls and reset re
   await page.getByLabel('Saved dashboard view',{exact:true}).selectOption('view-1');await page.getByRole('button',{name:'Apply view'}).click();
   await expect(page.locator('.db-data-table tbody tr')).toHaveCount(1);await expect(page.locator('.db-data-table')).toContainText('false');
   await expect(page.locator('.export-parameter-control input[aria-label="region"]')).toHaveValue('West');
-  await page.getByRole('button',{name:'Reset filters'}).click();
-  await expect(page.locator('.db-data-table')).toContainText('true');
+  // UX-7 D3: the applied view's state is now what Restore returns to.
+  const restore=page.getByRole('button',{name:'Restore exported filters'});
+  await expect(restore).toBeDisabled();
+  await region.fill('East');
+  // V3: a filter change that empties a chart keeps the card, title and source.
+  await expect(page.locator('.export-tile .export-tile-empty')).toHaveText('No data matches these filters.');
+  await expect(page.locator('.export-tile .export-card-source')).toHaveText('Source: Not provided');
+  await expect(restore).toBeEnabled();
+  await restore.click();
+  await expect(page.locator('.export-parameter-control input[aria-label="region"]')).toHaveValue('West');
+  await expect(page.locator('.db-data-table tbody tr')).toHaveCount(1);await expect(page.locator('.db-data-table')).toContainText('false');
+  await expect(restore).toBeDisabled();
 });
 
 test('slice 2 number slider and numeric input stay synchronized and honor integer step',async({page})=>{

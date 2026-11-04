@@ -67,3 +67,7 @@ Open a tile's **Settings** and choose **Chart type**. The list is limited to cha
 Filters, parameters, report pages, and saved views are included in saved layouts and JSON backups. Choose **Saved views** → **Save current view** to keep the current page, filters, parameter values, and theme; select a view and choose **Apply selected view** to restore it. Saved views store parameter values, not filter bindings.
 
 **Share as HTML** materializes each tile's rows and filter definitions so category, numeric, and date filters still work offline, and **Restore exported filters** returns them to the exported state. The offline file does not run SQL, so parameters referenced by SQL are frozen at their exported values and listed at the top of the file. A parameter bound to a filter and not referenced by any SQL stays live as a control in the file. A saved view is available in the file only when its parameter values match the exported ones; otherwise it is listed as disabled with the reason. Wrangling recipes are stored locally in the current browser and can be loaded into a later pivot or calculated-field session.
+
+![Bound parameter controls staying live in the exported viewer](screenshots/parameters-viewer.png)
+
+The exported viewer keeps bound single-select, range, and multi-select parameters as live controls, while SQL-referencing parameters are frozen and disclosed.

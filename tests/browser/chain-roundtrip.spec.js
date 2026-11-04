@@ -13,7 +13,7 @@ const chain=()=>({
 });
 
 async function ready(page) {
-  await page.goto('/');await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint=page.locator('.first-run-hint');
   if(await hint.isVisible())await hint.getByRole('button',{name:'Got it'}).click();
 }
@@ -45,7 +45,7 @@ test('GA-1: saved chain survives reload, HTML import, review and re-edit without
   test.setTimeout(120000);
   const id=await seed(page);
   await clickHeaderAction(page,'#btn-save');await page.reload();
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await expect(page.locator('.db-data-table tbody tr')).toHaveCount(2);
   const html=await exportHtml(page),payload=payloadOf(html);
   expect(payload.layout.queries[id].chain).toEqual(chain());
@@ -68,7 +68,7 @@ test('GA-1: saved chain survives reload, HTML import, review and re-edit without
     await imported.locator('.wrangling-popover').getByRole('button',{name:'Close',exact:true}).click();
     expect((await imported.evaluate(async id=>(await import('/src/data/queries.js')).getQuery(id),id)).trusted).toBe(false);
     await clickHeaderAction(imported,'#btn-save');await imported.reload();
-    await expect(imported.locator('#status')).toContainText('build');
+    await expect(imported.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
     const tile=imported.locator('.grid-stack-item[gs-id="editable-chain"]');
     await tile.getByRole('button',{name:'Review query',exact:true}).click();
     await expect(imported.locator('.data-sql-run')).toBeEnabled({timeout:90000});
@@ -153,7 +153,7 @@ test('GA-1: a malformed stored chain reports a blocked load and retains its dura
   },queryKey);
   await page.reload();
   await expect(page.locator('#status')).toContainText('Saved queries could not be loaded');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   expect(await page.evaluate(key=>localStorage.getItem(key),queryKey)).toBe(corrupt);
   await expect(page.locator('.grid-stack-item[gs-id="editable-chain"]')).toHaveCount(1);
 });

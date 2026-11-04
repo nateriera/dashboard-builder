@@ -14,7 +14,7 @@ async function ready(page) {
     }
   }, layoutKey);
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.locator('.palette-item[data-tile-type="bar"]').click();
   await expect(page.locator('.grid-stack-item')).toHaveCount(1);
 }

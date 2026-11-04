@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('both SQL execution paths reject wrapper escapes and preserve quoted content', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const result = await page.evaluate(async () => {
     const { runQuery, runQueryDetailed } = await import('/src/data/duckdb.js');
     const results = [];

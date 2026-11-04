@@ -9,25 +9,20 @@
     <header id="app-header">
       <div class="brand">
         <h1>Dashboard builder</h1>
-        <p class="brand-sub">Compose charts into dashboards</p>
+        <p class="brand-sub">Local workspace · No account needed</p>
       </div>
       <nav class="header-actions" aria-label="Dashboard actions">
         <div class="header-action-group" role="group" aria-label="Data controls">
-          <button id="btn-data" type="button" title="Pick one dataset for every chart — tiles with their own data keep it">Data: Tile samples</button>
-          <button id="btn-filters" type="button" title="Filter charts and change SQL parameters">Filters</button>
+          <button id="btn-data" type="button" title="Pick one dataset for every chart — tiles with their own data keep it">Manage data</button>
+          <button id="btn-filters" type="button" title="Filter charts and change SQL parameters">Edit filters</button>
         </div>
-        <div class="header-action-group header-view-group" role="group" aria-label="Saved views">
-          <label class="view-picker-label" for="saved-view-picker">View</label>
-          <select id="saved-view-picker" aria-label="Saved dashboard view"><option value="">Current view</option></select>
-          <button id="btn-save-view" type="button" title="Save the current filters, parameters, and theme as a reusable view">Save view</button>
-          <button id="btn-apply-view" type="button" title="Apply the selected saved view">Apply view</button>
-        </div>
+        <button id="btn-saved-views" type="button" aria-haspopup="dialog" aria-expanded="false">Saved views</button>
         <div class="header-action-group" role="group" aria-label="Share and present">
-          <button id="btn-export-html" type="button" title="Download a self-contained HTML file of this dashboard">Export HTML</button>
-          <button id="btn-present" type="button" title="Hide the editor chrome and lock the grid">Present</button>
+          <button id="btn-present" type="button" title="Hide the editor chrome and lock the grid">Present dashboard</button>
+          <button id="btn-export-html" type="button" title="Download a self-contained HTML file of this dashboard">Share as HTML</button>
         </div>
         <details class="header-more">
-          <summary aria-label="More actions">More</summary>
+        <summary aria-label="More actions">More actions</summary>
           <div class="header-more-menu" role="group" aria-label="Additional dashboard actions">
             <button id="btn-theme" type="button" title="Pick a visual theme for the dashboard">Theme</button>
             <button id="btn-templates" type="button" title="Start from a template dashboard">Templates</button>
@@ -35,6 +30,7 @@
             <button id="btn-export" type="button" title="Download layout as a JSON file">Export JSON</button>
             <button id="btn-import" type="button" title="Load a layout from JSON or an exported HTML backup">Import JSON / HTML</button>
             <button id="btn-clear" type="button" class="danger" title="Clear current page">Clear current page</button>
+            <button id="btn-show-guidance" type="button" hidden>Show guidance</button>
           </div>
         </details>
         <input type="file" id="file-import" accept="application/json,.json,text/html,.html,.htm" hidden />
@@ -44,18 +40,42 @@
         <span data-warning-message></span>
         <button id="dismiss-persistence-warning" type="button" aria-label="Dismiss persistence warning">Dismiss</button>
       </div>
+      <div id="saved-view-controls" hidden>
+        <label class="view-picker-label" for="saved-view-picker">Choose a saved view</label>
+        <select id="saved-view-picker" aria-label="Choose a saved view"><option value="">Current view</option></select>
+        <button id="btn-save-view" type="button" title="Save the current filters, parameters, and theme to return to later">Save current view</button>
+        <button id="btn-apply-view" type="button" title="Apply the selected saved view" disabled>Apply selected view</button>
+      </div>
     </header>
 
     <div id="app-body">
       <aside id="palette" aria-label="Chart palette">
         <h2>Charts</h2>
+        <section id="palette-guidance" class="palette-guidance" aria-labelledby="palette-guidance-title">
+          <h3 id="palette-guidance-title">Build a page</h3>
+          <ul>
+            <li>Choose a chart to add it, or drag it onto the page grid.</li>
+            <li>Use Data source on a chart to connect sample data, a file, or SQL.</li>
+            <li>Share as HTML creates a single file that opens offline.</li>
+          </ul>
+          <button id="btn-hide-guidance" type="button">Hide tips</button>
+        </section>
         <div id="palette-items"></div>
-        <p class="palette-hint">Drag a chart onto the grid, or click to add it.</p>
       </aside>
 
       <main id="grid-wrap">
+        <button id="btn-add-chart" type="button">Add chart</button>
         <nav id="page-tabs" aria-label="Dashboard pages"></nav>
-        <div class="grid-stack" aria-label="Dashboard grid"></div>
+        <div class="grid-stack" aria-label="Dashboard grid">
+          <div id="grid-guidance" class="grid-guidance" hidden>
+            <section class="grid-guidance-card" aria-labelledby="grid-guidance-title">
+              <h2 id="grid-guidance-title">Add your first chart</h2>
+              <p>Choose a chart from the palette, or drag one into a grid cell.</p>
+              <button id="btn-grid-add-chart" type="button">Add chart</button>
+              <small>Charts and data stay in this browser.</small>
+            </section>
+          </div>
+        </div>
       </main>
     </div>
 

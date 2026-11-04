@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 const source=(sql,columns,types,order={kind:'columns',fields:['sequence']})=>({sql,dependencies:[],schema:{columns,types},order});
 const envelope=(input,steps,mapping={})=>({version:1,source:input,steps,outputMapping:mapping});

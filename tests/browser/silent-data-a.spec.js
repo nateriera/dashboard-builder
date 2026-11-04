@@ -5,7 +5,7 @@ import { clickHeaderAction } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 
 test('S1: real SQL registration and query results distinguish empty text, missing values, and whitespace', async ({ page }) => {
@@ -28,7 +28,7 @@ test('S2: layout load and reload report blanked whitespace and preserve null ver
   await expect(page.locator('#status')).toContainText('Imported');
   await expect(page.locator('#status')).toContainText('1 non-numeric value blanked');
   await page.reload();
-  await expect(page.locator('#status')).toContainText('Restored autosaved layout');
+  await expect(page.locator('#status')).toContainText('Layout restored from this browser');
   await expect(page.locator('#status')).toContainText('1 non-numeric value blanked');
   const values = await page.locator('.tile-chart svg a').evaluateAll(marks => marks.map(mark => {
     const href = mark.getAttributeNS('http://www.w3.org/1999/xlink','href') || mark.getAttribute('href') || '';

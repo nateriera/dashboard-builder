@@ -23,7 +23,7 @@ test('corrupt save is retained and offered for download while starter opens', as
 
 test('import asks after validation and preserves every stored byte on cancellation', async ({page}) => {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await clickHeaderAction(page, '#btn-save');
   const before = await page.evaluate(() => JSON.stringify({...localStorage}));
   const fixture = {app:'dashboard-builder',version:1,tiles:[{id:'replacement',type:'text',title:'Replacement',x:0,y:0,w:6,h:4}]};
@@ -43,7 +43,7 @@ test('import asks after validation and preserves every stored byte on cancellati
 });
 
 test('guided replacement confirms when only another page has tiles', async ({page}) => {
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   page.once('dialog', dialog => dialog.accept('Empty page'));
   await page.getByRole('button', {name:'Add dashboard page'}).click();
   await expect(page.locator('.grid-stack-item')).toHaveCount(0);
@@ -65,7 +65,7 @@ test('tile upload disables Apply while loading and never binds after dismissal',
     source = source.replace('const persisted = await persistDataset(id);', 'await window.ux2Wait; const persisted = await persistDataset(id); window.ux2Done = true;');
     await route.fulfill({response,body:source});
   });
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const tile = page.locator('.grid-stack-item').first();
   const sourceBefore = await tile.locator('.tile-data-btn').textContent();
   await tile.locator('.tile-data-btn').click();
@@ -99,7 +99,7 @@ test('dashboard upload rejection stays visible and preserves the previous dashbo
     const source = (await response.text()).replace('const persisted = await persistDataset(id);', 'await Promise.reject(new Error("Injected upload failure")); const persisted = await persistDataset(id);');
     await route.fulfill({response,body:source});
   });
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const original = await page.locator('#btn-data').textContent();
   await page.locator('#btn-data').click();
   const pop = page.getByRole('dialog',{name:'Dashboard data'});
@@ -112,7 +112,7 @@ test('dashboard upload rejection stays visible and preserves the previous dashbo
 });
 
 test('removing a tile names it and respects cancel and confirm', async ({page}) => {
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const tile = page.locator('.grid-stack-item').first();
   const title = await tile.locator('.tile-title').inputValue();
   const count = await page.locator('.grid-stack-item').count();
@@ -128,7 +128,7 @@ test('removing a tile names it and respects cancel and confirm', async ({page}) 
 });
 
 test('clear current page preserves other pages and storage across reload', async ({page}) => {
-  await page.goto('/'); await expect(page.locator('#status')).toContainText('build');
+  await page.goto('/'); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   page.once('dialog', dialog => dialog.accept('Detail'));
   await page.getByRole('button',{name:'Add dashboard page'}).click();
   await page.locator('.palette-item[data-tile-type="bar"]').click();

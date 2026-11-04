@@ -5,7 +5,7 @@ import { clickHeaderAction } from './header-actions.js';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   const hint = page.locator('.first-run-hint');
   if (await hint.isVisible()) await hint.getByRole('button',{name:'Got it'}).click();
 }
@@ -56,7 +56,7 @@ test('S6: donut Other selects its folded original records in the composer and of
   await expect(selected).toHaveCount(206);
   expect(await selected.locator('td:first-child').allTextContents()).toEqual(many.slice(5).map(row=>row.label));
   await clickHeaderAction(page,'#btn-save');await page.reload();
-  await expect(page.locator('#status')).toContainText('Restored autosaved layout');
+  await expect(page.locator('#status')).toContainText('Layout restored from this browser');
   await expect(selected).toHaveCount(206);
 });
 
@@ -83,7 +83,7 @@ test('S7: category multiselect survives deselection, Apply, reopening and editin
   await page.locator('#btn-filters').click(); await clickHeaderAction(page,'#btn-save');
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')).filters);
   expect(saved).toEqual([{id:expect.any(String),field:'label',op:'is',values:['B','C']}]);
-  await page.reload(); await expect(page.locator('#status')).toContainText('build');
+  await page.reload(); await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
   await page.locator('#btn-filters').click(); await pop.getByRole('button',{name:'Edit label filter',exact:true}).click();
   await expect(pop.getByRole('checkbox',{name:'B',exact:true})).toBeChecked();
   await expect(pop.getByRole('checkbox',{name:'C',exact:true})).toBeChecked();

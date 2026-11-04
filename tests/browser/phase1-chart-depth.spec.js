@@ -15,7 +15,7 @@ const tile=(type,index)=>{
   return {...base,dataset,binding:{mode:'explicit',ref:dataset},tileOptions:type.startsWith('stacked')?{mode:'stacked'}:type==='histogram'?{binCount:20}:{}};
 };
 const envelope={app:'dashboard-builder',version:3,rowHeight:24,theme:'paper',defaultDataset:{kind:'samples'},tiles:types.map(tile)};
-async function ready(page){await page.goto('/');await expect(page.locator('#status')).toContainText('build');}
+async function ready(page){await page.goto('/');await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);}
 async function importJSON(page,data){await page.locator('#file-import').setInputFiles({name:'phase1.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});await expect(page.locator('#status')).toContainText(/Imported|Import failed/);}
 
 test('Phase 1 tiles bind samples, save annotations, export offline, and capture every new view',async({page},testInfo)=>{
@@ -65,7 +65,7 @@ test('Phase 1 tiles bind samples, save annotations, export offline, and capture 
   await expect(annotation.locator('.db-annotation script')).toHaveCount(0);
   expect(await page.evaluate(()=>window.phase1Pwned)).toBeUndefined();
   await clickHeaderAction(page, '#btn-save');
-  await expect(page.locator('#status')).toContainText('Saved');
+  await expect(page.locator('#status')).toContainText('Changes saved in this browser');
   await page.reload();
   await expect(annotation.locator('.db-annotation')).toContainText('<script>');
   await expect(annotation.locator('.tile-data-btn')).toBeHidden();

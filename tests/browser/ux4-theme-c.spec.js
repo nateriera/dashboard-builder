@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 async function ready(page) {
   await page.goto('/');
-  await expect(page.locator('#status')).toContainText('build');
+  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);
 }
 
 async function stubConfirms(page, answer = true) {
@@ -56,8 +56,9 @@ test('persistence warnings survive later transient status updates until dismisse
   await page.locator('#btn-save').click();
   const warning = page.locator('#persistence-warning');
   await expect(warning).toContainText('Save failed: storage unavailable');
-  await page.locator('#btn-apply-view').click();
-  await expect(page.locator('#status')).toContainText('Choose a saved view first');
+  await page.locator('#btn-saved-views').click();
+  await expect(page.locator('#btn-apply-view')).toBeDisabled();
+  await expect(page.locator('#status')).not.toContainText('Choose a saved view first');
   await expect(warning).toContainText('Save failed: storage unavailable');
   await page.getByRole('button', {name: 'Dismiss persistence warning'}).click();
   await expect(warning).toBeHidden();
@@ -82,6 +83,7 @@ test('saving over an existing view confirms and names the view', async ({page}) 
   await stubConfirms(page, false);
   await page.addInitScript(() => { window.prompt = () => 'Quarterly review'; });
   await ready(page);
+  await page.locator('#btn-saved-views').click();
   await page.locator('#btn-save-view').click();
   await page.locator('#btn-save-view').click();
   expect(await page.evaluate(() => window.__ux4ConfirmMessages)).toEqual(['Replace saved view “Quarterly review”?']);

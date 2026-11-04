@@ -4,7 +4,7 @@
 
 **[Open the live demo](https://nateriera.github.io/dashboard-builder/)**
 
-![Dashboard Builder: brush a time series to filter a second chart, then export a standalone HTML dashboard](docs/screenshots/demo.gif)
+![Dashboard Builder: drag and resize a chart, narrow it with a typed parameter, brush a time series, then share the dashboard as a standalone offline HTML file](docs/screenshots/demo.gif)
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deploy demo](https://github.com/nateriera/dashboard-builder/actions/workflows/pages.yml/badge.svg)](https://github.com/nateriera/dashboard-builder/actions)
@@ -19,20 +19,21 @@
 - Dashboard category, numeric, and date filters connect explicitly to chart fields, including relative date presets
 - Set filters at dashboard, page, or selected-chart scope across named report pages
 - Save named dashboard views that restore the active page, filters, parameters, and theme
+- Move and resize tiles from the keyboard: **Move and resize** enters arrangement mode, arrow keys move, Shift + arrow keys resize, Enter finishes, and Escape restores every tile on the page to where it was
 - Brush a time-series range or select category marks to create independent cross-filters from multiple charts
 - Choose whether each category chart filters rows, highlights matching marks, or ignores incoming cross-filters
 - Configure chart mark clicks to filter charts, inspect source records, or navigate to a drill-through page
 - Inspect source columns in each chart's paginated data table
 - Select a category to see its contributing source rows
-- Export a standalone HTML dashboard with working filters and chart cross-filtering
+- **Share as HTML** exports a standalone dashboard with working filters and chart cross-filtering; you add its title, author and data period at share time
 - Switch a tile among chart types supported by its current data columns
-- Named SQL parameters support local what-if analysis with `{{name}}` placeholders
+- Typed parameters — number, text, boolean, date, number range, date range, single select and multi-select — feed SQL `{{name}}` placeholders and transform steps, or bind to a dashboard filter so one control drives it
 - Optional per-tile reference lines, with labels, mark targets and thresholds
 - Save and reuse local data-wrangling recipes for grouping and calculated fields
-- Build ordered GroupBy, day/week/month Bucket, Between, Top, MovingAvg, and Stats chains in the Transform tab
+- Build ordered transform chains in the Transform tab: GroupBy, day/week/month Bucket, Between, Top, MovingAvg, Stats, Cumulative, Change, paired periods, Pivot, Histogram, and Ratio
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
 - 4 themes, 6 starter templates, save/load multi-page dashboards as JSON
-- Export to a single self-contained HTML file — email it or host it anywhere, no server needed
+- The exported file is one self-contained, offline HTML document — every page in one scrollable file, labeled as an offline snapshot, with a Restore exported filters button and print rules. Email it or host it anywhere; no server needed
 - Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
 
 ## Quick start
@@ -52,18 +53,18 @@ Explore three original sample dashboards in the [starter template gallery](docs/
 - **Trend deep dive** — time series, small multiples, and scatter.
 - **Geographic snapshot** — state map with supporting metrics.
 
-Choose **Templates** in the composer to try these or the other three starters.
+Choose **More actions → Templates** in the composer to try these or the other three starters.
 
 ## Beginner guides
 
 - [Map a CSV to a chart and repair a missing upload](docs/csv-mapping-walkthrough.md)
 - [Run a categorical SQL aggregation](docs/sql-aggregation-recipe.md)
 - [Choose between JSON backup and HTML sharing](docs/json-backup-html-sharing.md)
-- [Filter a dashboard and use SQL parameters](docs/filters-and-parameters.md)
+- [Filter a dashboard and use parameters](docs/filters-and-parameters.md)
 
 ## Start from an upload
 
-Choose **Data** and upload a CSV or JSON file to see its row and column counts,
+Choose **Manage data** and upload a CSV or JSON file to see its row and column counts,
 full-file missing-value counts, and inferred column types. Type inference uses
 up to 5,000 evenly spaced rows; it is a suggestion, not a change to the source
 data. The composer may offer a small set of charts when existing column-name
@@ -112,7 +113,7 @@ original references. A blocking notice offers **Repair data binding**. Choosing
 sample data is an explicit action; loading or exporting never substitutes it.
 
 Charts use neutral axis labels until a user enters **X label / unit** or
-**Y label / unit** under each tile’s **Settings**. These choices travel through autosave, JSON,
+**Y label / unit** under each tile’s **Chart settings**. These choices travel through autosave, JSON,
 templates and HTML. Small-multiple columns use one zero-inclusive domain by
 default; disabling Include zero displays a cropped-domain notice.
 
@@ -130,34 +131,77 @@ Category charts refuse more than 100 distinct categories rather than silently om
 
 ### Layout schema and replacement
 
-Layouts carry `app: "dashboard-builder"`, `version: 3`, `rowHeight: 24`, theme, dashboard default,
-tile geometry, metadata and explicit binding modes:
+Layouts are written as `app: "dashboard-builder"`, `version: 5`, `rowHeight: 24`,
+`savedAt`, optional `meta`, the dashboard default, filters, parameters, saved views,
+pages, the current page, theme and tiles. Each tile carries its page, geometry,
+metadata and an explicit binding mode:
 
 ```json
 {
-  "app": "dashboard-builder", "version": 3, "rowHeight": 24, "theme": "paper",
+  "app": "dashboard-builder", "version": 5, "rowHeight": 24,
+  "savedAt": "2026-11-03T22:00:00.000Z",
+  "meta": { "title": "Service requests", "preparedBy": "Ops team", "dataPeriod": "Jan–Dec 2026" },
+  "theme": "paper",
   "defaultDataset": { "kind": "samples" },
+  "pages": [{ "id": "page-1", "name": "Overview" }],
+  "currentPageId": "page-1",
+  "filters": [{ "id": "filter-category", "field": "label", "op": "is",
+                "values": ["Housing", "Food"], "scope": "charts",
+                "targets": [{ "tileId": "requests", "field": "label" }] }],
+  "parameters": [{ "name": "categories", "type": "multi-select", "value": ["Housing", "Food"],
+                   "source": { "dataset": "categorical", "column": "label" },
+                   "options": ["Housing", "Employment", "Health", "Food"],
+                   "bindings": [{ "kind": "filter", "filterId": "filter-category" }] }],
+  "savedViews": [],
   "tiles": [{
-    "id": "revenue", "type": "bar", "title": "Revenue", "source": "sales.csv",
-    "dataset": "upload:sales", "binding": { "mode": "explicit", "ref": "upload:sales" },
-    "sizing": "manual", "tileOptions": { "xLabel": "USD" }, "x": 0, "y": 0, "w": 6, "h": 15
+    "id": "requests", "type": "bar", "title": "Requests by category", "source": "Sample data",
+    "dataset": "categorical", "binding": { "mode": "explicit", "ref": "categorical" },
+    "sizing": "manual", "tileOptions": { "xLabel": "Requests" },
+    "pageId": "page-1", "x": 0, "y": 0, "w": 6, "h": 16
   }]
 }
 ```
 
+JSON exports may also carry `datasets`, `queries` and `omittedDependencies`.
 A dashboard follower has `dataset: null` and `binding: {mode:"dashboard"}`.
 An explicit sample, upload or query reference stays explicit even if it equals a
-tile's sample default. Version 1 migrates without guessing: every existing
-nonnull reference becomes explicit and missing/null references follow the
-dashboard. V1 cannot recover historical intent, so it never converts a matching
-sample reference into a follower. Validation clones its input; migration occurs
-once and the next save is V3. V1/V2 geometry uses 72px rows; migration
-multiplies y/h by three while preserving x/w and data bindings. V3 uses 24px
-rows with gutters inside each cell, also used by HTML exports. Other versions
-and row heights are rejected.
+tile's sample default.
+
+Versions 1 through 5 load; any other version, or a row height other than 24 from
+version 3 on, is rejected. Validation clones its input, migrates once and always
+returns version 5, so the next save is V5. Version 1 migrates without guessing:
+every existing nonnull reference becomes explicit and missing/null references
+follow the dashboard. V1 cannot recover historical intent, so it never converts a
+matching sample reference into a follower. V1/V2 geometry uses 72px rows;
+migration multiplies y/h by three while preserving x/w and data bindings. From V3,
+rows are 24px with gutters inside each cell, also used by HTML exports.
+Typed parameters arrived in V5: a version 1–4 file that uses a parameter type
+other than number or text, a number `step`/`integer` setting, or `bindings` is
+rejected with the parameter named rather than silently downgraded.
+
+### Parameters
+
+A layout holds up to 100 parameters with unique names (letters, digits and
+underscores, not starting with a digit). The eight types are `number` (optional
+min, max, step and integer), `text`, `boolean`, `date` (`YYYY-MM-DD`),
+`number-range` and `date-range` (`{from, to}`, one end may be open),
+`single-select` and `multi-select`. Select options are refreshed explicitly from
+a named sample or uploaded dataset column (not a query or the dashboard default):
+values are stringified, missing values skipped, and at most 200 options kept,
+with the distinct count recorded when there are more. Values that disappear
+from the options are kept and flagged stale.
+
+In SQL, `{{name}}` substitutes only in executable code (never strings or
+comments): numbers and booleans as literals, text, dates and selects as quoted
+strings, and a multi-select as a parenthesized list for `IN {{name}}` — `(NULL)`
+when nothing is selected. Range parameters have no SQL placeholder; using one is
+an error that says they substitute through bindings. Any parameter can bind to
+one dashboard filter of a compatible operator and field type, and each filter
+accepts one parameter; the parameter and the filter then stay in step. Saved
+views store parameter values, never bindings.
 
 Manual resize intent is saved with the tile and survives data changes, reload,
-import and present mode. **Settings → Fit content** chooses automatic sizing.
+import and present mode. **Chart settings → Fit content** chooses automatic sizing.
 Plots redraw during pointer resizing and use both available width and height.
 Very small manually sized tiles retain one outer scrolling fallback so labels,
 source notes and data alternatives remain reachable.
@@ -208,17 +252,35 @@ for the difference between the editable backup and the standalone viewer.
 HTML export carries materialized query results, all tile rows, theme and options;
 its viewer runs without SQL or network access. It rejects an export if the
 dashboard changes during preparation. Errors remain visible per tile.
+**Share as HTML** first asks for an optional dashboard title, preparer and data
+period. These are stored on the layout as `meta` and never inferred; blank
+fields appear as "Untitled dashboard", "Not provided" and "Not specified". The
+viewer opens with an **Offline snapshot** badge, those facts, and the export
+time with its UTC offset. Every page is one section of a single document, with
+anchor tabs when there is more than one page. Filters stay editable in the
+file, and **Restore exported filters** returns them, and any bound parameters,
+to the exported state (or to the applied saved view's state).
+
+Static query results belong to one set of parameter values, so SQL-referencing
+parameters are frozen at their exported values and listed in a disclosure.
+A parameter bound to a dashboard filter and referenced by no SQL stays live in
+the viewer as a typed control: a number or text field, a checkbox, a pair of
+range bounds, or a select list (date parameters use a text field). A saved view whose parameter values differ from the exported
+values, or that lost a detached binding, is disabled in the file with the reason.
 New HTML exports also contain an editable layout backup with saved queries and
 eligible source datasets. Import reads that backup without running the HTML;
 imported queries still require Run and Apply before tiles execute them. The
 500 KiB per-dataset backup budget applies, and unavailable dependencies are
 reported separately from the materialized viewer rows.
 
-The Data control's Transform tab supports ordered GroupBy and date Bucket steps,
-with full per-step counts, exclusion provenance, and up to five sample rows.
-Chains retain raw parameter references and recompile when edited; SQL-only
-queries remain editable SQL. See [Transform chains](docs/transform-chains.md)
-for the contract, ordering rules, aggregate semantics and limits.
+The Data control's Transform tab builds ordered chains of up to 30 steps from
+twelve operations: GroupBy, Bucket (day/week/month), Between, Top, MovingAvg,
+Stats, Cumulative, Change, paired periods (current vs. previous window), Pivot,
+Histogram, and Ratio (a convenience extension). Previews show full per-step
+counts, exclusion provenance, and up to five sample rows. Chains retain raw
+parameter references and recompile when edited; SQL-only queries remain
+editable SQL. See [Transform chains](docs/transform-chains.md) for the contract,
+ordering rules, aggregate semantics and limits.
 
 ### Exact numbers and dates
 
@@ -253,6 +315,8 @@ Engineering limits are separate from measured device capacity:
 | Small-multiple facets | 12, otherwise filter/aggregate notice |
 | Layout | 32 MiB, 100 tiles, twelve columns, max geometry 3,000 rows of 24px (same physical limit as legacy) |
 | JSON inline data | 500 KiB per dataset; omitted dependencies listed |
+| Parameters | 100 per layout; select parameters keep at most 200 options |
+| Transform chains | 30 steps; 20 groups/aggregations per step |
 
 Uploads parse in a worker, show progress, and can be cancelled. SQL runs in its
 DuckDB worker with a running status. Discarding a running result prevents Apply;
@@ -260,9 +324,14 @@ it does not terminate the engine computation. Wait for execution to settle
 before the next Run. Returned results are capped before JS materialization.
 
 Core controls are keyboard operable; dialogs enter/trap/return focus and Escape
-closes them. Chart tables provide text alternatives. The verified editor viewport
-is desktop Chrome at 1440×900 and 1024×768. The exported viewer has print rules
-that keep each tile together and start a page per tile. Chrome print media is
+closes them. Each tile's **Move and resize** button enters keyboard arrangement:
+arrow keys move the tile, Shift + arrow keys resize it, Enter keeps the result,
+and Escape cancels and restores the geometry of every tile that was on the page
+when arrangement started. Moves are announced through the status region. Chart
+tables provide text alternatives. The verified editor viewport
+is desktop Chrome at 1440×900 and 1024×768. The exported viewer's print rules
+keep each tile whole, start each dashboard page on a new sheet, hide interactive
+controls, and print a "Filters at print time" summary when filters apply. Chrome print media is
 tested; printer-specific output, screen-reader acceptance, mobile editing and
 other browser engines are outside the retained acceptance evidence.
 

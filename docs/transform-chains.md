@@ -1,7 +1,9 @@
-# Transform chains (Gate A)
+# Transform chains
 
-Open a tile's Data control and choose Transform. Add Group & summarize or Bucket
-dates steps, set their inputs and output names, then Preview transforms. A preview
+Open a tile's Data control and choose Transform. Add steps from the operation
+list — Group & summarize, Bucket dates, Between, Top, Moving average, Stats,
+Cumulative, Change, Paired periods, Pivot, Histogram, and Ratio (a convenience
+extension) — set their inputs and output names, then Preview transforms. A preview
 shows the full input/output count for each step and every exclusion, plus up to
 five final sample rows. Map the required chart fields before Apply. Add, remove,
 reorder, form edits, parameter changes and data revisions invalidate the preview;
@@ -34,6 +36,23 @@ Each step has a unique `id`, `op`, and `params`:
   reference), and optional `partitions`.
 - `stats`: numeric `field`; the step returns `count`, `min`, `max`, `mean`,
   `median`, and `stddev` columns in one row.
+- `cumulative`: numeric `field` and optional `partitions`; the field becomes its
+  running total.
+- `change`: numeric `currentField` and `previousField`, and an `outputName`
+  (`change_pct` by default) for the added percentage-change column.
+- `periodPair`: `dateField`, optional `categoryField`, `measureField`,
+  `aggregate` (SUM, COUNT, or AVG), `currentWindow`, optional `previousWindow`,
+  and `outputCurrent`/`outputPrevious` names (`current`/`previous` by default).
+  A window is `{kind: 'relative', days}` (literal or parameter reference) or
+  `{kind: 'range', start, end}`. It works on one source and cannot name a second.
+- `pivot`: one or more `rowFields`, a `columnField`, an optional `measureField`,
+  and `aggregate` (SUM, AVG, COUNT, MIN, MAX, or COUNT DISTINCT; anything but
+  COUNT needs a measure). The three roles must use distinct fields.
+- `histogram`: numeric `field`, integer `bins` from 1 to 500 (default 20), and
+  optional `min`/`max` bounds (numbers or numeric parameter references).
+- `ratio`: `numerator` and `denominator`, each either `{kind: 'field', field}` or
+  `{kind: 'aggregate', operation, column}` computed over optional `partitions`;
+  `percent` (boolean) and `outputName` (`ratio` by default).
 
 Each aggregation has `column` (nullable for COUNT), `operation`, and output
 `name`. Operations are SUM, COUNT, AVG, MIN, MAX, and the existing COUNT DISTINCT
@@ -84,6 +103,24 @@ Stats excludes and counts invalid numeric values; an even-sized median averages
 its middle pair. With no valid values, count is zero and all other statistics
 are null.
 
+Cumulative replaces the field with a running SUM in incoming order within each
+partition. Invalid values add nothing to the total and are counted; integer
+columns stay integers. Change adds `(current − previous) / |previous| × 100`, or
+null when either value is invalid or the previous value is zero, and counts the
+null causes. Paired periods aggregate the measure over a current window and a
+previous window (by category when one is set). A relative window of N days ends
+on the app's local date at execution; with no previous window, the previous
+period is the equal-length span immediately before the current one. An invalid
+or inverted date range produces an empty step with a visible warning.
+
+Pivot turns each distinct column-field value into an output column, one row per
+row-key combination; at most 24 distinct column categories are allowed. The
+Histogram transform returns `key`, `value`, `start`, and `end` per bin;
+non-finite bounds or a minimum above the maximum produce an empty step with a
+warning. Ratio adds an output column dividing the numerator by the denominator,
+optionally as a percentage. Cumulative, Top, MovingAvg, grouped GroupBy,
+categorized paired periods, and Pivot all need a deterministic incoming order.
+
 The existing histogram chart also handles constant data: it draws one bin
 centered on the shared value with width one and labels the range degenerate.
 
@@ -92,7 +129,7 @@ centered on the shared value with width one and labels the range degenerate.
 Gate A supports the sales, support, and satisfaction-trend bench dashboards
 (benches 1, 2, and 7), plus bench 3's GroupBy alternative. The support bench's
 “slowest teams” ranking uses `Top(desc)` on duration per the B6 correction.
-Between paired-period comparisons that also require Change remain Gate B work.
+Paired-period comparisons use Paired periods followed by Change.
 
 The existing 10,000-row query budget applies. Bucket checks generated grid size
 before expanding gaps. Chains allow at most 30 steps and 20 groups/aggregations
@@ -114,13 +151,10 @@ SQL/chain disagreement reject the entire import before replacement mutations.
 Imported queries remain untrusted until Run and Apply. HTML imports extract only
 the embedded JSON backup; markup, scripts and remote resources are never loaded.
 
-Layout version 4 is unchanged: the query record gains additive optional fields.
-Versions 1–4 still load; old SQL-only record shape remains unchanged. New HTML
+Chain metadata is an additive optional field on the query record in the
+current layout version (5); versions 1–5 still load, and the old SQL-only record
+shape remains unchanged. New HTML
 exports add a `layout` backup to the existing materialized viewer payload. The
 viewer continues to use materialized rows without SQL execution. Editable
 backups retain the existing 500 KiB per-dataset inline budget and list omissions;
 excluded saved views remain excluded from both parts of the HTML file.
-
-Gate A contains GroupBy, Bucket, Between, Top, MovingAvg, Stats, and the
-all-equal histogram chart fix. Gate B operations—including Cumulative, Change,
-true Pivot, Histogram transform, and ratio helpers—remain outside this contract.

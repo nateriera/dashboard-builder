@@ -7,7 +7,6 @@ const emptyLayout = {
 };
 
 async function startEmpty(page) {
-  page.on('pageerror', error => console.log('BROWSER_PAGE_ERROR', error.stack || error.message));
   await page.addInitScript(layout => localStorage.setItem('dashboard-builder:layout:v1', JSON.stringify(layout)), emptyLayout);
   await page.goto('/');
   await expect(page.locator('#status')).toContainText('Layout restored from this browser · Stored locally');
@@ -46,6 +45,25 @@ test('empty page shows measured grid guidance, Add chart focuses palette, and fi
   await page.locator('.palette-item').first().click();
   await expect(page.locator('#grid-guidance')).toBeHidden();
   await expect(page.locator('.grid-stack')).not.toHaveClass(/show-grid-guides/);
+});
+
+test('Present hides the empty-page guidance and grid outlines, then restores them if the page stays empty', async ({ page }) => {
+  await startEmpty(page);
+  const guidance = page.locator('#grid-guidance');
+  const outlines = page.locator('.grid-cell-guides');
+  await expect(guidance).toBeVisible();
+  await expect(outlines).toBeVisible();
+
+  await page.locator('#btn-present').click();
+  await expect(page.locator('body')).toHaveClass(/present/);
+  await expect(guidance).toBeHidden();
+  await expect(outlines).toBeHidden();
+
+  await page.locator('#btn-exit-present').click();
+  await expect(page.locator('body')).not.toHaveClass(/present/);
+  await expect(guidance).toBeVisible();
+  await expect(outlines).toBeVisible();
+  await expect(page.locator('.grid-stack-item')).toHaveCount(0);
 });
 
 test('palette guidance dismissal persists and returns from More actions', async ({ page }) => {

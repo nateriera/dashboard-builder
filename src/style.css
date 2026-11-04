@@ -422,6 +422,33 @@ body.present #grid-wrap { padding: 16px; }
 
 body.present .tile-toolbar { display: none; }
 
+/* UX-5: keep tile arrangement discoverable and show the active keyboard target. */
+.tile-arrange-btn {
+  flex: 0 0 auto;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px 8px;
+  line-height: 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--slate-600);
+  font: 600 12px var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tile-arrange-btn:hover,
+.tile-arrange-btn[aria-pressed="true"] {
+  border-color: var(--periwinkle);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--periwinkle) 10%, var(--white));
+}
+.grid-stack-item.tile-arranging {
+  z-index: 5;
+  box-shadow: var(--shadow-focus) !important;
+}
+
 #btn-exit-present {
   position: fixed;
   top: 16px;
@@ -2851,6 +2878,8 @@ body.present #page-tabs { display: none; }
 .show-grid-guides > .grid-cell-guides { display: grid; }
 .grid-cell-guides > span { border: 1px solid var(--slate-300); }
 .grid-guidance[hidden] { display: none; }
+body.present .grid-guidance,
+body.present .grid-cell-guides { display: none !important; }
 .grid-guidance { position: absolute; z-index: 3; top: calc(var(--grid-guide-gap) + 2px); left: calc(var(--grid-guide-gap) + 2px); width: min(320px, calc(var(--grid-guide-column-width) * 4 - var(--grid-guide-gap))); }
 .grid-guidance-card { padding: 16px; border: 1px solid var(--slate-300); border-radius: 10px; background: var(--white); box-shadow: var(--shadow-card); }
 .grid-guidance-card h2 { margin: 0 0 5px; font: 500 18px var(--font-display); }

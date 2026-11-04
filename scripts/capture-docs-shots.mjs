@@ -92,7 +92,31 @@ async function shareHtml(page, meta) {
   return fs.readFile(await (await download).path(), 'utf8');
 }
 
-async function shootViewer(browser, html, out) {
+// Capture-only: scroll the filter's multi-select so its first selected option
+// sits at the top of the listbox, then require that at least one selected
+// option is fully inside the box. Throws rather than writing a shot without it.
+async function revealFilterSelection(viewer) {
+  const lists = await viewer.locator('select[multiple]').count();
+  if (lists !== 1) throw new Error(`html-sharing-viewer: expected one filter multi-select, found ${lists}`);
+  await viewer.evaluate(() => {
+    const sel = document.querySelector('select[multiple]');
+    const first = [...sel.options].find(o => o.selected);
+    if (!first) return;
+    sel.scrollTop += first.getBoundingClientRect().top - sel.getBoundingClientRect().top;
+  });
+  const visible = await viewer.evaluate(() => {
+    const sel = document.querySelector('select[multiple]');
+    const box = sel.getBoundingClientRect();
+    return [...sel.options]
+      .filter(o => o.selected)
+      .filter(o => { const r = o.getBoundingClientRect(); return r.top >= box.top && r.bottom <= box.bottom; })
+      .map(o => o.text);
+  });
+  if (!visible.length) throw new Error('html-sharing-viewer: no selected option is fully inside the filter listbox');
+  console.log('selected options in frame:', visible.join(', '));
+}
+
+async function shootViewer(browser, html, out, prepare = null) {
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2 });
   await context.setOffline(true);
   const viewer = await context.newPage();
@@ -106,6 +130,7 @@ async function shootViewer(browser, html, out) {
   for (const text of ['Untitled dashboard', 'Not provided', 'Not specified']) {
     if (await viewer.getByText(text, { exact: false }).count()) throw new Error(`${out}: metadata fallback "${text}" is in frame`);
   }
+  if (prepare) await prepare(viewer);
   await viewer.screenshot({ path: join(outDir, out) });
   await context.close();
   if (errors.length) throw new Error(`page errors on ${out}: ${errors.join(' | ')}`);
@@ -155,7 +180,7 @@ async function captureSharingViewer(browser) {
   const html = await shareHtml(page, META);
   await context.close();
   if (errors.length) throw new Error(`page errors on html-sharing-viewer: ${errors.join(' | ')}`);
-  await shootViewer(browser, html, 'html-sharing-viewer.png');
+  await shootViewer(browser, html, 'html-sharing-viewer.png', revealFilterSelection);
 }
 
 // ── Exported viewer: typed parameters bound to dashboard filters ─────────

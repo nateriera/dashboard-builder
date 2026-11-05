@@ -51,12 +51,30 @@ import boxdata from "../data/boxdata.json";
 import heatmap from "../data/heatmap.json";
 import treemap from "../data/treemap.json";
 import usStates from "../data/us-states-10m.json";
+// Meridian County: one fictitious jurisdiction's synthetic data universe,
+// written by scripts/generate-sample-data.mjs (seeded, deterministic). Each
+// family file holds several tile-shaped datasets keyed by dataset id.
+import meridianCoc from "../data/meridian/coc.json";
+import meridianBh from "../data/meridian/bh.json";
+import meridianUds from "../data/meridian/uds.json";
+import meridianOverdose from "../data/meridian/overdose.json";
+import meridianCommunity from "../data/meridian/community.json";
+import meridianPrograms from "../data/meridian/programs.json";
+import meridianCs311 from "../data/meridian/cs311.json";
+import meridianScorecard from "../data/meridian/scorecard.json";
+import meridianExecutive from "../data/meridian/executive.json";
+import meridianSales from "../data/meridian/sales.json";
+import meridianStarter from "../data/meridian/starter.json";
+import meridianLabels from "../data/meridian/labels.json";
 
 // Sample datasets shipped with the app. Later phases will let tiles bind
 // their own data (CSV/JSON upload, then DuckDB-WASM queries).
 // states: synthetic per-state values (FIPS ids) for the choropleth sample;
 // usStates is the TopoJSON topology the choropleth renders against.
-export const DATASETS = { categorical, timeseries, scatter, kpis, states, facets, stacked, boxdata, heatmap, treemap };
+// The ten generic samples stay first: fresh tiles default to them.
+export const CORE_DATASET_KEYS = Object.freeze(["categorical", "timeseries", "scatter", "kpis", "states", "facets", "stacked", "boxdata", "heatmap", "treemap"]);
+export const MERIDIAN_DATASETS = Object.freeze({ ...meridianCoc, ...meridianBh, ...meridianUds, ...meridianOverdose, ...meridianCommunity, ...meridianPrograms, ...meridianCs311, ...meridianScorecard, ...meridianExecutive, ...meridianSales, ...meridianStarter });
+export const DATASETS = { categorical, timeseries, scatter, kpis, states, facets, stacked, boxdata, heatmap, treemap, ...MERIDIAN_DATASETS };
 
 export const DATASET_LABELS = {
   categorical: "Categories (8)",
@@ -68,7 +86,8 @@ export const DATASET_LABELS = {
   stacked: "Segment totals — 3 series × 8 categories (24)",
   boxdata: "Distribution groups — 4 × 30 values (120)",
   heatmap: "Service matrix — 6 × 5 cells (30)",
-  treemap: "Program hierarchy — 4 groups (12)"
+  treemap: "Program hierarchy — 4 groups (12)",
+  ...Object.fromEntries(Object.keys(MERIDIAN_DATASETS).map((key) => [key, `${meridianLabels[key] || key} (${MERIDIAN_DATASETS[key].length})`]))
 };
 
 const sortControls = [{ type: "select", key: "sort", label: "Sort", default: "desc", options: [["desc", "Descending"], ["asc", "Ascending"], ["data", "Data order"]] }];
@@ -308,7 +327,9 @@ export const TILE_TYPES = {
     defaultSize: { w: 12, h: 6 },
     defaultTitle: "Requests by category and region",
     controls: [
-      { key: "includeZero", label: "Include zero in shared scale", type: "checkbox", default: true }
+      { key: "includeZero", label: "Include zero in shared scale", type: "checkbox", default: true },
+      // Default stays "desc" (largest first); time-ordered panels use "data".
+      ...sortControls
     ],
     render(el, { data, options }) {
       const includeZero = options.tileOptions?.includeZero ?? true;
@@ -326,7 +347,7 @@ export const TILE_TYPES = {
             includeZero,
             chartWidth,
             chart: (rows, { yDomain, width: cw }) =>
-              columnChart(rows, { x: "label", y: "value", width: cw, height: chartHeight, yDomain, yLabel: options.tileOptions?.yLabel || null })
+              columnChart(rows, { x: "label", y: "value", sort: options.tileOptions?.sort === "data" ? null : options.tileOptions?.sort ?? "desc", width: cw, height: chartHeight, yDomain, yLabel: options.tileOptions?.yLabel || null })
           });
         },
         options
@@ -421,6 +442,18 @@ export const TILE_TYPES = {
     render(el,{data,options}) { el.replaceChildren(card(treemapChart(data,{width:Math.max(240,el.clientWidth-32),height:Math.max(180,el.clientHeight-140)}),{title:options.hideTitle?null:options.title,source:options.source})); }
   }
 };
+
+// Offer each Meridian dataset in the pickers of the tile types whose required
+// fields it already carries (default mappings only — no per-tile remapping).
+// Tables list the datasets built as tables. The generic sample stays first.
+for (const [type, entry] of Object.entries(TILE_TYPES)) {
+  if (entry.noData) continue;
+  for (const [key, rows] of Object.entries(MERIDIAN_DATASETS)) {
+    const columns = new Set(rows.flatMap((row) => Object.keys(row)));
+    const fits = entry.dynamicFields ? /Table$/.test(key) : entry.fields.filter((f) => !f.optional).every((f) => columns.has(f.key));
+    if (fits) entry.datasets.push(key);
+  }
+}
 
 const lastRender = new WeakMap();
 export function resizeTileChart(el, options = {}) {

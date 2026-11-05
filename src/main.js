@@ -18,7 +18,7 @@ import "./style.css";
 import './ui/transformEditor.css';
 import { chartStyles } from "./charts/charts.js";
 import { getTheme, getThemeId, setTheme, THEMES } from "./themes/themes.js";
-import { TILE_TYPES, DATASETS, DATASET_LABELS, resizeTileChart } from "./tiles/registry.js";
+import { TILE_TYPES, DATASETS, DATASET_LABELS, CORE_DATASET_KEYS, resizeTileChart } from "./tiles/registry.js";
 import { ROW_HEIGHT } from "./tiles/geometry.js";
 import { fitTileToContent } from "./tiles/autofit.js";
 import { guessMapping, normalizeRows } from "./tiles/normalize.js";
@@ -1838,7 +1838,7 @@ if (btnData) {
     toggleDashboardPopover({
       anchor: btnData,
       current: dashboardDefault,
-      sampleKeys: Object.keys(DATASETS),
+      sampleKeys: CORE_DATASET_KEYS,
       bindingCounts: (() => {
         const tiles = serializeLayout().tiles.filter(tile => !TILE_TYPES[tile.type]?.noData);
         return { following: tiles.filter(tile => tile.dataset == null).length, ownData: tiles.filter(tile => tile.dataset != null).length };
@@ -2221,12 +2221,15 @@ function starterLayout() {
   return {
     app: "dashboard-builder",
     version: 3, rowHeight: ROW_HEIGHT,
+    // Meridian County community services at a glance: one domain, built from
+    // finished pieces of the 311 and CoC families (synthetic, fictitious county).
     tiles: [
-      { type: "kpi", title: "Headlines", dataset: "kpis", x: 0, y: 0, w: 12, h: 13, binding: {mode:"explicit",ref:"kpis"} },
-      { type: "bar", title: "Requests by category", dataset: "categorical", x: 0, y: 13, w: 6, h: 16, binding: {mode:"explicit",ref:"categorical"} },
-      { type: "line", title: "Monthly requests", dataset: "timeseries", x: 6, y: 13, w: 6, h: 16, binding: {mode:"explicit",ref:"timeseries"} },
-      { type: "donut", title: "Share of requests", dataset: "categorical", x: 0, y: 29, w: 4, h: 20, binding: {mode:"explicit",ref:"categorical"} },
-      { type: "scatter", title: "Rent burden vs. homelessness rate", dataset: "scatter", x: 4, y: 29, w: 8, h: 20, binding: {mode:"explicit",ref:"scatter"} }
+      { type: "kpi", title: "Meridian County services: 311 timeliness below goal, homelessness edging down", dataset: "starterKpis", x: 0, y: 0, w: 12, h: 12, binding: {mode:"explicit",ref:"starterKpis"} },
+      { type: "area", title: "311: closures trail openings", dataset: "cs311Daily", x: 0, y: 12, w: 7, h: 21, tileOptions: { yLabel: "Requests per day" }, binding: {mode:"explicit",ref:"cs311Daily"} },
+      { type: "bar", title: "Half single", dataset: "flowByGroup", x: 7, y: 12, w: 5, h: 21, tileOptions: { sort: "data" }, binding: {mode:"explicit",ref:"flowByGroup"} },
+      { type: "line", title: "Homeless: peak 1,709, falling", dataset: "flowActive", x: 0, y: 33, w: 7, h: 21, tileOptions: { yLabel: "People actively homeless" }, binding: {mode:"explicit",ref:"flowActive"} },
+      { type: "dot", title: "311 medians", dataset: "cs311CloseVsTarget", x: 7, y: 33, w: 5, h: 21, tileOptions: { sort: "desc", referenceValue: 100, referenceLabel: "Target", xLabel: "Median days to close as % of target" }, binding: {mode:"explicit",ref:"cs311CloseVsTarget"} },
+      { type: "text", title: "About this dashboard", x: 0, y: 54, w: 12, h: 9, tileOptions: { body: "A starter built from two of Meridian County's systems: 311 service requests (Jun 4 – Oct 31, 2026) and the homeless response system's monthly by-name list (September 2026 is provisional). Open Templates for the full 311, system-flow and CoC dashboards, or replace any chart's data with your own.\nMeasures: 311 days to close against type-specific targets; HUD System Performance Measure M7b.1; actively homeless by month · Synthetic data for Meridian County, a fictitious jurisdiction." }, binding: {mode:"none"} }
     ]
   };
 }

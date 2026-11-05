@@ -3,7 +3,7 @@
 import { readFile } from "fs/promises";
 
 export async function resolve(specifier, context, next) {
-  if (specifier.endsWith(".json")) {
+  if (specifier.endsWith(".json") || specifier.endsWith(".png")) {
     return { url: new URL(specifier, context.parentURL).href, shortCircuit: true };
   }
   return next(specifier, context);
@@ -13,6 +13,11 @@ export async function load(url, context, next) {
   if (url.endsWith(".json")) {
     const source = await readFile(new URL(url), "utf8");
     return { format: "json", source, shortCircuit: true };
+  }
+  // Bundled images (template thumbnails) resolve to their URL string, as
+  // vite's asset import does.
+  if (url.endsWith(".png")) {
+    return { format: "module", source: `export default ${JSON.stringify(url)};`, shortCircuit: true };
   }
   return next(url, context);
 }

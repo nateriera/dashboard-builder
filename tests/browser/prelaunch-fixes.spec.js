@@ -2,6 +2,12 @@ import { acceptImportConfirmation, configureImportContext } from './accept-impor
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction, shareHtml } from './header-actions.js';
+import { seedLegacyStarter } from './legacy-starter.js';
+
+// These specs drive the pre-exemplar starter (Headlines, Requests by category,
+// Monthly requests, donut, scatter); seed it explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedLegacyStarter(page); });
+
 
 const envelope = (tiles, datasets = {}, queries = {}) => ({
   app: 'dashboard-builder', version: 1, theme: 'paper', tiles, datasets, queries
@@ -56,8 +62,8 @@ test('prelaunch: add bar then dot gets a distinct title and templates keep expli
   await overview.getByRole('button', { name: 'Replace' }).click();
   await expect(titles).toHaveCount(5);
   const restoredTitles = await page.locator('.tile [aria-label="Tile title"]').evaluateAll(inputs => inputs.map(input => input.value));
-  expect(restoredTitles).toContain('Monthly volume');
-  expect(restoredTitles).toContain('Requests by category');
+  expect(restoredTitles).toContain('Ahead of 2025 every month');
+  expect(restoredTitles).toContain('Tech under');
 });
 
 test('prelaunch: starter templates show bundled images and user templates keep schematic previews', async ({ page }) => {
@@ -70,8 +76,15 @@ test('prelaunch: starter templates show bundled images and user templates keep s
   await ready(page);
   await dismissHint(page);
   await clickHeaderAction(page, '#btn-templates');
-  await expect(page.locator('.tpl-card')).toHaveCount(7);
-  await expect(page.locator('.tpl-preview.has-screenshot img')).toHaveCount(6);
+  await expect(page.locator('.tpl-card')).toHaveCount(12);
+  await expect(page.locator('.tpl-preview.has-screenshot img')).toHaveCount(11);
+  const names = await page.locator('.tpl-card .tpl-card-name').allTextContents();
+  expect(names.slice(0, 11)).toEqual([
+    'Homeless system performance (CoC)', 'Behavioral health quality (CCBHC)', 'Health center quality (UDS)',
+    'Overdose & SUD community surveillance', 'Community health by place', 'Program outcomes & funder report',
+    'System flow: inflow, outflow & actively homeless', 'City services: 311 operations',
+    'Performance scorecard (targets & thresholds)', 'Executive overview', 'Sales performance'
+  ]);
   await page.waitForFunction(() => [...document.querySelectorAll('.tpl-preview img')]
     .every(image => image.complete && image.naturalWidth > 0));
   const imageOrigins = await page.locator('.tpl-preview img').evaluateAll(images =>

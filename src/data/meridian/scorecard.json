@@ -1,0 +1,53 @@
+{
+  "scKpis": [
+    {"label":"Measures on target (≥100% of target)","value":"5 of 12","delta":"▲ 1 vs last quarter","deltaDir":"up"},
+    {"label":"At risk (90–99.9% of target)","value":"4","delta":"■ 0 vs last quarter"},
+    {"label":"Off target (<90% of target)","value":"3","delta":"▼ 1 vs last quarter · fewer is better","deltaDir":"down","invert":true}
+  ],
+  "scTable": [
+    {"perspective":"Clients & community","measure":"Exits to permanent housing (CoC M7b.1)","actual":"39.1%","target":"45%","variance":"−5.9 pts","better when":"higher","% of target":86.9,"status":"Off target (86.9% of target)"},
+    {"perspective":"Clients & community","measure":"Returns to homelessness within 12 months (CoC M2)","actual":"10.7%","target":"10%","variance":"+0.7 pts","better when":"lower","% of target":93.5,"status":"At risk (93.5% of target)"},
+    {"perspective":"Clients & community","measure":"Hypertension controlled (UDS)","actual":"67.5%","target":"65%","variance":"+2.5 pts","better when":"higher","% of target":103.8,"status":"On target (103.8% of target)"},
+    {"perspective":"Clients & community","measure":"Depression remission at 6 months (DEP-REM-6)","actual":"19.7%","target":"16%","variance":"+3.7 pts","better when":"higher","% of target":123.1,"status":"On target (123.1% of target)"},
+    {"perspective":"Internal process","measure":"Median days to first BH service","actual":"8 days","target":"10 days","variance":"−2 days","better when":"lower","% of target":125,"status":"On target (125% of target)"},
+    {"perspective":"Internal process","measure":"311 requests closed within target","actual":"65.3%","target":"80%","variance":"−14.7 pts","better when":"higher","% of target":81.6,"status":"Off target (81.6% of target)"},
+    {"perspective":"Internal process","measure":"HMIS exit destination recorded (not DK/refused/missing)","actual":"95.7%","target":"95%","variance":"+0.7 pts","better when":"higher","% of target":100.7,"status":"On target (100.7% of target)"},
+    {"perspective":"Learning & growth","measure":"Direct-service staff vacancy rate","actual":"14.2%","target":"10%","variance":"+4.2 pts","better when":"lower","% of target":70.4,"status":"Off target (70.4% of target)"},
+    {"perspective":"Learning & growth","measure":"Staff completing trauma-informed care training","actual":"88.5%","target":"90%","variance":"−1.5 pts","better when":"higher","% of target":98.3,"status":"At risk (98.3% of target)"},
+    {"perspective":"Financial stewardship","measure":"Grant spend-down vs plan (year to date)","actual":"96.4%","target":"100%","variance":"−3.6 pts","better when":"higher","% of target":96.4,"status":"At risk (96.4% of target)"},
+    {"perspective":"Financial stewardship","measure":"Cost per exit to permanent housing","actual":"$8,420","target":"$8,000","variance":"+$420","better when":"lower","% of target":95,"status":"At risk (95% of target)"},
+    {"perspective":"Financial stewardship","measure":"Days cash on hand","actual":"74 days","target":"60 days","variance":"+14 days","better when":"higher","% of target":123.3,"status":"On target (123.3% of target)"}
+  ],
+  "scPctTarget": [
+    {"label":"Exits to PH","value":86.9,"measure":"Exits to permanent housing (CoC M7b.1)"},
+    {"label":"Returns ≤12 mo","value":93.5,"measure":"Returns to homelessness within 12 months (CoC M2)"},
+    {"label":"BP controlled","value":103.8,"measure":"Hypertension controlled (UDS)"},
+    {"label":"Remission 6 mo","value":123.1,"measure":"Depression remission at 6 months (DEP-REM-6)"},
+    {"label":"Days to BH care","value":125,"measure":"Median days to first BH service"},
+    {"label":"311 on time","value":81.6,"measure":"311 requests closed within target"},
+    {"label":"HMIS complete","value":100.7,"measure":"HMIS exit destination recorded (not DK/refused/missing)"},
+    {"label":"Staff vacancy","value":70.4,"measure":"Direct-service staff vacancy rate"},
+    {"label":"Training done","value":98.3,"measure":"Staff completing trauma-informed care training"},
+    {"label":"Grant spend-down","value":96.4,"measure":"Grant spend-down vs plan (year to date)"},
+    {"label":"Cost per PH exit","value":95,"measure":"Cost per exit to permanent housing"},
+    {"label":"Days cash","value":123.3,"measure":"Days cash on hand"}
+  ],
+  "scPerspectiveTrend": [
+    {"facet":"Clients & community","label":"25Q4","value":97.4},
+    {"facet":"Clients & community","label":"26Q1","value":98},
+    {"facet":"Clients & community","label":"26Q2","value":100},
+    {"facet":"Clients & community","label":"26Q3","value":101.1},
+    {"facet":"Internal process","label":"25Q4","value":97.4},
+    {"facet":"Internal process","label":"26Q1","value":98.5},
+    {"facet":"Internal process","label":"26Q2","value":99.6},
+    {"facet":"Internal process","label":"26Q3","value":100.8},
+    {"facet":"Learning & growth","label":"25Q4","value":80.3},
+    {"facet":"Learning & growth","label":"26Q1","value":81.8},
+    {"facet":"Learning & growth","label":"26Q2","value":82.8},
+    {"facet":"Learning & growth","label":"26Q3","value":84.4},
+    {"facet":"Financial stewardship","label":"25Q4","value":99.9},
+    {"facet":"Financial stewardship","label":"26Q1","value":101.3},
+    {"facet":"Financial stewardship","label":"26Q2","value":102.6},
+    {"facet":"Financial stewardship","label":"26Q3","value":103.8}
+  ]
+}

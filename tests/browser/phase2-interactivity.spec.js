@@ -2,6 +2,12 @@ import { acceptExportSnapshotConfirmation, acceptImportConfirmation } from './ac
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction, shareHtml } from './header-actions.js';
+import { seedLegacyStarter } from './legacy-starter.js';
+
+// These specs drive the pre-exemplar starter (Headlines, Requests by category,
+// Monthly requests, donut, scatter); seed it explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedLegacyStarter(page); });
+
 
 const tile = (id, type, dataset, y, tileOptions = {}) => ({
   id, type, title: id.replace(/(^|-)([a-z])/g, (_, separator, letter) => `${separator ? ' ' : ''}${letter.toUpperCase()}`), source: 'Bundled sample data', dataset,

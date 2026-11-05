@@ -1,4 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { seedLegacyStarter } from './legacy-starter.js';
+
+// These specs drive the pre-exemplar starter (Headlines, Requests by category,
+// Monthly requests, donut, scatter); seed it explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedLegacyStarter(page); });
+
 
 async function ready(page) {
   await page.goto('/');

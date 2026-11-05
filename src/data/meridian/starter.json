@@ -1,0 +1,8 @@
+{
+  "starterKpis": [
+    {"label":"311 requests closed within target","value":"65.3%","delta":"last 150 days · goal 80% · higher is better","deltaDir":"down"},
+    {"label":"311 median days to close (administrative)","value":"2.5 days","delta":"mean 7 days · lower is better"},
+    {"label":"People actively homeless (Sep 2026)","value":"1,612","delta":"▼ 18/month over the last 3 months · lower is better","deltaDir":"down","invert":true},
+    {"label":"Exits to permanent housing, FY2026","value":"39.1%","delta":"▲ 0.6 pts vs FY2025 · CoC goal 45%","deltaDir":"up"}
+  ]
+}

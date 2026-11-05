@@ -1,0 +1,52 @@
+{
+  "poKpis": [
+    {"label":"Served, last 4 quarters","value":"606","delta":"101% of goal (600) · ▲ 102 vs prior 4 quarters","deltaDir":"up"},
+    {"label":"Program completion","value":"71.6%","delta":"of participants who exited · goal 75%","deltaDir":"down"},
+    {"label":"Achieved primary outcome","value":"62%","delta":"1,140 of 1,838 · goal 60%","deltaDir":"up"},
+    {"label":"Cost per outcome achieved","value":"$3,940","delta":"▼ $310 vs prior year · lower is better","deltaDir":"down","invert":true}
+  ],
+  "poEnrollments": [
+    {"label":"2024 Q1","value":108},
+    {"label":"2024 Q2","value":122},
+    {"label":"2024 Q3","value":131},
+    {"label":"2024 Q4","value":119},
+    {"label":"2025 Q1","value":117},
+    {"label":"2025 Q2","value":132},
+    {"label":"2025 Q3","value":136},
+    {"label":"2025 Q4","value":141},
+    {"label":"2026 Q1","value":147},
+    {"label":"2026 Q2","value":149},
+    {"label":"2026 Q3","value":169}
+  ],
+  "poAttainment": [
+    {"facet":"Housing Stability","label":"Downtown","value":63.1,"achieved":118,"participants":187},
+    {"facet":"Housing Stability","label":"Eastside","value":60.8,"achieved":200,"participants":329},
+    {"facet":"Housing Stability","label":"Riverbend","value":74.9,"achieved":158,"participants":211},
+    {"facet":"Youth Employment","label":"Downtown","value":71.4,"achieved":155,"participants":217},
+    {"facet":"Youth Employment","label":"Northfield","value":52.4,"achieved":100,"participants":191},
+    {"facet":"Peer Recovery Coaching","label":"Eastside","value":61.3,"achieved":95,"participants":155},
+    {"facet":"Peer Recovery Coaching","label":"Riverbend","value":60.3,"achieved":193,"participants":320},
+    {"facet":"Peer Recovery Coaching","label":"Northfield","value":53.1,"achieved":121,"participants":228}
+  ],
+  "poPrePost": [
+    {"label":"Spring '24 (n=56)","cohort":"2024 spring cohort","value":1.1,"n":56,"measure":"Self-sufficiency matrix, mean change (pre → post, points)"},
+    {"label":"Fall '24 (n=43)","cohort":"2024 fall cohort","value":1,"n":43,"measure":"Self-sufficiency matrix, mean change (pre → post, points)"},
+    {"label":"Spring '25 (n=41)","cohort":"2025 spring cohort","value":1.3,"n":41,"measure":"Self-sufficiency matrix, mean change (pre → post, points)"},
+    {"label":"Fall '25 (n=61)","cohort":"2025 fall cohort","value":1.6,"n":61,"measure":"Self-sufficiency matrix, mean change (pre → post, points)"},
+    {"label":"Spring '26 (n=49)","cohort":"2026 spring cohort","value":1.4,"n":49,"measure":"Self-sufficiency matrix, mean change (pre → post, points)"}
+  ],
+  "poDemographics": [
+    {"label":"Black","series":"Participants","value":46.2},
+    {"label":"Black","series":"Service-area residents","value":31.5},
+    {"label":"White","series":"Participants","value":30.1},
+    {"label":"White","series":"Service-area residents","value":47.8},
+    {"label":"Hispanic/Latino","series":"Participants","value":15.4},
+    {"label":"Hispanic/Latino","series":"Service-area residents","value":13.1},
+    {"label":"Asian","series":"Participants","value":1.6},
+    {"label":"Asian","series":"Service-area residents","value":3.6},
+    {"label":"Multiracial / another race","series":"Participants","value":4.9},
+    {"label":"Multiracial / another race","series":"Service-area residents","value":4},
+    {"label":"Not reported","series":"Participants","value":1.8},
+    {"label":"Not reported","series":"Service-area residents","value":0}
+  ]
+}

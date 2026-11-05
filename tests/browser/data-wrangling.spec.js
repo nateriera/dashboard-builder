@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { seedLegacyStarter } from './legacy-starter.js';
+
+// These specs drive the pre-exemplar starter (Headlines, Requests by category,
+// Monthly requests, donut, scatter); seed it explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedLegacyStarter(page); });
+
 
 for (const action of ['Add grouping', 'Add aggregation']) {
   test(`wrangling integrity: ${action} invalidates a successful pivot preview`, async ({ page }) => {

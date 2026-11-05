@@ -40,7 +40,7 @@ test('gallery lists the 11 exemplar templates in the ruled order (flagship first
 
 test('every built-in template validates as a layout with no overlapping tiles', () => {
   for (const tpl of BUILT_IN_TEMPLATES) {
-    const layout = validateLayout({ app: 'dashboard-builder', version: 1, theme: tpl.theme, tiles: tpl.tiles });
+    const layout = validateLayout({ app: 'dashboard-builder', version: 3, rowHeight: tpl.rowHeight, theme: tpl.theme, tiles: tpl.tiles });
     assert.equal(layout.tiles.length, tpl.tiles.length, tpl.id);
     for (const [i, a] of tpl.tiles.entries()) for (const b of tpl.tiles.slice(i + 1)) {
       const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -48,8 +48,10 @@ test('every built-in template validates as a layout with no overlapping tiles', 
     }
     for (const t of tpl.tiles) {
       assert.ok(t.w >= 1 && t.x + t.w <= 12, `${tpl.id}: ${t.title} fits the grid`);
-      assert.ok(t.h * 3 >= TILE_TYPES[t.type].defaultSize.h || t.type === 'text' || t.type === 'kpi', `${tpl.id}: ${t.title} is at least its type's default height`);
     }
+    // One 1440×900 present-mode screen: 35 rows of 24px (840px of the 860px grid area).
+    assert.equal(tpl.rowHeight, 24, `${tpl.id} uses 24px rows`);
+    assert.ok(Math.max(...tpl.tiles.map(t => t.y + t.h)) <= 35, `${tpl.id} fits one 1440×900 screen`);
   }
 });
 
@@ -80,7 +82,7 @@ test('every template tile renders in the export render path without a tile error
   for (const tpl of BUILT_IN_TEMPLATES) {
     for (const t of tpl.tiles) {
       const el = document.createElement('div');
-      el.style.width = `${t.w * 100}px`; el.style.height = `${t.h * 72}px`;
+      el.style.width = `${t.w * 100}px`; el.style.height = `${t.h * 24}px`;
       document.body.append(el);
       TILE_TYPES[t.type].render(el, { data: t.dataset ? DATASETS[t.dataset] : [], options: { title: t.title, tileOptions: t.tileOptions || {} } });
       assert.equal(el.querySelector('.tile-error'), null, `${tpl.id}: ${t.title}: ${el.querySelector('.tile-error')?.textContent}`);

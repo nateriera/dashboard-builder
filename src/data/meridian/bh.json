@@ -47,6 +47,36 @@
     {"facet":"Northfield","label":"26Q2","quarter":"2026 Q2","value":10.7,"numerator":6,"denominator":56},
     {"facet":"Northfield","label":"26Q3","quarter":"2026 Q3","value":8.3,"numerator":6,"denominator":72}
   ],
+  "bhSiteTrendLines": [
+    {"date":"25Q1","series":"Downtown","value":15.4,"quarter":"2025 Q1","numerator":27,"denominator":175},
+    {"date":"25Q2","series":"Downtown","value":12.2,"quarter":"2025 Q2","numerator":23,"denominator":189},
+    {"date":"25Q3","series":"Downtown","value":20.1,"quarter":"2025 Q3","numerator":32,"denominator":159},
+    {"date":"25Q4","series":"Downtown","value":29.4,"quarter":"2025 Q4","numerator":50,"denominator":170},
+    {"date":"26Q1","series":"Downtown","value":18.7,"quarter":"2026 Q1","numerator":32,"denominator":171},
+    {"date":"26Q2","series":"Downtown","value":27.2,"quarter":"2026 Q2","numerator":50,"denominator":184},
+    {"date":"26Q3","series":"Downtown","value":20.2,"quarter":"2026 Q3","numerator":34,"denominator":168},
+    {"date":"25Q1","series":"Eastside","value":9.2,"quarter":"2025 Q1","numerator":12,"denominator":131},
+    {"date":"25Q2","series":"Eastside","value":17.3,"quarter":"2025 Q2","numerator":24,"denominator":139},
+    {"date":"25Q3","series":"Eastside","value":11.3,"quarter":"2025 Q3","numerator":12,"denominator":106},
+    {"date":"25Q4","series":"Eastside","value":13,"quarter":"2025 Q4","numerator":14,"denominator":108},
+    {"date":"26Q1","series":"Eastside","value":14.3,"quarter":"2026 Q1","numerator":17,"denominator":119},
+    {"date":"26Q2","series":"Eastside","value":10.3,"quarter":"2026 Q2","numerator":12,"denominator":117},
+    {"date":"26Q3","series":"Eastside","value":17.4,"quarter":"2026 Q3","numerator":21,"denominator":121},
+    {"date":"25Q1","series":"Riverbend","value":18.5,"quarter":"2025 Q1","numerator":17,"denominator":92},
+    {"date":"25Q2","series":"Riverbend","value":20.6,"quarter":"2025 Q2","numerator":20,"denominator":97},
+    {"date":"25Q3","series":"Riverbend","value":18.1,"quarter":"2025 Q3","numerator":19,"denominator":105},
+    {"date":"25Q4","series":"Riverbend","value":22.8,"quarter":"2025 Q4","numerator":23,"denominator":101},
+    {"date":"26Q1","series":"Riverbend","value":26.6,"quarter":"2026 Q1","numerator":29,"denominator":109},
+    {"date":"26Q2","series":"Riverbend","value":21.3,"quarter":"2026 Q2","numerator":23,"denominator":108},
+    {"date":"26Q3","series":"Riverbend","value":38.6,"quarter":"2026 Q3","numerator":32,"denominator":83},
+    {"date":"25Q1","series":"Northfield","value":15.4,"quarter":"2025 Q1","numerator":10,"denominator":65},
+    {"date":"25Q2","series":"Northfield","value":9.2,"quarter":"2025 Q2","numerator":6,"denominator":65},
+    {"date":"25Q3","series":"Northfield","value":7.1,"quarter":"2025 Q3","numerator":4,"denominator":56},
+    {"date":"25Q4","series":"Northfield","value":9.7,"quarter":"2025 Q4","numerator":6,"denominator":62},
+    {"date":"26Q1","series":"Northfield","value":6.3,"quarter":"2026 Q1","numerator":5,"denominator":79},
+    {"date":"26Q2","series":"Northfield","value":10.7,"quarter":"2026 Q2","numerator":6,"denominator":56},
+    {"date":"26Q3","series":"Northfield","value":8.3,"quarter":"2026 Q3","numerator":6,"denominator":72}
+  ],
   "bhHeatmap": [
     {"x":"Downtown","y":"I-SERV","value":75.7,"numerator":730,"denominator":964},
     {"x":"Eastside","y":"I-SERV","value":70.3,"numerator":488,"denominator":694},
@@ -118,5 +148,17 @@
     {"measure":"FUA-30","description":"follow-up after ED visit for AOD","numerator":90,"denominator":333,"rate %":27,"benchmark %":22,"gap (pts)":5,"prior period %":19.4,"note":""},
     {"measure":"SRA-A","description":"suicide risk assessment with MDD","numerator":1071,"denominator":1321,"rate %":81.1,"benchmark %":80,"gap (pts)":1.1,"prior period %":80.6,"note":""},
     {"measure":"SRA-C","description":"suicide risk assessment with MDD","numerator":406,"denominator":551,"rate %":73.7,"benchmark %":80,"gap (pts)":-6.3,"prior period %":77.9,"note":""}
+  ],
+  "bhMeasureBriefTable": [
+    {"measure":"I-SERV","rate %":73.2,"benchmark %":75,"n / N":"1880 / 2567"},
+    {"measure":"DEP-REM-6","rate %":19.7,"benchmark %":16,"n / N":"360 / 1828"},
+    {"measure":"FUH-7","rate %":40.6,"benchmark %":38,"n / N":"197 / 485"},
+    {"measure":"FUH-30","rate %":59.4,"benchmark %":60,"n / N":"288 / 485"},
+    {"measure":"FUM-7","rate %":41.1,"benchmark %":40,"n / N":"156 / 380"},
+    {"measure":"FUM-30","rate %":55.8,"benchmark %":55,"n / N":"212 / 380"},
+    {"measure":"FUA-7","rate %":18.6,"benchmark %":14,"n / N":"62 / 333"},
+    {"measure":"FUA-30","rate %":27,"benchmark %":22,"n / N":"90 / 333"},
+    {"measure":"SRA-A","rate %":81.1,"benchmark %":80,"n / N":"1071 / 1321"},
+    {"measure":"SRA-C","rate %":73.7,"benchmark %":80,"n / N":"406 / 551"}
   ]
 }

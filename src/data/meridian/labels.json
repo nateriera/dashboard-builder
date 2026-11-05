@@ -61,5 +61,12 @@
   "slBookings": "Sales — bookings vs prior year",
   "slQuota": "Sales — quota attainment by rep",
   "slPipeline": "Sales — pipeline by stage",
-  "slDeals": "Sales — deal size vs cycle length"
+  "slDeals": "Sales — deal size vs cycle length",
+  "bhSiteTrendLines": "Meridian CCBHC — DEP-REM-6 by site and quarter (one line each)",
+  "odBySubstanceTrend": "Meridian overdose — rate by substance (one line each)",
+  "cocSpmBriefTable": "Meridian CoC — SPM brief table (FY2025 vs FY2026)",
+  "bhMeasureBriefTable": "Meridian CCBHC — measure brief table",
+  "cs311BriefTable": "Meridian 311 — brief table by request type",
+  "scPerspectiveTrendLines": "Meridian scorecard — average % of target by perspective (one line each)",
+  "chFactorsCompared": "Meridian community health — factors vs state and U.S. (grouped)"
 }

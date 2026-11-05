@@ -410,5 +410,17 @@
     {"request type":"Sidewalk repair","opened":2203,"closed":1776,"still open":427,"target (days)":30,"% closed within target":86,"median days to close":6.5,"mean days to close":14.2},
     {"request type":"Tree or limb down","opened":2757,"closed":2665,"still open":92,"target (days)":3,"% closed within target":55.9,"median days to close":2.5,"mean days to close":5.5},
     {"request type":"Water leak or main break","opened":2391,"closed":2354,"still open":37,"target (days)":2,"% closed within target":58.7,"median days to close":1.5,"mean days to close":3.3}
+  ],
+  "cs311BriefTable": [
+    {"type":"Trash (2d)","opened":7233,"% on time":66,"median days":1.1},
+    {"type":"Pothole (7d)","opened":6046,"% on time":65.1,"median days":4},
+    {"type":"Light (10d)","opened":4243,"% on time":67.6,"median days":5.3},
+    {"type":"Dumping (7d)","opened":3298,"% on time":61.9,"median days":4.6},
+    {"type":"Graffiti (5d)","opened":2990,"% on time":61.7,"median days":3.3},
+    {"type":"Car (14d)","opened":2510,"% on time":72.3,"median days":5.9},
+    {"type":"Noise (1d)","opened":2895,"% on time":63.9,"median days":0.6},
+    {"type":"Walk (30d)","opened":2203,"% on time":86,"median days":6.5},
+    {"type":"Tree (3d)","opened":2757,"% on time":55.9,"median days":2.5},
+    {"type":"Water (2d)","opened":2391,"% on time":58.7,"median days":1.5}
   ]
 }

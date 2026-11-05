@@ -2223,13 +2223,14 @@ function starterLayout() {
     version: 3, rowHeight: ROW_HEIGHT,
     // Meridian County community services at a glance: one domain, built from
     // finished pieces of the 311 and CoC families (synthetic, fictitious county).
+    // Fits one 1440×900 present-mode screen (35 rows), like every template.
     tiles: [
-      { type: "kpi", title: "Meridian County services: 311 timeliness below goal, homelessness edging down", dataset: "starterKpis", x: 0, y: 0, w: 12, h: 12, binding: {mode:"explicit",ref:"starterKpis"} },
-      { type: "area", title: "311: closures trail openings", dataset: "cs311Daily", x: 0, y: 12, w: 7, h: 21, tileOptions: { yLabel: "Requests per day" }, binding: {mode:"explicit",ref:"cs311Daily"} },
-      { type: "bar", title: "Half single", dataset: "flowByGroup", x: 7, y: 12, w: 5, h: 21, tileOptions: { sort: "data" }, binding: {mode:"explicit",ref:"flowByGroup"} },
-      { type: "line", title: "Homeless: peak 1,709, falling", dataset: "flowActive", x: 0, y: 33, w: 7, h: 21, tileOptions: { yLabel: "People actively homeless" }, binding: {mode:"explicit",ref:"flowActive"} },
-      { type: "dot", title: "311 medians", dataset: "cs311CloseVsTarget", x: 7, y: 33, w: 5, h: 21, tileOptions: { sort: "desc", referenceValue: 100, referenceLabel: "Target", xLabel: "Median days to close as % of target" }, binding: {mode:"explicit",ref:"cs311CloseVsTarget"} },
-      { type: "text", title: "About this dashboard", x: 0, y: 54, w: 12, h: 9, tileOptions: { body: "A starter built from two of Meridian County's systems: 311 service requests (Jun 4 – Oct 31, 2026) and the homeless response system's monthly by-name list (September 2026 is provisional). Open Templates for the full 311, system-flow and CoC dashboards, or replace any chart's data with your own.\nMeasures: 311 days to close against type-specific targets; HUD System Performance Measure M7b.1; actively homeless by month · Synthetic data for Meridian County, a fictitious jurisdiction." }, binding: {mode:"none"} }
+      { type: "kpi", title: "Meridian County services: 311 timeliness below goal, homelessness edging down", source: "", dataset: "starterKpis", x: 0, y: 0, w: 12, h: 11, binding: {mode:"explicit",ref:"starterKpis"} },
+      { type: "area", title: "311: closures trail openings", source: "", dataset: "cs311Daily", x: 0, y: 11, w: 3, h: 19, tileOptions: { yLabel: "Requests per day" }, binding: {mode:"explicit",ref:"cs311Daily"} },
+      { type: "line", title: "Homeless: peak 1,709, falling", source: "", dataset: "flowActive", x: 3, y: 11, w: 3, h: 19, tileOptions: { yLabel: "People actively homeless" }, binding: {mode:"explicit",ref:"flowActive"} },
+      { type: "bar", title: "Single adults are half", source: "", dataset: "flowByGroup", x: 6, y: 11, w: 3, h: 19, tileOptions: { sort: "data" }, binding: {mode:"explicit",ref:"flowByGroup"} },
+      { type: "dot", title: "311 medians beat every target", source: "", dataset: "cs311CloseVsTarget", x: 9, y: 11, w: 3, h: 19, tileOptions: { sort: "desc", referenceValue: 100, referenceLabel: "Target", xLabel: "Median days to close, % of target" }, binding: {mode:"explicit",ref:"cs311CloseVsTarget"} },
+      { type: "text", title: "About this dashboard", x: 0, y: 30, w: 12, h: 5, tileOptions: { body: "A starter built from two of Meridian County's systems: 311 service requests (Jun 4 – Oct 31, 2026) and the homeless response system's monthly by-name list (September 2026 is provisional). Open Templates for the full 311, system-flow and CoC dashboards, or replace any chart's data with your own.\nMeasures: 311 days to close against type-specific targets; HUD System Performance Measure M7b.1; actively homeless by month · Synthetic data for Meridian County, a fictitious jurisdiction." }, binding: {mode:"none"} }
     ]
   };
 }

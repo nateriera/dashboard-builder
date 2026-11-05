@@ -309,7 +309,7 @@ function buildCoc() {
   const row = (measure, definition, fy25, fy26, unit, betterWhen) => {
     const change = r1(fy26 - fy25);
     const better = betterWhen === "lower" ? change < 0 : betterWhen === "higher" ? change > 0 : null;
-    return { measure, definition, "FY2025": fy25, "FY2026": fy26, change, unit, "better when": betterWhen, direction: better == null ? "context only" : better ? "improved" : "worsened" };
+    return { measure, definition, "FY2025": r1(fy25), "FY2026": r1(fy26), change, unit, "better when": betterWhen, direction: better == null ? "context only" : better ? "improved" : "worsened" };
   };
   const cocSpmTable = [
     row("M1a median", "Median days homeless in ES, SH, TH (person-stays)", med25, med26, "days", "lower"),
@@ -337,7 +337,7 @@ function buildCoc() {
   ];
 
   return {
-    datasets: { cocKpis, cocDaysByHousehold, cocExitDestinations, cocLothStays, cocReturnsTiming, cocSpmTable, cocEquity, flowInOut, flowActive, flowByGroup, flowKpis, cocMonthlyFlow },
+    datasets: { cocKpis, cocDaysByHousehold, cocExitDestinations, cocLothStays, cocReturnsTiming, cocSpmTable, cocSpmBriefTable: cocSpmTable.map((r) => ({ measure: `${r.measure}, ${r.unit}`, FY2025: r.FY2025, FY2026: r.FY2026, direction: r.direction })), cocEquity, flowInOut, flowActive, flowByGroup, flowKpis, cocMonthlyFlow },
     facts: { unknownExitPct: pct(sum(cocExitDestinations.filter((r) => /doesn't know|not collected/i.test(r.destination)).map((r) => r.value)), exitsFY26), servedFY26, servedFY25, exitsFY26, ph26, phPct26, phPct25, med26, med25, mean26, mean25, ret6, ret12, ret24, cohort26, ret12Pct26, ret12Pct25, retWithin12, famShare25, famShare26, suppressed, latest, last3net, pit26, activeSeries: active, months: FLOW_MONTHS, staysFY26: staysFY26.length,
       typeMedians26: Object.fromEntries(HH.map((h) => [h.label, typeMedian(staysFY26, h.label)])),
       typeMedians25: Object.fromEntries(HH.map((h) => [h.label, typeMedian(staysFY25, h.label)])),
@@ -452,7 +452,7 @@ function buildBh() {
   const remissionRange = SITES.map((site) => { const c = agg((x) => x.site === site.label && x.measure === "DEP-REM-6" && last12.includes(x.month)); return pct(c.num, c.den); });
   const fuh30Sites = SITES.map((site) => { const c = agg((x) => x.site === site.label && x.measure === "FUH-30" && last12.includes(x.month)); return pct(c.num, c.den); });
   return {
-    datasets: { bhKpis, bhGapToBenchmark, bhSiteTrends, bhHeatmap, bhPhqBands, bhMeasureTable },
+    datasets: { bhKpis, bhGapToBenchmark, bhSiteTrends, bhSiteTrendLines: bhSiteTrends.map((r) => ({ date: r.label, series: r.facet, value: r.value, quarter: r.quarter, numerator: r.numerator, denominator: r.denominator })), bhHeatmap, bhPhqBands, bhMeasureTable, bhMeasureBriefTable: bhMeasureTable.map((r) => ({ measure: r.measure, "rate %": r["rate %"], "benchmark %": r["benchmark %"], "n / N": `${r.numerator} / ${r.denominator}` })) },
     facts: { remission: r["DEP-REM-6"].rate, remissionRange, fuh30Sites, iserv: r["I-SERV"].rate, waitMedian: median(waits26), waitMean: r1(mean(waits26)), measures: Object.fromEntries(measureRows.map((x) => [x.m.key, x.rate])) }
   };
 }
@@ -596,7 +596,7 @@ function buildOverdose() {
     { label: "People receiving MOUD (Sep 2026)", value: commas(moud), delta: `${signed(100 * (moud / moudPrior - 1), 1, "%")} vs Sep 2025 · higher is better`, deltaDir: moud >= moudPrior ? "up" : "down" }
   ];
   return {
-    datasets: { odKpis, odRollingRate, odEdVisits, odStateRates, odBySubstance, odMonthly: MONTHS.map((ym, i) => ({ month: ym, deaths: deaths[i], edVisits: ed[i], provisional: i >= MONTHS.length - PROVISIONAL_MONTHS })) },
+    datasets: { odKpis, odRollingRate, odEdVisits, odStateRates, odBySubstance, odBySubstanceTrend: odBySubstance.map((r) => ({ date: r.label, series: r.facet, value: r.value, deaths: r.deaths })), odMonthly: MONTHS.map((ym, i) => ({ month: ym, deaths: deaths[i], edVisits: ed[i], provisional: i >= MONTHS.length - PROVISIONAL_MONTHS })) },
     facts: { deathsRange: [Math.min(...deaths), Math.max(...deaths)], stateSpread: r2(Math.max(...rates) / Math.min(...rates)), rollingNow: rolling.at(-1), peak: Math.max(...rolling.filter((v) => v != null)), last12Deaths, prior12Deaths }
   };
 }
@@ -626,6 +626,8 @@ function buildCommunity() {
     ["Children in poverty (%)", 19.6, 16.4, 16.3],
     ["Severe housing cost burden (%)", 17.2, 13.8, 14.3]
   ];
+  // Short names for the landscape grouped bar; the full name stays in `factor`.
+  const FACTOR_SHORT = { "Adult smoking (%)": "Smoking", "Adult obesity (%)": "Obesity", "Physical inactivity (%)": "Inactivity", "Uninsured adults 19–64 (%)": "Uninsured", "Children in poverty (%)": "Child poverty", "Severe housing cost burden (%)": "Housing burden" };
   const chFactors = FACTORS.flatMap(([facet, county, state, us]) => [
     { facet, label: "Meridian County", value: county },
     { facet, label: "State", value: state },
@@ -640,7 +642,7 @@ function buildCommunity() {
   ];
   const chTable = chStateRates.map((r, i) => ({ state: r.state, fips: r.id, "uninsured adults": r.uninsured, "adults 19–64": r["adults 19–64"], "uninsured %": r.value, "premature deaths per 100k": chScatter[i].y }));
   return {
-    datasets: { chKpis, chStateRates, chFactors, chScatter, chTable },
+    datasets: { chKpis, chStateRates, chFactors, chFactorsCompared: chFactors.map((r) => ({ label: FACTOR_SHORT[r.facet], series: r.label, value: r.value, factor: r.facet })), chScatter, chTable },
     facts: { spread: r2(Math.max(...unins) / Math.min(...unins)), corr: r2(correlation(chScatter.map((r) => r.x), chScatter.map((r) => r.y))) }
   };
 }
@@ -674,7 +676,9 @@ function buildPrograms() {
   const poDemographics = DEMO.flatMap(([label, p, a]) => [{ label, series: "Participants", value: p }, { label, series: "Service-area residents", value: a }]);
   const served = sum(enrol.slice(-8, -4)) + sum(enrol.slice(-4)); // last 2 program years
   const servedYear = sum(enrol.slice(-4)), goalYear = GOAL * 4;
-  const completion = 72.4 + r1(s.normal(0, 0.5));
+  // Round after the addition: 72.4 + 0.x is not exactly representable, and
+  // the KPI row prints this value as given (PR #42 review, B1).
+  const completion = r1(72.4 + r1(s.normal(0, 0.5)));
   const cost = 3_940;
   const poKpis = [
     { label: "Served, last 4 quarters", value: commas(servedYear), delta: `${pct(servedYear, goalYear)}% of goal (${commas(goalYear)}) · ${signed(servedYear - sum(enrol.slice(-8, -4)), 0)} vs prior 4 quarters`, deltaDir: servedYear >= sum(enrol.slice(-8, -4)) ? "up" : "down" },
@@ -771,7 +775,7 @@ function buildCs311() {
   ];
   const typeShares = byType.map((r) => r.opened).sort((a, b) => b - a);
   return {
-    datasets: { cs311Kpis, cs311Daily: daily, cs311Types, cs311CloseVsTarget, cs311Heatmap, cs311District, cs311Table },
+    datasets: { cs311Kpis, cs311Daily: daily, cs311Types, cs311CloseVsTarget, cs311Heatmap, cs311District, cs311Table, cs311BriefTable: cs311Table.map((r) => ({ type: cs311CloseVsTarget.find((c) => c.type === r["request type"])?.label ?? r["request type"], opened: r.opened, "% on time": r["% closed within target"], "median days": r["median days to close"] })) },
     facts: { top3: pct(sum(typeShares.slice(0, 3)), opened), meanToMedian: byType.map((r) => [r.label, r2(r.mean / r.median)]), onTimeAll, medAll, meanAll, opened, closed }
   };
 }
@@ -820,7 +824,7 @@ function buildScorecard(coc, bh, uds, cs) {
     const now = r1(mean(cur.map((r) => Math.min(r.value, 120))));
     QUARTERS.forEach((q, i) => scPerspectiveTrend.push({ facet: p, label: `${q.slice(2, 4)}Q${q.slice(-1)}`, value: i === QUARTERS.length - 1 ? now : r1(now - (QUARTERS.length - 1 - i) * (1.1 + Math.abs(s.normal(0, 0.4)))) })); // steady quarterly gains (title claims improvement every quarter)
   }
-  return { datasets: { scKpis, scTable, scPctTarget, scPerspectiveTrend }, facts: { counts } };
+  return { datasets: { scKpis, scTable, scPctTarget, scPerspectiveTrend, scPerspectiveTrendLines: scPerspectiveTrend.map((r) => ({ date: r.label, series: r.facet, value: r.value })) }, facts: { counts } };
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -887,7 +891,8 @@ export const LABELS = {
   scKpis: "Meridian scorecard — status counts", scTable: "Meridian scorecard — measures vs targets", scPctTarget: "Meridian scorecard — % of target by measure", scPerspectiveTrend: "Meridian scorecard — trend by perspective",
   exKpis: "Executive — KPIs by function", exRevenue: "Executive — revenue vs prior year", exBudget: "Executive — actual vs budget by function", exByFunction: "Executive — actual as % of budget",
   starterKpis: "Meridian community services — starter KPIs",
-  slKpis: "Sales — KPIs", slBookings: "Sales — bookings vs prior year", slQuota: "Sales — quota attainment by rep", slPipeline: "Sales — pipeline by stage", slDeals: "Sales — deal size vs cycle length"
+  slKpis: "Sales — KPIs", slBookings: "Sales — bookings vs prior year", slQuota: "Sales — quota attainment by rep", slPipeline: "Sales — pipeline by stage", slDeals: "Sales — deal size vs cycle length",
+  bhSiteTrendLines: "Meridian CCBHC — DEP-REM-6 by site and quarter (one line each)", odBySubstanceTrend: "Meridian overdose — rate by substance (one line each)", cocSpmBriefTable: "Meridian CoC — SPM brief table (FY2025 vs FY2026)", bhMeasureBriefTable: "Meridian CCBHC — measure brief table", cs311BriefTable: "Meridian 311 — brief table by request type", scPerspectiveTrendLines: "Meridian scorecard — average % of target by perspective (one line each)", chFactorsCompared: "Meridian community health — factors vs state and U.S. (grouped)"
 };
 
 // Starter dashboard: Meridian community services at a glance, composed from

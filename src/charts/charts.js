@@ -64,7 +64,8 @@ function themePlotDefaults(t) {
       overflow: "visible"
     },
     x: { tickSize: 0, tickPadding: 8, labelOffset: 40, line: false },
-    y: { tickSize: 0, tickPadding: 8, labelOffset: 44, grid: true, line: false },
+    // insetTop: the top tick label clears the "↑ label" above the frame.
+    y: { tickSize: 0, tickPadding: 8, labelOffset: 44, grid: true, line: false, insetTop: 8 },
     color: { range: t.categorical }
   };
 }
@@ -134,6 +135,89 @@ function crossfilterHref(value) {
   return `#db-crossfilter:${encodeURIComponent(JSON.stringify([value]))}`;
 }
 
+// ── Scale-aware number formats (PR #42 review, B2/N4) ─────────────────────
+// Axes used to format every tick with fmtInt, so narrow-range decimal data
+// (revenue 1.6–2.4 $M) printed the same integer on every tick. Precision now
+// follows the span the axis covers; integer-scaled data formats as before.
+const numberFormats = new Map();
+function fixedFormat(min, max) {
+  const key = `${min}:${max}`;
+  if (!numberFormats.has(key)) {
+    const f = new Intl.NumberFormat("en-US", { minimumFractionDigits: min, maximumFractionDigits: max });
+    numberFormats.set(key, f.format.bind(f));
+  }
+  return numberFormats.get(key);
+}
+function finiteNumbers(values) {
+  return values.map(v => typeof v === "string" && v.trim() !== "" ? Number(v) : v).filter(v => typeof v === "number" && Number.isFinite(v));
+}
+function spanDecimals(nums) {
+  if (!nums.length) return 0;
+  let lo = Infinity, hi = -Infinity;
+  for (const v of nums) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const unit = hi > lo ? (hi - lo) / 5 : Math.abs(hi);
+  if (!(unit > 0)) return 0;
+  return Math.min(3, Math.max(0, -Math.floor(Math.log10(unit))));
+}
+/** Tick formatter for a numeric axis covering `values` (include 0/reference when the domain does). */
+export function axisFormat(values) {
+  const d = spanDecimals(finiteNumbers(values));
+  return d ? fixedFormat(d, d + 1) : fmtInt.format.bind(fmtInt);
+}
+/** Value-label formatter: integers stay integers; decimal data keeps at least one decimal (−0.3 never prints "-0"). */
+export function valueLabelFormat(values) {
+  const nums = finiteNumbers(values);
+  if (nums.every(Number.isInteger)) return fmtInt.format.bind(fmtInt);
+  return fixedFormat(0, Math.max(1, spanDecimals(nums) + 1));
+}
+/** Plot's own ascending order for an ordinal domain, made explicit (an inferred
+ * band domain of year-like strings logs a warning and draws a ⚠ glyph; N2). */
+function naturalDomain(values) {
+  return [...new Set(values)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
+// ── Category axis sizing (PR #42 review, B4) ────────────────────────────────
+// Left category labels are set in the mono tick font (see chartStyles), about
+// 0.6em per glyph. A fixed min(120, 22% of width) margin clipped the first
+// letters of any label over ~14 characters. The margin is now measured from
+// the labels, capped at a share of the chart width; only a label longer than
+// the cap is shortened, at its end, with an ellipsis (never clipped).
+const TICK_FONT_PX = 13;
+let measureContext;
+function labelWidth(text, font) {
+  if (measureContext === undefined) {
+    try { measureContext = typeof OffscreenCanvas === "function" ? new OffscreenCanvas(1, 1).getContext("2d") : null; } catch { measureContext = null; }
+  }
+  const estimate = text.length * TICK_FONT_PX * 0.62;
+  if (!measureContext) return estimate;
+  measureContext.font = font;
+  return Math.max(measureContext.measureText(text).width, estimate * 0.9);
+}
+function fitLabel(text, room, font) {
+  if (labelWidth(text, font) <= room) return text;
+  let n = text.length;
+  while (n > 1 && labelWidth(text.slice(0, n).trimEnd() + "…", font) > room) n--;
+  return text.slice(0, n).trimEnd() + "…";
+}
+/** marginLeft (and, only when labels exceed the cap, a shortening tickFormat) for a left category axis. */
+export function categoryAxis(labels, width, theme = getTheme(), { min = 48, maxShare = 0.5 } = {}) {
+  const font = `${TICK_FONT_PX}px ${theme.chart.fonts.mono}`;
+  const gap = 8 + 6; // Plot tickPadding + slack
+  const longest = Math.max(0, ...labels.map(label => labelWidth(String(label ?? ""), font)));
+  const cap = Math.max(min, Math.floor(width * maxShare));
+  const need = Math.ceil(longest) + gap;
+  const marginLeft = Math.min(cap, Math.max(min, need));
+  return need <= cap ? { marginLeft } : { marginLeft, tickFormat: label => fitLabel(String(label ?? ""), marginLeft - gap, font) };
+}
+/** Bottom band labels: rotate only when the longest label is wider than its band. */
+function bandAxis(labels, width, theme = getTheme(), { marginX = 60 } = {}) {
+  const font = `${TICK_FONT_PX}px ${theme.chart.fonts.mono}`;
+  const longest = Math.max(0, ...labels.map(label => labelWidth(String(label ?? ""), font)));
+  const band = (width - marginX) / Math.max(1, labels.length);
+  if (longest <= band * 0.92) return { tickRotate: 0, marginBottom: 48 };
+  return { tickRotate: -30, marginBottom: Math.min(140, Math.ceil(longest * 0.5) + 30) };
+}
+
 function axisMaximum(rows, field) {
   let maximum = null;
   for (const row of rows) {
@@ -178,10 +262,13 @@ export function referenceMarks(axis, value, label, theme, anchor = {}) {
     ? Plot.ruleX([numeric], { stroke: t.ink, strokeOpacity: 0.68, strokeDasharray: "5,4", strokeWidth: 1.5, ariaLabel: "Reference line" })
     : Plot.ruleY([numeric], { stroke: t.ink, strokeOpacity: 0.68, strokeDasharray: "5,4", strokeWidth: 1.5, ariaLabel: "Reference line" })];
   if (typeof label === "string" && label.trim() && anchor.x != null && anchor.y != null) {
-    marks.push(Plot.text([{ x: anchor.x, y: anchor.y, label: label.trim() }], {
-      x: "x", y: "y", text: "label", textAnchor: "end", dx: -5, dy: -5,
-      fill: t.ink, stroke: t.card, strokeWidth: 3, paintOrder: "stroke", fontSize: 11
-    }));
+    // The caption sits off the data (PR #42 review, N5): above the frame for a
+    // vertical rule, at the line's start for a horizontal one. Anchoring it to
+    // the first category or last point printed it over that mark's label.
+    const text = { text: "label", fill: t.ink, stroke: t.card, strokeWidth: 3, paintOrder: "stroke", fontSize: 11 };
+    marks.push(axis === "x"
+      ? Plot.text([{ x: numeric, label: label.trim() }], { ...text, x: "x", frameAnchor: "top", textAnchor: "middle", dy: -9 })
+      : Plot.text([{ y: numeric, label: label.trim() }], { ...text, y: "y", frameAnchor: "left", textAnchor: "start", dx: 4, dy: -7 }));
   }
   return marks;
 }
@@ -190,12 +277,14 @@ export function referenceMarks(axis, value, label, theme, anchor = {}) {
 // data: rows; x: numeric field; y: category field.
 // options: sort ("desc"|"asc"|null), fill (color or field), highlight (predicate),
 //   valueFormat, tip (default true), width, xLabel, theme.
-export function barChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, xLabel = null, xDomain = null, width = 640, height, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
+export function barChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = null, tickFormat = null, tip = true, xLabel = null, xDomain = null, width = 640, height, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
   const t = theme.chart;
   const baseFill = fill ?? t.primary;
   const rows = sort
     ? data.slice().sort((a, b) => (sort === "desc" ? b[x] - a[x] : a[x] - b[x]))
     : data;
+  valueFormat ??= valueLabelFormat(rows.map(row => row[x]));
+  const categories = categoryAxis(rows.map(d => d[y]), width, theme);
   const marks = [
     Plot.barX(rows, {
       x, y,
@@ -218,21 +307,24 @@ export function barChart(data, { x, y, sort = "desc", fill = null, highlight = n
   return themedPlot(theme, {
     width,
     height,
-    marginLeft: Math.min(120, Math.max(48, width * 0.22)),
+    marginLeft: categories.marginLeft,
     marginRight: Math.min(72, Math.max(36, width * 0.12)),
-    x: { label: xLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: domainWithReference(rows.map(row => row[x]), referenceValue, xDomain, true) },
-    y: { label: null, domain: rows.map((d) => d[y]) },
+    x: { label: xLabel, tickFormat: tickFormat ?? axisFormat([0, ...rows.map(row => row[x]), ...(xDomain || []), referenceValue]), domain: domainWithReference(rows.map(row => row[x]), referenceValue, xDomain, true) },
+    y: { label: null, domain: rows.map((d) => d[y]), ...(categories.tickFormat ? { tickFormat: categories.tickFormat } : {}) },
     marks
   });
 }
 
 // ── Vertical column chart (categorical or time buckets) ──────────────────────
-export function columnChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, tip = true, yLabel = null, yDomain = null, width = 640, height, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
+export function columnChart(data, { x, y, sort = "desc", fill = null, highlight = null, valueFormat = null, tickFormat = null, tip = true, yLabel = null, yDomain = null, width = 640, height, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
   const t = theme.chart;
   const baseFill = fill ?? t.primary;
   const rows = sort
     ? data.slice().sort((a, b) => (sort === "desc" ? b[y] - a[y] : a[y] - b[y]))
     : data;
+  valueFormat ??= valueLabelFormat(rows.map(row => row[y]));
+  // Rotate category labels only when they are wider than their band (B4).
+  const bands = bandAxis(rows.map(d => d[x]), width, theme);
   const marks = [
     Plot.barY(rows, {
       x, y,
@@ -255,16 +347,17 @@ export function columnChart(data, { x, y, sort = "desc", fill = null, highlight 
   return themedPlot(theme, {
     width,
     height,
-    marginBottom: 48,
-    x: { label: null, domain: rows.map(d => d[x]), tickRotate: rows.length > 8 ? -30 : 0 },
-    y: { label: yLabel, tickFormat: (d) => (tickFormat ?? fmtInt.format.bind(fmtInt))(d), domain: domainWithReference(rows.map(row => row[y]), referenceValue, yDomain, true) },
+    marginBottom: bands.marginBottom,
+    x: { label: null, domain: rows.map(d => d[x]), tickRotate: bands.tickRotate },
+    // insetTop keeps the tallest bar's value label inside the frame, clear of the y-axis label.
+    y: { label: yLabel, insetTop: 14, tickFormat: tickFormat ?? axisFormat([0, ...rows.map(row => row[y]), ...(yDomain || []), referenceValue]), domain: domainWithReference(rows.map(row => row[y]), referenceValue, yDomain, true) },
     marks
   });
 }
 
 // ── Line chart (time series; one or many series via `stroke`) ───────────────
 // data: rows; x: date/number field; y: numeric field; stroke: optional series field.
-export function lineChart(data, { x, y, stroke = null, width = 680, height, xLabel = null, yLabel = null, yFormat = fmtInt.format.bind(fmtInt), xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "", sourceRows = data } = {}) {
+export function lineChart(data, { x, y, stroke = null, width = 680, height, xLabel = null, yLabel = null, yFormat = null, xDomain = null, yDomain = null, tip = true, theme = getTheme(), referenceValue = null, referenceLabel = "", sourceRows = data } = {}) {
   const t = theme.chart;
   const base = { x, y, tip, strokeWidth: 2 };
   const render = timeMarkRender(data, sourceRows, x);
@@ -280,11 +373,14 @@ export function lineChart(data, { x, y, stroke = null, width = 680, height, xLab
         Plot.dot(data, Plot.selectLast({ x, y, fill: t.highlight, stroke: t.primary, r: 4, render }))
       ];
   marks.push(...referenceMarks("y", referenceValue, referenceLabel, theme, { x: axisMaximum(data, x), y: Number(referenceValue) }));
+  // Category x (FY22, 25Q1, 2019…): rotate only when labels outgrow their slot (B4).
+  const points = xType === "point" ? bandAxis(naturalDomain(data.map(d => d[x])), width, theme) : null;
   return themedPlot(theme, {
     width,
     height,
-    x: { label: xLabel, type: xType, domain: xDomain ?? undefined },
-    y: { label: yLabel, tickFormat: yFormat, domain: domainWithReference(data.map(row => row[y]), referenceValue, yDomain) },
+    ...(points?.tickRotate ? { marginBottom: points.marginBottom } : {}),
+    x: { label: xLabel, type: xType, domain: xDomain ?? undefined, ...(points?.tickRotate ? { tickRotate: points.tickRotate } : {}) },
+    y: { label: yLabel, tickFormat: yFormat ?? axisFormat([...data.map(row => row[y]), ...(yDomain || []), referenceValue]), domain: domainWithReference(data.map(row => row[y]), referenceValue, yDomain) },
     color: stroke ? { range: t.categorical, legend: true } : undefined,
     marks
   });
@@ -322,19 +418,21 @@ export function scatterChart(data, { x, y, r = null, fill = null, trend = false,
 }
 
 // ── Dot plot / lollipop (clean alternative to bars for many categories) ──────
-export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabel = null, xDomain = null, valueFormat = fmtInt.format.bind(fmtInt), tickFormat = null, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
+export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabel = null, xDomain = null, valueFormat = null, tickFormat = null, theme = getTheme(), referenceValue = null, referenceLabel = "", crossfilterField = null } = {}) {
   const t = theme.chart;
   const rows = sort
     ? data.slice().sort((a, b) => (sort === "desc" ? b[x] - a[x] : a[x] - b[x]))
     : data;
-  const tf = tickFormat ?? valueFormat;
+  valueFormat ??= valueLabelFormat(rows.map(row => row[x]));
+  const tf = tickFormat ?? axisFormat([0, ...rows.map(row => row[x]), ...(xDomain || []), referenceValue]);
+  const categories = categoryAxis(rows.map(d => d[y]), width, theme);
   return themedPlot(theme, {
     width,
     height,
-    marginLeft: Math.min(120, Math.max(48, width * 0.22)),
+    marginLeft: categories.marginLeft,
     marginRight: Math.min(64, Math.max(32, width * 0.12)),
-    x: { label: xLabel, tickFormat: (d) => tf(d), domain: domainWithReference(rows.map(row => row[x]), referenceValue, xDomain, true) },
-    y: { label: null, domain: rows.map((d) => d[y]) },
+    x: { label: xLabel, tickFormat: tf, domain: domainWithReference(rows.map(row => row[x]), referenceValue, xDomain, true) },
+    y: { label: null, domain: rows.map((d) => d[y]), ...(categories.tickFormat ? { tickFormat: categories.tickFormat } : {}) },
     marks: [
       Plot.ruleX(rows, { x1: 0, x2: x, y, stroke: t.mutedLight }),
       Plot.dot(rows, { x, y, fill: t.primary, r: 5, tip: true, ...(crossfilterField ? { ariaLabel: d => crossfilterAriaLabel(d[crossfilterField]), href: d => crossfilterHref(d[crossfilterField]) } : {}) }),
@@ -356,35 +454,45 @@ export function dotChart(data, { x, y, sort = "desc", width = 640, height, xLabe
 export function stackedBarChart(data, { mode = "stacked", width = 640, height, xLabel = null, theme = getTheme(), crossfilterField = null } = {}) {
   const t = theme.chart;
   const series = [...new Set(data.map(d => d.series))];
+  const labels = [...new Set(data.map(d => d.label))];
   const color = { domain: series, range: t.categorical, legend: true };
-  let marks, domain;
+  const categories = categoryAxis(labels, width, theme, { min: 60 });
+  const crossfilter = crossfilterField ? { ariaLabel: d => crossfilterAriaLabel(d[crossfilterField]), href: d => crossfilterHref(d[crossfilterField]) } : {};
+  const values = data.map(d => d.value);
   if (mode === "grouped") {
-    const labelByBand = new Map();
-    const rows = data.map(d => {
-      const band = JSON.stringify([d.label, d.series]); labelByBand.set(band, d.label);
-      return { ...d, _band: band };
-    });
-    domain = [...labelByBand.keys()];
-    marks = [Plot.barX(rows, {x:"value", y:"_band", fill:"series", tip:true, ...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})})];
-    return themedPlot(theme, {width,height,marginLeft:Math.min(140,Math.max(60,width*.24)),x:{label:xLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},y:{label:null,domain,tickFormat:k=>labelByBand.get(k)},color,marks});
+    // Grouped = one band per category (fy) holding one bar per series, so each
+    // category label prints once (PR #42 review, B3: per-series bands used to
+    // repeat every label once per series).
+    return themedPlot(theme, {width,height,marginLeft:categories.marginLeft,
+      fy:{label:null,domain:labels,padding:0.18,axis:"left",tickSize:0,tickPadding:8,...(categories.tickFormat?{tickFormat:categories.tickFormat}:{})},
+      x:{label:xLabel??null,tickFormat:axisFormat([0,...values])},
+      y:{axis:null,domain:series,grid:false},
+      color,
+      marks:[Plot.barX(data,{fy:"label",y:"series",x:"value",fill:"series",tip:true,...crossfilter}),Plot.ruleX([0],{stroke:t.border})]});
   }
-  marks = [Plot.barX(data, Plot.stackX({z:"series"},{x:"value",y:"label",fill:"series",tip:true,...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})}))];
-  return themedPlot(theme, {width,height,marginLeft:Math.min(140,Math.max(60,width*.24)),x:{label:xLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},y:{label:null},color,marks});
+  const totals = labels.map(label => data.filter(d => d.label === label).reduce((sum, d) => sum + (Number(d.value) || 0), 0));
+  const marks = [Plot.barX(data, Plot.stackX({z:"series"},{x:"value",y:"label",fill:"series",tip:true,...crossfilter}))];
+  return themedPlot(theme, {width,height,marginLeft:categories.marginLeft,x:{label:xLabel??null,tickFormat:axisFormat([0,...totals])},y:{label:null,domain:naturalDomain(labels),...(categories.tickFormat?{tickFormat:categories.tickFormat}:{})},color,marks});
 }
 
 export function stackedColumnChart(data, { mode = "stacked", width = 640, height, yLabel = null, theme = getTheme(), crossfilterField = null } = {}) {
   const t = theme.chart;
   const series = [...new Set(data.map(d => d.series))];
+  const labels = [...new Set(data.map(d => d.label))];
   const color = { domain: series, range: t.categorical, legend: true };
+  const crossfilter = crossfilterField ? { ariaLabel: d => crossfilterAriaLabel(d[crossfilterField]), href: d => crossfilterHref(d[crossfilterField]) } : {};
+  const bands = bandAxis(labels, width, theme);
   if (mode === "grouped") {
-    const labelByBand = new Map();
-    const rows = data.map(d => {
-      const band = JSON.stringify([d.label, d.series]); labelByBand.set(band, d.label);
-      return { ...d, _band: band };
-    });
-    return themedPlot(theme, {width,height,marginBottom:56,x:{label:null,domain:[...labelByBand.keys()],tickFormat:k=>labelByBand.get(k),tickRotate:data.length>12?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(rows,{x:"_band",y:"value",fill:"series",tip:true,...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})}),Plot.ruleY([0],{stroke:t.border})]});
+    // One band per category (fx) holding one column per series (PR #42 review, B3).
+    return themedPlot(theme, {width,height,marginBottom:bands.marginBottom,
+      fx:{label:null,domain:labels,padding:0.18,axis:"bottom",tickSize:0,tickPadding:8,tickRotate:bands.tickRotate},
+      x:{axis:null,domain:series},
+      y:{label:yLabel??null,tickFormat:axisFormat([0,...data.map(d => d.value)])},
+      color,
+      marks:[Plot.barY(data,{fx:"label",x:"series",y:"value",fill:"series",tip:true,...crossfilter}),Plot.ruleY([0],{stroke:t.border})]});
   }
-  return themedPlot(theme, {width,height,marginBottom:48,x:{label:null,tickRotate:data.length>8?-30:0},y:{label:yLabel??null,tickFormat:fmtInt.format.bind(fmtInt)},color,marks:[Plot.barY(data,Plot.stackY({z:"series"},{x:"label",y:"value",fill:"series",tip:true,...(crossfilterField ? {ariaLabel:d=>crossfilterAriaLabel(d[crossfilterField]), href:d=>crossfilterHref(d[crossfilterField])} : {})})),Plot.ruleY([0],{stroke:t.border})]});
+  const totals = labels.map(label => data.filter(d => d.label === label).reduce((sum, d) => sum + (Number(d.value) || 0), 0));
+  return themedPlot(theme, {width,height,marginBottom:bands.marginBottom,x:{label:null,domain:naturalDomain(labels),tickRotate:bands.tickRotate},y:{label:yLabel??null,tickFormat:axisFormat([0,...totals])},color,marks:[Plot.barY(data,Plot.stackY({z:"series"},{x:"label",y:"value",fill:"series",tip:true,...crossfilter})),Plot.ruleY([0],{stroke:t.border})]});
 }
 
 export function histogramChart(data, { value = "value", bins = 20, preBinned = false, width = 640, height, xLabel = null, theme = getTheme(), referenceValue = null, referenceLabel = "" } = {}) {

@@ -1,7 +1,7 @@
 {
   "poKpis": [
     {"label":"Served, last 4 quarters","value":"606","delta":"101% of goal (600) · ▲ 102 vs prior 4 quarters","deltaDir":"up"},
-    {"label":"Program completion","value":"71.60000000000001%","delta":"of participants who exited · goal 75%","deltaDir":"down"},
+    {"label":"Program completion","value":"71.6%","delta":"of participants who exited · goal 75%","deltaDir":"down"},
     {"label":"Achieved primary outcome","value":"62%","delta":"1,140 of 1,838 · goal 60%","deltaDir":"up"},
     {"label":"Cost per outcome achieved","value":"$3,940","delta":"▼ $310 vs prior year · lower is better","deltaDir":"down","invert":true}
   ],

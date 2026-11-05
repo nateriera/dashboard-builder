@@ -32,7 +32,7 @@
 - Save and reuse local data-wrangling recipes for grouping and calculated fields
 - Build ordered transform chains in the Transform tab: GroupBy, day/week/month Bucket, Between, Top, MovingAvg, Stats, Cumulative, Change, paired periods, Pivot, Histogram, and Ratio
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
-- 4 themes, 6 starter templates, save/load multi-page dashboards as JSON
+- 4 themes, 11 built-in templates plus a preloaded Meridian County starter dashboard, save/load multi-page dashboards as JSON
 - The exported file is one self-contained, offline HTML document — every page in one scrollable file, labeled as an offline snapshot, with a Restore exported filters button and print rules. Email it or host it anywhere; no server needed
 - Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
 
@@ -47,13 +47,13 @@ npm run dev
 
 ## Template gallery
 
-Explore three original sample dashboards in the [starter template gallery](docs/template-gallery.md):
+The composer opens on a Meridian County starter dashboard: 311 timeliness and
+homelessness at a glance, on synthetic data for a fictitious county. Eleven
+original built-in templates, from homeless system performance and behavioral
+health quality to 311 operations, scorecards and sales, are pictured in the
+[template gallery](docs/template-gallery.md).
 
-- **Executive overview** — KPIs, monthly trend, and category mix.
-- **Trend deep dive** — time series, small multiples, and scatter.
-- **Geographic snapshot** — state map with supporting metrics.
-
-Choose **More actions → Templates** in the composer to try these or the other three starters.
+Choose **More actions → Templates** in the composer to try any of the eleven.
 
 ## Beginner guides
 
@@ -343,8 +343,8 @@ are not promised; a cache hit is not a verified offline installation mode.
 
 ### Templates and release
 
-Six original starter templates and user-saved templates retain theme and tile
-options. Applying a template asks before replacing the dashboard. Templates
+Eleven original built-in templates and user-saved templates retain theme and
+tile options. Applying a template asks before replacing the dashboard. Templates
 contain data references, so missing uploads/queries require repair in another
 browser. Contributed templates must use original compositions rather than
 recreate another creator's dashboard.

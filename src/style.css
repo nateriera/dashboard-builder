@@ -1452,6 +1452,13 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .
 .theme-option.current { background: var(--slate); }
 }
 
+/* Unscoped on purpose: applies under every theme. GridStack's DDDraggable
+   skips a mousedown whose target sits inside a <button> unless the target IS
+   the drag element (dd-draggable.js skipMouseDown), so grabbing the palette
+   card's label/description text never started a drag. Routing hits to the
+   card itself makes the whole card a grab surface. */
+.palette-item > * { pointer-events: none; }
+
 @scope (:root[data-theme]:not([data-theme="paper"])){/* Dashboard Builder — composer chrome. Chart internals are styled by the
    chart kit (chartStyles in src/charts/charts.js); this file covers the app
    shell, palette, grid, and tile chrome only. All colors/fonts come from

@@ -78,6 +78,26 @@
     {"facet":"Severe housing cost burden (%)","label":"State","value":13.8},
     {"facet":"Severe housing cost burden (%)","label":"United States","value":14.3}
   ],
+  "chFactorsCompared": [
+    {"label":"Smoking","series":"Meridian County","value":16.8,"factor":"Adult smoking (%)"},
+    {"label":"Smoking","series":"State","value":14.9,"factor":"Adult smoking (%)"},
+    {"label":"Smoking","series":"United States","value":13.2,"factor":"Adult smoking (%)"},
+    {"label":"Obesity","series":"Meridian County","value":36.4,"factor":"Adult obesity (%)"},
+    {"label":"Obesity","series":"State","value":34.1,"factor":"Adult obesity (%)"},
+    {"label":"Obesity","series":"United States","value":33,"factor":"Adult obesity (%)"},
+    {"label":"Inactivity","series":"Meridian County","value":25.9,"factor":"Physical inactivity (%)"},
+    {"label":"Inactivity","series":"State","value":23.2,"factor":"Physical inactivity (%)"},
+    {"label":"Inactivity","series":"United States","value":22.6,"factor":"Physical inactivity (%)"},
+    {"label":"Uninsured","series":"Meridian County","value":11.8,"factor":"Uninsured adults 19–64 (%)"},
+    {"label":"Uninsured","series":"State","value":10.9,"factor":"Uninsured adults 19–64 (%)"},
+    {"label":"Uninsured","series":"United States","value":9.5,"factor":"Uninsured adults 19–64 (%)"},
+    {"label":"Child poverty","series":"Meridian County","value":19.6,"factor":"Children in poverty (%)"},
+    {"label":"Child poverty","series":"State","value":16.4,"factor":"Children in poverty (%)"},
+    {"label":"Child poverty","series":"United States","value":16.3,"factor":"Children in poverty (%)"},
+    {"label":"Housing burden","series":"Meridian County","value":17.2,"factor":"Severe housing cost burden (%)"},
+    {"label":"Housing burden","series":"State","value":13.8,"factor":"Severe housing cost burden (%)"},
+    {"label":"Housing burden","series":"United States","value":14.3,"factor":"Severe housing cost burden (%)"}
+  ],
   "chScatter": [
     {"x":7.4,"y":353,"group":"South","state":"Alabama"},
     {"x":12.6,"y":376,"group":"West","state":"Alaska"},

@@ -49,5 +49,23 @@
     {"facet":"Financial stewardship","label":"26Q1","value":101.3},
     {"facet":"Financial stewardship","label":"26Q2","value":102.6},
     {"facet":"Financial stewardship","label":"26Q3","value":103.8}
+  ],
+  "scPerspectiveTrendLines": [
+    {"date":"25Q4","series":"Clients & community","value":97.4},
+    {"date":"26Q1","series":"Clients & community","value":98},
+    {"date":"26Q2","series":"Clients & community","value":100},
+    {"date":"26Q3","series":"Clients & community","value":101.1},
+    {"date":"25Q4","series":"Internal process","value":97.4},
+    {"date":"26Q1","series":"Internal process","value":98.5},
+    {"date":"26Q2","series":"Internal process","value":99.6},
+    {"date":"26Q3","series":"Internal process","value":100.8},
+    {"date":"25Q4","series":"Learning & growth","value":80.3},
+    {"date":"26Q1","series":"Learning & growth","value":81.8},
+    {"date":"26Q2","series":"Learning & growth","value":82.8},
+    {"date":"26Q3","series":"Learning & growth","value":84.4},
+    {"date":"25Q4","series":"Financial stewardship","value":99.9},
+    {"date":"26Q1","series":"Financial stewardship","value":101.3},
+    {"date":"26Q2","series":"Financial stewardship","value":102.6},
+    {"date":"26Q3","series":"Financial stewardship","value":103.8}
   ]
 }

@@ -5,15 +5,15 @@ import { clickHeaderAction } from './header-actions.js';
 // state — every tile rendered, no tile errors, zero console errors at load.
 
 const TEMPLATES = [
-  ['Homeless system performance (CoC)', 9],
-  ['Behavioral health quality (CCBHC)', 7],
-  ['Health center quality (UDS)', 7],
-  ['Overdose & SUD community surveillance', 7],
-  ['Community health by place', 8],
-  ['Program outcomes & funder report', 6],
+  ['Homeless system performance (CoC)', 5],
+  ['Behavioral health quality (CCBHC)', 6],
+  ['Health center quality (UDS)', 5],
+  ['Overdose & SUD community surveillance', 6],
+  ['Community health by place', 6],
+  ['Program outcomes & funder report', 4],
   ['System flow: inflow, outflow & actively homeless', 5],
-  ['City services: 311 operations', 8],
-  ['Performance scorecard (targets & thresholds)', 5],
+  ['City services: 311 operations', 6],
+  ['Performance scorecard (targets & thresholds)', 4],
   ['Executive overview', 5],
   ['Sales performance', 6]
 ];

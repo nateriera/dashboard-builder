@@ -693,10 +693,21 @@
     {"measure":"M2 (12 mo)","definition":"% of PH exits two years prior who returned within 12 months","FY2025":12.8,"FY2026":10.7,"change":-2.1,"unit":"%","better when":"lower","direction":"improved"},
     {"measure":"M3.1","definition":"Point-in-time count, sheltered + unsheltered (January)","FY2025":1555,"FY2026":1427,"change":-128,"unit":"people","better when":"lower","direction":"improved"},
     {"measure":"M3.2","definition":"Annual count of people in ES, SH, TH","FY2025":4260,"FY2026":4448,"change":188,"unit":"people","better when":"lower","direction":"worsened"},
-    {"measure":"M4","definition":"% of CoC-funded adult stayers/leavers who increased total income","FY2025":28.299999999999997,"FY2026":32,"change":3.7,"unit":"%","better when":"higher","direction":"improved"},
+    {"measure":"M4","definition":"% of CoC-funded adult stayers/leavers who increased total income","FY2025":28.3,"FY2026":32,"change":3.7,"unit":"%","better when":"higher","direction":"improved"},
     {"measure":"M5","definition":"People homeless for the first time (no HMIS record in prior 24 months)","FY2025":1917,"FY2026":2047,"change":130,"unit":"people","better when":"lower","direction":"worsened"},
     {"measure":"M7b.1","definition":"% of exits from ES, SH, TH, RRH to permanent housing","FY2025":38.5,"FY2026":39.1,"change":0.6,"unit":"%","better when":"higher","direction":"improved"},
-    {"measure":"M7b.2","definition":"% of PSH/OPH participants retained or exited to PH","FY2025":92.60000000000001,"FY2026":92.8,"change":0.2,"unit":"%","better when":"higher","direction":"improved"}
+    {"measure":"M7b.2","definition":"% of PSH/OPH participants retained or exited to PH","FY2025":92.6,"FY2026":92.8,"change":0.2,"unit":"%","better when":"higher","direction":"improved"}
+  ],
+  "cocSpmBriefTable": [
+    {"measure":"M1a median, days","FY2025":76.5,"FY2026":75.5,"direction":"improved"},
+    {"measure":"M1a mean, days","FY2025":176,"FY2026":167,"direction":"improved"},
+    {"measure":"M2 (12 mo), %","FY2025":12.8,"FY2026":10.7,"direction":"improved"},
+    {"measure":"M3.1, people","FY2025":1555,"FY2026":1427,"direction":"improved"},
+    {"measure":"M3.2, people","FY2025":4260,"FY2026":4448,"direction":"worsened"},
+    {"measure":"M4, %","FY2025":28.3,"FY2026":32,"direction":"improved"},
+    {"measure":"M5, people","FY2025":1917,"FY2026":2047,"direction":"worsened"},
+    {"measure":"M7b.1, %","FY2025":38.5,"FY2026":39.1,"direction":"improved"},
+    {"measure":"M7b.2, %","FY2025":92.6,"FY2026":92.8,"direction":"improved"}
   ],
   "cocEquity": [
     {"facet":"Exits to permanent housing (%)","label":"Black","group":"Black, African American, or African","value":32.5,"n":1163},

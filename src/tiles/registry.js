@@ -509,10 +509,13 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
       if (type === 'donut') {
         const legend = el.querySelector('.db-legend');
         legendSpace = Math.max(0, legend.getBoundingClientRect().height + parseFloat(getComputedStyle(legend).marginTop) - 80);
-      } else if (type === 'line') {
-        const figure = el.querySelector('figure');
-        const plot = figure && [...figure.querySelectorAll('svg')].sort((a,b) => b.getBoundingClientRect().height - a.getBoundingClientRect().height)[0];
-        if (plot) legendSpace = figure.getBoundingClientRect().height - plot.getBoundingClientRect().height;
+      } else if (type !== 'smallMultiples') {
+        // Anything in the chart body besides the plot (Plot's color legend on
+        // line/area/stacked charts, the heatmap ramp) takes height from it, or
+        // the tile's data row is pushed out of the tile (PR #42 review, B6).
+        const body = el.querySelector('.db-chart-body');
+        const plot = body && [...body.querySelectorAll('svg')].sort((a,b) => b.getBoundingClientRect().height - a.getBoundingClientRect().height)[0];
+        if (plot) legendSpace = Math.max(0, body.getBoundingClientRect().height - plot.getBoundingClientRect().height);
       }
       if (Math.abs(footerHeight - (options.footerHeight ?? 40)) > 1 || Math.abs(legendSpace - (options.legendSpace || 0)) > 1) {
         options = { ...options, footerHeight, legendSpace };

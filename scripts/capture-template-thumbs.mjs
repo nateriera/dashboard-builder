@@ -1,17 +1,20 @@
 // Captures the built-in template thumbnails and the screenshot-at-load sheet.
 //
 // Usage:
-//   node scripts/capture-template-thumbs.mjs [--sheet DIR] [--no-thumbs]
+//   node scripts/capture-template-thumbs.mjs [--sheet DIR] [--appendix] [--no-thumbs]
 //
 // Starts the vite dev server on 127.0.0.1:4178 (or uses BASE_URL), then, for
 // each built-in template in gallery order, opens a fresh browser context with
 // empty storage, applies the template from the gallery exactly as a user
 // would (Use template → Replace) and:
-//   • writes src/assets/template-thumbs/<id>.png — a 1160×884 viewport capture
-//     at 1× (the existing thumbnail format; the gallery shows it 156px tall,
-//     object-fit: cover, anchored top);
-//   • with --sheet DIR, writes DIR/<nn>-<id>.png — the whole dashboard at
-//     1440px wide, nothing scrolled away, for tile-by-tile review;
+//   • writes src/assets/template-thumbs/<id>.png — the present-mode 1440×900
+//     screen rendered at 1160px wide (device scale 1160/1440 → 1160×725; the
+//     gallery shows it 156px tall, object-fit: cover, anchored top);
+//   • with --sheet DIR, writes DIR/<nn>-<id>.png — the dashboard as presented:
+//     present mode in a 1440×900 viewport, the review surface (PR #42, B6).
+//     Fails if any dashboard scrolls in present mode: everything must be
+//     visible at once. --appendix also writes DIR/appendix/<nn>-<id>.png, the
+//     whole page in edit mode (supporting material, not the review surface);
 //   • fails if the page logs any console error or page error at load.
 // The starter dashboard is captured to the sheet as 00-starter.png.
 // Drives installed Google Chrome through Playwright, like the browser suite.
@@ -27,9 +30,10 @@ const args = process.argv.slice(2);
 const sheetIdx = args.indexOf('--sheet');
 const SHEET = sheetIdx >= 0 ? resolve(args[sheetIdx + 1]) : null;
 const THUMBS = !args.includes('--no-thumbs');
+const APPENDIX = args.includes('--appendix');
 const PORT = 4178;
 const BASE = process.env.BASE_URL || `http://127.0.0.1:${PORT}`;
-const THUMB = { width: 1160, height: 884 };
+const THUMB = { width: 1440, height: 900, scale: 1160 / 1440 };
 
 async function startServer() {
   if (process.env.BASE_URL) return null;
@@ -43,7 +47,7 @@ async function startServer() {
 }
 
 async function open(browser, viewport) {
-  const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: viewport.scale ?? 1 });
   const page = await context.newPage();
   const errors = [];
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
@@ -78,8 +82,25 @@ async function applyTemplate(page, name) {
   await page.locator('#status').filter({ hasText: `Applied template “${name}”.` }).waitFor({ timeout: 10000 });
 }
 
+async function presentShot(page, file, label) {
+  // Present mode at 1440×900, exactly as a presentation shows it; no page scroll allowed.
+  await page.mouse.move(0, 0);
+  await page.evaluate(() => document.getElementById('btn-present').click());
+  await page.locator('#btn-exit-present').waitFor({ state: 'visible' });
+  await settle(page);
+  const fit = await page.evaluate(() => {
+    const wrap = document.getElementById('grid-wrap');
+    const bottom = Math.max(...[...document.querySelectorAll('.grid-stack-item')].map(t => t.getBoundingClientRect().bottom));
+    return { scroll: wrap.scrollHeight - wrap.clientHeight, page: document.documentElement.scrollHeight - innerHeight, bottom: Math.round(bottom) };
+  });
+  if (fit.scroll > 1 || fit.page > 1 || fit.bottom > 900) failures.push(`${label}: does not fit 1440×900 in present mode (grid bottom ${fit.bottom}px)`);
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: file });
+  await page.evaluate(() => document.getElementById('btn-exit-present').click());
+}
+
 async function sheetShot(page, file) {
-  // Grow the viewport until the whole grid is on screen, then capture it.
+  // Appendix: grow the viewport until the whole grid is on screen, then capture it.
   const height = await page.evaluate(() => {
     const grid = document.querySelector('.grid-stack');
     const top = grid.getBoundingClientRect().top + window.scrollY;
@@ -91,9 +112,9 @@ async function sheetShot(page, file) {
   await page.screenshot({ path: file });
 }
 
+const failures = [];
 const server = await startServer();
 const browser = await chromium.launch({ channel: 'chrome' });
-const failures = [];
 try {
   const { BUILT_IN_TEMPLATES } = await import('../src/templates.js').catch(() => ({ BUILT_IN_TEMPLATES: null }));
   const list = BUILT_IN_TEMPLATES || await (async () => {
@@ -104,9 +125,11 @@ try {
   })();
   if (SHEET) {
     await mkdir(SHEET, { recursive: true });
+    if (APPENDIX) await mkdir(join(SHEET, 'appendix'), { recursive: true });
     const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
     await settle(page);
-    await sheetShot(page, join(SHEET, '00-starter.png'));
+    await presentShot(page, join(SHEET, '00-starter.png'), 'starter');
+    if (APPENDIX) await sheetShot(page, join(SHEET, 'appendix', '00-starter.png'));
     if (errors.length) failures.push(`starter: ${errors.join(' | ')}`);
     await context.close();
     console.log('sheet  00-starter.png');
@@ -116,8 +139,7 @@ try {
       const { context, page, errors } = await open(browser, THUMB);
       await applyTemplate(page, tpl.name);
       await settle(page);
-      await page.mouse.move(0, THUMB.height - 1);
-      await page.screenshot({ path: join(root, 'src', 'assets', 'template-thumbs', `${tpl.id}.png`) });
+      await presentShot(page, join(root, 'src', 'assets', 'template-thumbs', `${tpl.id}.png`), `${tpl.id} (thumb)`);
       if (errors.length) failures.push(`${tpl.id} (thumb): ${errors.join(' | ')}`);
       await context.close();
       console.log('thumb ', `${tpl.id}.png`);
@@ -129,7 +151,8 @@ try {
       const tileErrors = await page.locator('.tile-error').allTextContents();
       if (tileErrors.length) failures.push(`${tpl.id}: tile errors: ${tileErrors.join(' | ')}`);
       const file = `${String(i + 1).padStart(2, '0')}-${tpl.id}.png`;
-      await sheetShot(page, join(SHEET, file));
+      await presentShot(page, join(SHEET, file), tpl.id);
+      if (APPENDIX) await sheetShot(page, join(SHEET, 'appendix', file));
       if (errors.length) failures.push(`${tpl.id} (sheet): ${errors.join(' | ')}`);
       await context.close();
       console.log('sheet ', file);

@@ -1,9 +1,12 @@
 // Captures the docs screenshots that no browser spec or `npm run shots`
-// produces: the three starter-template shots, the exported HTML viewer with
-// real metadata and an active filter, and the typed-parameter viewer.
+// produces: one shot per built-in template (template-<id>.png, gallery
+// order), the exported HTML viewer with real metadata and an active filter,
+// and the typed-parameter viewer.
 //
 // Usage:
-//   npm run build && node scripts/capture-docs-shots.mjs
+//   npm run build && node scripts/capture-docs-shots.mjs [templates]
+//
+// With `templates`, only the template shots are written.
 //
 // It serves the production build with `vite preview` on 127.0.0.1:4176,
 // drives installed Google Chrome through Playwright (fresh context per shot,
@@ -35,7 +38,7 @@ const META = {
 };
 
 async function startPreview() {
-  const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  const server = spawn(process.execPath, [join(root, 'node_modules', 'vite', 'bin', 'vite.js'), 'preview', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(BASE)).ok) return server; } catch { /* not up yet */ }
     await new Promise(r => setTimeout(r, 200));
@@ -144,7 +147,21 @@ async function seedAndReload(page, layout) {
   await settle(page);
 }
 
-// ── Starter templates ────────────────────────────────────────────────────
+// ── Built-in templates, in gallery order (src/templates.js) ──────────────
+const TEMPLATES = [
+  ['homeless-system-performance', 'Homeless system performance (CoC)'],
+  ['behavioral-health-quality', 'Behavioral health quality (CCBHC)'],
+  ['health-center-quality', 'Health center quality (UDS)'],
+  ['overdose-surveillance', 'Overdose & SUD community surveillance'],
+  ['community-health-by-place', 'Community health by place'],
+  ['program-outcomes', 'Program outcomes & funder report'],
+  ['system-flow', 'System flow: inflow, outflow & actively homeless'],
+  ['city-services-311', 'City services: 311 operations'],
+  ['performance-scorecard', 'Performance scorecard (targets & thresholds)'],
+  ['executive-overview', 'Executive overview'],
+  ['sales-performance', 'Sales performance']
+];
+
 async function captureTemplate(browser, name, out) {
   const { context, page, errors } = await newPage(browser);
   await page.goto(BASE);
@@ -229,11 +246,11 @@ async function captureParametersViewer(browser) {
 const server = await startPreview();
 const browser = await chromium.launch({ channel: 'chrome' });
 try {
-  await captureTemplate(browser, 'Executive overview', 'template-executive-overview.png');
-  await captureTemplate(browser, 'Trend deep dive', 'template-trend-deep-dive.png');
-  await captureTemplate(browser, 'Geographic snapshot', 'template-geographic-snapshot.png');
-  await captureSharingViewer(browser);
-  await captureParametersViewer(browser);
+  for (const [id, name] of TEMPLATES) await captureTemplate(browser, name, `template-${id}.png`);
+  if (process.argv[2] !== 'templates') {
+    await captureSharingViewer(browser);
+    await captureParametersViewer(browser);
+  }
 } finally {
   await browser.close();
   server.kill();

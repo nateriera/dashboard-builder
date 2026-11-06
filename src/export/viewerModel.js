@@ -5,6 +5,25 @@
 import { exportMetaFacts, metaFromInputs, validateLayoutMeta, META_FIELDS, META_MAX_LENGTH } from '../data/layoutMeta.js';
 export { exportMetaFacts, metaFromInputs, validateLayoutMeta, META_FIELDS, META_MAX_LENGTH };
 
+const presentText = value => (typeof value === 'string' ? value.trim() : '');
+
+/**
+ * Title-block fact lines (empty-state parity with the composer): a blank
+ * Prepared by or Data period prints no line at all; present values print as
+ * "Label: value" in a fixed order.
+ */
+export function exportFactLines(meta) {
+  return [['Prepared by', presentText(meta?.preparedBy)], ['Data period', presentText(meta?.dataPeriod)]]
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label}: ${value}`);
+}
+
+/** A tile's source line, or null when the source is empty (the composer shows none). */
+export function tileSourceLine(source) {
+  const value = presentText(source);
+  return value ? `Source: ${value}` : null;
+}
+
 const pad = n => String(Math.abs(Math.trunc(n))).padStart(2, '0');
 
 /**

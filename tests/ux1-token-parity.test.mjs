@@ -8,7 +8,7 @@ test('Paper roots agree on canonical tokens', () => {
     '--paper':'#F5F1EA', '--white':'#FFFFFF', '--ink':'#1E2347',
     '--periwinkle':'#B7BFD9', '--dusk':'#4A5278', '--slate':'#E7E3D9',
     '--slate-200':'#E7E3D9', '--slate-300':'#9AA0AE', '--slate-400':'#9AA0AE',
-    '--slate-500':'#6E7484', '--slate-600':'#3A4054', '--slate-700':'#3A4054',
+    '--slate-500':'#5F6575', '--slate-600':'#3A4054', '--slate-700':'#3A4054',
     '--success':'#2F7D5B', '--warning':'#B97F26', '--danger':'#C0452F',
     '--brush-fill':'rgba(183,191,217,.30)',
     '--scrim':'rgba(14,31,42,.45)',

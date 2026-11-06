@@ -10,6 +10,8 @@ export function fitTileToContent(grid, el) {
     const style = getComputedStyle(child);
     return sum + child.getBoundingClientRect().height + parseFloat(style.marginTop || 0) + parseFloat(style.marginBottom || 0);
   }, 0);
-  const rows = rowsForContent(content + (toolbar?.offsetHeight || 0), grid.getCellHeight(), grid.getMargin());
+  // A note's compact toolbar overlays the tile corner and takes no row height.
+  const chrome = toolbar && getComputedStyle(toolbar).position !== 'absolute' ? toolbar.offsetHeight : 0;
+  const rows = rowsForContent(content + chrome, grid.getCellHeight(), grid.getMargin());
   if (el.gridstackNode.h !== rows) grid.update(el, { h: rows });
 }

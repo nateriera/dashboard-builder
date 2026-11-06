@@ -769,7 +769,7 @@ export const chartStyles = html`<style>
 .db-data-table-grid th { position: sticky; top: 0; z-index: 1; background: var(--white); color: var(--slate-600); font-weight: 600; }
 .db-data-table-grid td { font-variant-numeric: tabular-nums; }
 svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.55; padding: 10px 4px; }
+.db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.45; padding: 4px; }
 .db-heatmap-legend { margin: 2px 6% 4px 12%; }
 .db-heatmap-ramp { height: 9px; border-radius: 6px; }
 .db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 12px; margin-top: 3px; }
@@ -896,7 +896,7 @@ svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--f
 .db-data-table-grid th, .db-data-table-grid td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--slate-200); white-space: nowrap; }
 .db-data-table-grid th { position: sticky; top: 0; z-index: 1; background: var(--white); color: var(--slate-600); font-weight: 600; }
 .db-data-table-grid td { font-variant-numeric: tabular-nums; }
-.db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.55; padding: 10px 4px; }
+.db-annotation { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); line-height: 1.45; padding: 4px; }
 .db-heatmap-legend { margin: 2px 6% 4px 12%; }
 .db-heatmap-ramp { height: 9px; border-radius: 2px; }
 .db-heatmap-domain { display: flex; justify-content: space-between; color: var(--slate-600); font-size: 11px; margin-top: 3px; }

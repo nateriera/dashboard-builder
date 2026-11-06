@@ -3,6 +3,12 @@ import { acceptErroredTileExportConfirmation } from './accept-errored-export.js'
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { clickHeaderAction, focusHeaderAction, shareHtml } from './header-actions.js';
+import { seedLegacyStarter } from './legacy-starter.js';
+
+// These specs drive the pre-exemplar starter (Headlines, Requests by category,
+// Monthly requests, donut, scatter); seed it explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedLegacyStarter(page); });
+
 
 const upload = { name:'Revenue',columns:['label','value'],rows:[{label:'North',value:12},{label:'South',value:30}],fieldKeys:['label','value'],mapping:{label:'label',value:'value'},raw:null };
 const envelope = (tiles,datasets={},queries={}) => ({app:'dashboard-builder',version:1,theme:'paper',tiles,datasets,queries});

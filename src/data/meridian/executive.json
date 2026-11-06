@@ -1,0 +1,53 @@
+{
+  "exKpis": [
+    {"label":"Revenue YTD (Finance)","value":"$19.9M","delta":"▲ 7.1% vs 2025 YTD · plan $19.6M","deltaDir":"up"},
+    {"label":"Gross margin (Finance)","value":"61.8%","delta":"▲ 1.2 pts vs 2025 · target 60%","deltaDir":"up"},
+    {"label":"Net revenue retention (Customer success)","value":"104%","delta":"▼ 2 pts vs Q2 · target 105%","deltaDir":"down"},
+    {"label":"On-time delivery (Operations)","value":"93.4%","delta":"▲ 0.8 pts vs Q2 · target 95%","deltaDir":"up"},
+    {"label":"Voluntary turnover, annualized (People)","value":"11.2%","delta":"▼ 1.5 pts vs 2025 · lower is better","deltaDir":"down","invert":true}
+  ],
+  "exRevenue": [
+    {"date":"2026-01","value":2.02,"series":"2026 revenue ($M)"},
+    {"date":"2026-01","value":1.91,"series":"2025, same month ($M)"},
+    {"date":"2026-02","value":2.01,"series":"2026 revenue ($M)"},
+    {"date":"2026-02","value":1.91,"series":"2025, same month ($M)"},
+    {"date":"2026-03","value":1.96,"series":"2026 revenue ($M)"},
+    {"date":"2026-03","value":1.89,"series":"2025, same month ($M)"},
+    {"date":"2026-04","value":1.97,"series":"2026 revenue ($M)"},
+    {"date":"2026-04","value":1.81,"series":"2025, same month ($M)"},
+    {"date":"2026-05","value":1.92,"series":"2026 revenue ($M)"},
+    {"date":"2026-05","value":1.81,"series":"2025, same month ($M)"},
+    {"date":"2026-06","value":1.92,"series":"2026 revenue ($M)"},
+    {"date":"2026-06","value":1.76,"series":"2025, same month ($M)"},
+    {"date":"2026-07","value":1.98,"series":"2026 revenue ($M)"},
+    {"date":"2026-07","value":1.78,"series":"2025, same month ($M)"},
+    {"date":"2026-08","value":1.99,"series":"2026 revenue ($M)"},
+    {"date":"2026-08","value":1.84,"series":"2025, same month ($M)"},
+    {"date":"2026-09","value":2,"series":"2026 revenue ($M)"},
+    {"date":"2026-09","value":1.91,"series":"2025, same month ($M)"},
+    {"date":"2026-10","value":2.13,"series":"2026 revenue ($M)"},
+    {"date":"2026-10","value":1.96,"series":"2025, same month ($M)"}
+  ],
+  "exBudget": [
+    {"label":"Sales","series":"Budget YTD ($M)","value":4.1},
+    {"label":"Sales","series":"Actual YTD ($M)","value":3.9},
+    {"label":"Marketing","series":"Budget YTD ($M)","value":1.2},
+    {"label":"Marketing","series":"Actual YTD ($M)","value":1.3},
+    {"label":"Operations","series":"Budget YTD ($M)","value":5.6},
+    {"label":"Operations","series":"Actual YTD ($M)","value":5.4},
+    {"label":"Customer success","series":"Budget YTD ($M)","value":1.9},
+    {"label":"Customer success","series":"Actual YTD ($M)","value":2},
+    {"label":"People","series":"Budget YTD ($M)","value":0.9},
+    {"label":"People","series":"Actual YTD ($M)","value":0.9},
+    {"label":"Technology","series":"Budget YTD ($M)","value":2.7},
+    {"label":"Technology","series":"Actual YTD ($M)","value":2.4}
+  ],
+  "exByFunction": [
+    {"label":"Sales","value":95.1},
+    {"label":"Marketing","value":108.3},
+    {"label":"Operations","value":96.4},
+    {"label":"Customer success","value":105.3},
+    {"label":"People","value":100},
+    {"label":"Technology","value":88.9}
+  ]
+}

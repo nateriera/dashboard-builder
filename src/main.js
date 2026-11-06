@@ -429,6 +429,17 @@ async function resolveExportRows(meta, entry) {
 }
 
 // ── Tile DOM ─────────────────────────────────────────────────────────────
+// Toolbar buttons carry three visible labels; a container query on the tile
+// shows one (full words, short words, or a symbol) so narrow tiles never clip
+// them. The spans are aria-hidden: the accessible name stays on aria-label.
+function toolbarLabels(el, full, short, glyph) {
+  el.replaceChildren(...[['tl-full', full], ['tl-short', short], ['tl-glyph', glyph]].map(([cls, text]) => {
+    const span = document.createElement('span'); span.className = cls; span.textContent = text; span.setAttribute('aria-hidden', 'true');
+    return span;
+  }));
+  el.title = full;
+}
+
 function buildTileContent(type, meta) {
   const entry = TILE_TYPES[type];
 
@@ -463,7 +474,7 @@ function buildTileContent(type, meta) {
   const arrangeBtn = document.createElement("button");
   arrangeBtn.type = "button";
   arrangeBtn.className = "tile-arrange-btn";
-  arrangeBtn.textContent = "Move and resize";
+  toolbarLabels(arrangeBtn, "Move and resize", "Move", "✥");
   arrangeBtn.setAttribute("aria-label", `Move and resize ${meta.title?.trim() || meta.type}`);
   arrangeBtn.setAttribute("aria-pressed", "false");
   arrangeBtn.addEventListener("pointerdown", event => event.stopPropagation());
@@ -541,8 +552,7 @@ function buildTileContent(type, meta) {
   const removeBtn = document.createElement("button");
   removeBtn.className = "tile-remove";
   removeBtn.type = "button";
-  removeBtn.textContent = "Remove chart";
-  removeBtn.title = "Remove chart";
+  toolbarLabels(removeBtn, "Remove chart", "Remove", "✕");
   removeBtn.setAttribute("aria-label", `Remove ${meta.title?.trim() || entry.label || meta.type}`);
   removeBtn.addEventListener("click", () => {
     const name = meta.title?.trim() || entry.label || meta.type;
@@ -586,7 +596,7 @@ function buildTileContent(type, meta) {
   });
   titleRow.append(titleInput, arrangeBtn);
   const settings = document.createElement('details'); settings.className = 'tile-settings';
-  const summary = document.createElement('summary'); summary.textContent = 'Chart settings'; settings.append(summary);
+  const summary = document.createElement('summary'); toolbarLabels(summary, 'Chart settings', 'Settings', '⚙'); summary.setAttribute('aria-label', 'Chart settings'); settings.append(summary);
   const settingsBody = document.createElement('div'); settingsBody.className = 'tile-settings-body'; settings.append(settingsBody);
   settings.addEventListener('pointerdown', e => e.stopPropagation());
   settings.addEventListener('mousedown', e => e.stopPropagation());

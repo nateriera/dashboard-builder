@@ -2900,8 +2900,33 @@ body.present .grid-cell-guides { display: none !important; }
 .tile-settings > summary { padding: 4px 8px; border: 1px solid var(--slate-200); border-radius: 6px; background: var(--white); color: var(--slate-600); font-size: 12px; cursor: pointer; white-space: nowrap; }
 .tile-remove { padding: 4px 8px; border: 1px solid var(--slate-200); background: var(--white); color: var(--slate-600); font-size: 12px; white-space: nowrap; }
 .tile-remove:hover { border-color: var(--danger); }
-.tile-data-row { display: grid; grid-template-columns: 1fr; gap: 2px; min-width: 0; cursor: default; }
-.tile-data-caption { color: var(--slate-500); font-size: 11px; line-height: 1.2; }
+/* Compact edit-mode toolbar: the caption sits inline with the data source (one
+   line when the name fits; a long name still wraps in full, never ellipsised),
+   and each toolbar button shows full words, short words or a symbol by tile
+   width, so narrow tiles keep their chart height and no button is clipped. */
+.tile { container: tile / inline-size; }
+.tile-toolbar { gap: 3px; padding: 4px 10px; }
+.tile-title-row { flex-wrap: nowrap; gap: 6px; }
+.tile-title-row .tile-title { min-width: 48px; }
+.tile-arrange-btn, .tile-settings > summary, .tile-remove { white-space: nowrap; flex: 0 0 auto; }
+.tile-arrange-btn .tl-short, .tile-arrange-btn .tl-glyph,
+.tile-settings > summary .tl-short, .tile-settings > summary .tl-glyph,
+.tile-remove .tl-short, .tile-remove .tl-glyph { display: none; }
+@container tile (max-width: 440px) {
+  .tile-arrange-btn .tl-full, .tile-settings > summary .tl-full, .tile-remove .tl-full { display: none; }
+  .tile-arrange-btn .tl-short, .tile-settings > summary .tl-short, .tile-remove .tl-short { display: inline; }
+}
+@container tile (max-width: 300px) {
+  .tile-arrange-btn .tl-short, .tile-settings > summary .tl-short, .tile-remove .tl-short { display: none; }
+  .tile-arrange-btn .tl-glyph, .tile-settings > summary .tl-glyph, .tile-remove .tl-glyph { display: inline; }
+  .tile-title-row { gap: 4px; }
+  .tile-arrange-btn, .tile-settings > summary, .tile-remove { padding-inline: 6px; }
+  /* The caption stays for screen readers; the dataset name keeps the line. */
+  .tile-data-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+.tile-data-row { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; row-gap: 2px; min-width: 0; cursor: default; }
+.tile-data-caption { flex: 0 0 auto; color: var(--slate-500); font-size: 11px; line-height: 1.2; }
+.tile-data-row .tile-data-btn { flex: 0 1 auto; }
 .tile-data-btn { max-width: none; width: fit-content; max-width: 100%; min-width: 0; white-space: normal; overflow: visible; overflow-wrap: anywhere; text-align: left; text-overflow: clip; }
 .tile-data-label { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .saved-views-popover { position: fixed; z-index: 5000; width: min(400px, calc(100vw - 16px)); padding: 16px; border: 1px solid var(--slate-300); border-radius: 8px; background: var(--white); color: var(--ink); box-shadow: var(--shadow-overlay); }

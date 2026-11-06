@@ -444,7 +444,8 @@ function buildTileContent(type, meta) {
   const entry = TILE_TYPES[type];
 
   const tile = document.createElement("div");
-  tile.className = "tile";
+  // Note tiles (no data) get the compact corner toolbar of the S3 note contract.
+  tile.className = entry.noData ? "tile tile-note" : "tile";
 
   const toolbar = document.createElement("div");
   toolbar.className = "tile-toolbar";
@@ -734,6 +735,8 @@ function buildTileContent(type, meta) {
   dataCaption.className = 'tile-data-caption';
   dataCaption.textContent = 'Data source';
   dataRow.append(dataCaption, dataBtn);
+  // A note has no data: its row would only show a caption over a hidden button.
+  dataRow.hidden = !!entry.noData;
   toolbar.append(titleRow, dataRow);
 
   const chart = document.createElement("div");

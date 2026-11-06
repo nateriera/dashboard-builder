@@ -3014,3 +3014,65 @@ body.palette-collapsed .grid-guidance { width: min(320px, calc(100% - 24px)); }
 .share-modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .share-modal-actions button { min-height: 36px; padding: 6px 14px; border: 1px solid var(--slate-300); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; cursor: pointer; }
 .share-modal-actions .share-modal-primary { border-color: var(--ink); background: var(--ink); color: var(--white); }
+
+/* S1 KPI height contract (unscoped: every theme; composer tiles only, since
+   the export viewer's cards are content height). At any card count 1–6 the
+   cards stay inside the tile, with no spill and no inner scrollbar:
+   - The "View data" disclosure stays in the tile's flow, directly under the
+     cards, and its line is part of the height budget below (it is no longer
+     pushed out of the tile by the cards).
+   - The tile body is a size container. In short tiles (every template KPI
+     tile at 24px rows: 149–221px tall in edit, 214–286px in present) the
+     cards compact;
+     cards narrower than 200px in a short tile compact once more. Below 240px
+     card width the figure and delta shrink in tall tiles too.
+   Cards only get shorter; no text is clamped or dropped. */
+.tile > .tile-chart:has(> .db-card .db-kpi-row) { display: flex; flex-direction: column; container: kpi-tile / size; }
+.tile > .tile-chart:has(> .db-card .db-kpi-row) > .db-card { flex: 0 0 auto; }
+.tile > .tile-chart:has(> .db-card .db-kpi-row) > details.chart-data { flex: 0 0 auto; margin: 0; padding-top: 4px; }
+.tile .db-kpi { container: kpi / inline-size; padding: clamp(10px, 6.67%, 16px) clamp(12px, 6.67%, 16px); }
+@container kpi (max-width: 240px) {
+  .tile .db-kpi-value { font-size: 24px; margin-bottom: 2px; }
+  .tile .db-kpi-delta { font-size: 12px; margin-top: 4px; }
+}
+@container kpi-tile (max-height: 290px) {
+  .tile .db-card:has(> .db-chart-body > .db-kpi-row) { padding-block: 10px; }
+  .tile .db-kpi-row { gap: 12px; }
+  .tile .db-kpi { padding: 10px 12px; }
+  .tile .db-kpi-value { font-size: 24px; line-height: 1.2; margin-bottom: 2px; }
+  .tile .db-kpi-label { line-height: 1.3; }
+  .tile .db-kpi-delta { font-size: 12px; line-height: 1.35; margin-top: 4px; }
+  .tile .db-card:has(> .db-chart-body > .db-kpi-row) > .db-chart-source { margin-top: 8px; }
+}
+@container kpi-tile (max-height: 230px) {
+  .tile .db-card:has(> .db-chart-body > .db-kpi-row) { padding: 8px 12px; }
+  .tile .db-kpi-row { gap: 10px; }
+  .tile .db-kpi { padding: 8px 10px; }
+  .tile .db-kpi-value { font-size: 22px; }
+  .tile .db-kpi-label { font-size: 11.5px; }
+  .tile .db-kpi-delta { font-size: 11.5px; line-height: 1.3; }
+  .tile > .tile-chart > details.chart-data { padding-top: 2px; }
+  .tile > .tile-chart > details.chart-data > summary { font-size: 12px; line-height: 1.3; }
+  .tile .db-card:has(> .db-chart-body > .db-kpi-row) > .db-chart-source { margin-top: 4px; line-height: 1.3; }
+  @container kpi (max-width: 200px) {
+    .tile .db-kpi-value { font-size: 20px; margin-bottom: 1px; }
+    .tile :is(.db-kpi-label, .db-kpi-delta) { font-size: 11px; line-height: 1.25; }
+    .tile .db-kpi-delta { margin-top: 3px; }
+  }
+}
+
+/* S3 note-tile contract, edit mode: a note's toolbar is a compact cluster on
+   the tile's top edge (the #43 symbol tier, whatever the tile width), set in
+   from the right so GridStack's corner resize grip (20px, rotated 45°) stays
+   clear of its buttons. The note text flows around it, so the chrome takes no
+   rows from the note. While a remove is being confirmed it spans the tile. */
+body:not(.present) .tile-note { --note-toolbar-w: 100px; --note-toolbar-h: 28px; --note-toolbar-inset: 26px; position: relative; }
+.tile-data-row[hidden] { display: none; }
+body:not(.present) .tile-note > .tile-toolbar { position: absolute; top: 0; right: var(--note-toolbar-inset); z-index: 3; width: var(--note-toolbar-w); height: var(--note-toolbar-h); padding: 2px 4px; align-content: center; border: 1px solid var(--slate-200); border-top: 0; border-radius: 0 0 8px 8px; }
+body:not(.present) .tile-note > .tile-toolbar:has(.tile-remove-confirm) { left: 0; right: 0; width: auto; border-inline: 0; border-radius: 0; }
+body:not(.present) .tile-note .tile-title-row { justify-content: flex-end; gap: 4px; }
+body:not(.present) .tile-note :is(.tile-arrange-btn, .tile-settings > summary, .tile-remove) { height: 24px; min-height: 24px; min-width: 24px; padding: 0 6px; line-height: 22px; text-align: center; }
+body:not(.present) .tile-note :is(.tile-arrange-btn, .tile-settings > summary, .tile-remove) :is(.tl-full, .tl-short) { display: none; }
+body:not(.present) .tile-note :is(.tile-arrange-btn, .tile-settings > summary, .tile-remove) .tl-glyph { display: inline; }
+body:not(.present) .tile-note .db-annotation { font-size: 13px; line-height: 1.35; padding: 2px 4px; }
+body:not(.present) .tile-note .db-annotation::before { content: ""; float: right; width: calc(var(--note-toolbar-w) + var(--note-toolbar-inset) + 4px); height: var(--note-toolbar-h); }

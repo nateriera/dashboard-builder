@@ -162,7 +162,7 @@ test('slice 2 applies saved-view filter state around bound controls; Restore ret
   await region.fill('East');
   // V3: a filter change that empties a chart keeps the card, title and source.
   await expect(page.locator('.export-tile .export-tile-empty')).toHaveText('No data matches these filters.');
-  await expect(page.locator('.export-tile .export-card-source')).toHaveText('Source: Not provided');
+  await expect(page.locator('.export-tile .export-card-source')).toHaveCount(0);
   await expect(restore).toBeEnabled();
   await restore.click();
   await expect(page.locator('.export-parameter-control input[aria-label="region"]')).toHaveValue('West');

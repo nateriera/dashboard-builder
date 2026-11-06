@@ -11,7 +11,7 @@ import { applyFilters, sortAndLimitRows } from "../data/filters.js";
 import { chartData } from "../ui/chartData.js";
 import { retainSourceRows } from '../data/rowProvenance.js';
 import { timeBrushPoints, timeBrushSelection } from '../charts/timeMarks.js';
-import { exportMetaFacts, formatExportStamp, filterAppliesToPage, crossfilterShownOnPage, packTileRows, describeFilterValue, printFilterSummary, viewerStateEquals, relativePresetLabel } from './viewerModel.js';
+import { exportMetaFacts, exportFactLines, tileSourceLine, formatExportStamp, filterAppliesToPage, crossfilterShownOnPage, packTileRows, describeFilterValue, printFilterSummary, viewerStateEquals, relativePresetLabel } from './viewerModel.js';
 
 document.head.appendChild(chartStyles);
 
@@ -72,7 +72,7 @@ function renderExport(payload) {
   // ── V2: title block ──────────────────────────────────────────────────
   const head = el('header', 'export-head');
   head.append(el('span', 'export-badge', 'Offline snapshot'), el('h1', null, facts.title),
-    el('p', 'export-fact', `Prepared by: ${facts.preparedBy}`), el('p', 'export-fact', `Data period: ${facts.dataPeriod}`));
+    ...exportFactLines(payload.meta).map(line => el('p', 'export-fact', line)));
   const stamp = payload.exportedAt
     ? formatExportStamp(payload.exportedAt, Number.isFinite(payload.exportedAtOffset) ? payload.exportedAtOffset : -new Date(payload.exportedAt).getTimezoneOffset())
     : null;
@@ -584,8 +584,10 @@ function decorateCard(chartEl, t) {
   }
   card.classList.add('export-card');
   const footer = el('div', 'export-card-footer');
-  footer.append(el('p', 'export-card-source', `Source: ${typeof t.source === 'string' && t.source.trim() ? t.source.trim() : 'Not provided'}`));
+  const source = tileSourceLine(t.source);
+  if (source) footer.append(el('p', 'export-card-source', source));
   if (typeof t.notes === 'string' && t.notes.trim()) footer.append(el('p', 'export-card-notes', `Notes: ${t.notes.trim()}`));
   if (dataDetails) footer.append(dataDetails);
-  card.append(footer);
+  // No source, notes or data table: leave no empty footer (and its rule) behind.
+  if (footer.childNodes.length) card.append(footer);
 }

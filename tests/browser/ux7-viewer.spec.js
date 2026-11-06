@@ -64,7 +64,7 @@ test('V1/V2: Share as HTML collects metadata, the title block renders it, and th
   await dialog.getByRole('button', { name: 'Cancel' }).click();
 });
 
-test('V2: the title block shows explicit fallbacks for blank or absent metadata', async ({ page, context }) => {
+test('V2: blank or absent metadata prints the title fallback and no Prepared by / Data period lines', async ({ page, context }) => {
   await template(page);
   const downloading = page.waitForEvent('download');
   await shareHtml(page);
@@ -75,9 +75,41 @@ test('V2: the title block shows explicit fallbacks for blank or absent metadata'
     await viewer.setContent(content);
     await expect(viewer).toHaveTitle('Untitled dashboard');
     await expect(viewer.locator('.export-head h1')).toHaveText('Untitled dashboard');
-    await expect(viewer.locator('.export-fact')).toHaveText(['Prepared by: Not provided', 'Data period: Not specified']);
+    await expect(viewer.locator('.export-fact')).toHaveCount(0);
     await viewer.close();
   }
+});
+
+test('Empty-state parity: the exported starter prints no placeholder for empty Prepared by, Data period or tile source; set values print as before', async ({ page, context }) => {
+  await template(page);
+  const exportStarter = async meta => {
+    const downloading = page.waitForEvent('download');
+    await shareHtml(page, meta);
+    const viewer = await context.newPage();
+    await viewer.setContent(await fs.readFile(await (await downloading).path(), 'utf8'));
+    await expect(viewer.locator('.export-tile svg').first()).toBeVisible();
+    return viewer;
+  };
+  // Starter, no metadata: header is badge, title, stamp, note — no fact lines, nothing dangling.
+  const empty = await exportStarter();
+  expect(await empty.locator('.export-head > *').evaluateAll(nodes => nodes.map(node => node.className || node.tagName))).toEqual(['export-badge', 'H1', 'export-meta', 'export-note']);
+  await expect(empty.locator('.export-fact')).toHaveCount(0);
+  // Starter tiles with an empty source have no source line; the one sourced tile keeps it verbatim.
+  await expect(empty.locator('.export-card-source')).toHaveText(['Source: Sample data']);
+  await expect(empty.locator('.export-card-footer:empty')).toHaveCount(0);
+  for (const text of ['Not provided', 'Not specified']) await expect(empty.getByText(text)).toHaveCount(0);
+  await empty.close();
+  // Metadata set: the fact lines print exactly as before, in order.
+  const set = await exportStarter({ 'Prepared by': 'Klaro Impact', 'Data period': 'July–September 2026' });
+  await expect(set.locator('.export-fact')).toHaveText(['Prepared by: Klaro Impact', 'Data period: July–September 2026']);
+  expect(await set.locator('.export-head > *').evaluateAll(nodes => nodes.map(node => node.className || node.tagName))).toEqual(['export-badge', 'H1', 'export-fact', 'export-fact', 'export-meta', 'export-note']);
+  await set.close();
+  // Mixed: only the present fact prints; whitespace-only sources print nothing, present sources print trimmed.
+  const html = await page.evaluate(async () => await (await fetch('/export-template.html')).text());
+  await page.setContent(viewerHtml(html, { meta: { title: 'Mixed', preparedBy: '  ', dataPeriod: 'Q3 2026' }, tiles: [bar('a', { source: '   ' }), bar('b', { x: 6, source: ' Intake log ' })] }));
+  await expect(page.locator('.export-fact')).toHaveText(['Data period: Q3 2026']);
+  await expect(page.locator('.export-tile[data-tile-id="a"] .export-card-source')).toHaveCount(0);
+  await expect(page.locator('.export-tile[data-tile-id="b"] .export-card-source')).toHaveText('Source: Intake log');
 });
 
 test('V3: an export with no editable filters has no filter region and no Restore button until a selection exists', async ({ page }) => {
@@ -160,7 +192,7 @@ test('V4/D2: a multi-page export shows every page in one document with anchor na
   await expect(page.locator('.export-page-heading')).toHaveText(['Overview', 'Detail with a long, descriptive page name', 'Notes']);
   await expect(page.locator('.export-page[data-page-id="notes"] .export-notice')).toHaveText('This page contains no charts.');
   await expect(page.locator('.export-page[data-page-id="notes"] .export-filters, .export-page[data-page-id="notes"] .export-grid')).toHaveCount(0);
-  await expect(page.locator('.export-tile[data-tile-id="b"] .export-card-source')).toHaveText('Source: Not provided');
+  await expect(page.locator('.export-tile[data-tile-id="b"] .export-card-source')).toHaveCount(0);
   // Anchor navigation: the targeted page heading gets the dusk outline.
   await tabs.nth(1).click();
   await expect.poll(() => page.evaluate(() => location.hash)).toBe('#page-detail');
@@ -225,6 +257,7 @@ test('V5: print hides data tables (even open), controls, navigation and badge; p
   const html = await template(page);
   await page.setContent(viewerHtml(html, {
     pages: [{ id: 'one', name: 'One' }, { id: 'two', name: 'Two' }],
+    meta: { title: '', preparedBy: 'Klaro Impact', dataPeriod: '' }, // a real fact line to print (blank facts print none)
     savedViews: [{ id: 'v', name: 'View', theme: 'paper', currentPageId: 'one', filters: [], parameters: [] }],
     filters: [{ id: 'f', field: 'label', op: 'is', values: ['Housing', 'Food'] }, { id: 'r', field: 'value', op: 'between', values: [1, 20], scope: 'page', pageId: 'two' }],
     tiles: [bar('a', { pageId: 'one' }), bar('b', { pageId: 'two' })]

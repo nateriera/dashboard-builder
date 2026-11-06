@@ -6,7 +6,7 @@ globalThis.document = dom.window.document; globalThis.window = dom.window;
 for (const key of ['Node', 'Element', 'HTMLElement', 'SVGElement', 'NodeList', 'HTMLCollection', 'CustomEvent', 'getComputedStyle']) globalThis[key] = dom.window[key];
 const { validateLayout } = await import('../src/data/layout.js');
 const { exportMetaFacts, metaFromInputs, validateLayoutMeta, META_MAX_LENGTH } = await import('../src/data/layoutMeta.js');
-const { formatExportStamp, filterAppliesToPage, crossfilterShownOnPage, packTileRows, describeFilterValue, printFilterSummary, viewerStateEquals } = await import('../src/export/viewerModel.js');
+const { exportFactLines, tileSourceLine, formatExportStamp, filterAppliesToPage, crossfilterShownOnPage, packTileRows, describeFilterValue, printFilterSummary, viewerStateEquals } = await import('../src/export/viewerModel.js');
 
 const envelope = extra => ({ app: 'dashboard-builder', version: 5, rowHeight: 24, tiles: [], ...extra });
 // serialize → JSON → validate, as autosave/export/import do.
@@ -51,6 +51,15 @@ test('UX-7 V1: payload fallbacks for missing metadata are explicit and never inf
   assert.deepEqual(exportMetaFacts({ title: '', preparedBy: '   ', dataPeriod: '' }), fallback);
   assert.deepEqual(exportMetaFacts({ title: 'Board pack' }), { ...fallback, title: 'Board pack' });
   assert.deepEqual(exportMetaFacts({ title: 'A', preparedBy: 'B', dataPeriod: 'C' }), { title: 'A', preparedBy: 'B', dataPeriod: 'C' });
+});
+
+test('Viewer empty-state parity: blank Prepared by, Data period and tile source print no line; present values print as before', () => {
+  for (const meta of [undefined, null, {}, { title: 'T', preparedBy: '', dataPeriod: '' }, { preparedBy: '   ', dataPeriod: '\t' }]) assert.deepEqual(exportFactLines(meta), []);
+  assert.deepEqual(exportFactLines({ preparedBy: ' Klaro Impact ', dataPeriod: 'Jul–Sep 2026' }), ['Prepared by: Klaro Impact', 'Data period: Jul–Sep 2026']);
+  assert.deepEqual(exportFactLines({ preparedBy: '', dataPeriod: 'Q3' }), ['Data period: Q3']);
+  assert.deepEqual(exportFactLines({ preparedBy: 'Nate', dataPeriod: ' ' }), ['Prepared by: Nate']);
+  for (const source of [undefined, null, '', '   ', 42]) assert.equal(tileSourceLine(source), null);
+  assert.equal(tileSourceLine(' Intake log '), 'Source: Intake log');
 });
 
 test('UX-7 V2: export timestamp formats as YYYY-MM-DD HH:mm:ss UTC±HH:mm', () => {

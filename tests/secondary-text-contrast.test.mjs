@@ -69,3 +69,60 @@ test('every theme: secondary text tokens meet AA on the tile and page surfaces',
     }
   }
 });
+
+// Dark-theme legibility census at ba2b7d5: read the consuming declarations
+// as well as their tokens, so reverting a selector to --ink fails the guard.
+function declarations(source, selector) {
+  const css = readFileSync(source, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const result = {};
+  for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!selectors.split(',').some(s => s.trim() === selector)) continue;
+    for (const declaration of body.split(';')) {
+      const colon = declaration.indexOf(':');
+      if (colon > -1) result[declaration.slice(0, colon).trim()] = declaration.slice(colon + 1).trim();
+    }
+  }
+  return result;
+}
+
+function tokenColor(value, tokens) {
+  assert.ok(value, 'expected an explicit color declaration (UA defaults are not token-driven)');
+  const variable = value.match(/^var\((--[\w-]+)\)$/);
+  if (!variable) return value;
+  assert.ok(tokens[variable[1]], `missing token ${variable[1]}`);
+  return tokenColor(tokens[variable[1]], tokens);
+}
+
+const ACCENT_SURFACES = [
+  ['src/style.css', '#btn-export-html', 'Share as HTML'],
+  ['src/export/style.css', '.export-badge', 'Offline snapshot']
+];
+const PLACEHOLDER_SURFACES = [
+  ['.tpl-name-input', '.tpl-name-input', 'Template name'],
+  ['.parameter-step', '.dashboard-parameter input', 'Any (numeric parameter step)'],
+  ['.data-sql-input', '.data-sql-input', 'Calculated field formula']
+];
+
+for (const theme of THEMES) {
+  for (const [source, selector, label] of ACCENT_SURFACES) {
+    test(`accent text ${theme.id}: ${label} meets AA`, () => {
+      const style = declarations(source, selector);
+      for (const tokens of [theme.css, ...(theme.id === 'paper' ? [rootTokens(source)] : [])]) {
+        const ratio = contrast(tokenColor(style.color, tokens), tokenColor(style.background, tokens));
+        assert.ok(ratio >= AA_SMALL, `${source} ${selector} ${theme.id}: ${ratio.toFixed(2)}:1`);
+      }
+    });
+  }
+  for (const [selector, backgroundSelector, label] of PLACEHOLDER_SURFACES) {
+    test(`placeholder ${theme.id}: ${label} meets AA`, () => {
+      const placeholder = declarations('src/style.css', `${selector}::placeholder`);
+      const input = declarations('src/style.css', backgroundSelector);
+      // Explicit opacity also avoids browser-specific placeholder fading.
+      assert.equal(placeholder.opacity, '1', `${selector}::placeholder must have explicit opacity`);
+      for (const tokens of [theme.css, ...(theme.id === 'paper' ? [rootTokens('src/style.css')] : [])]) {
+        const ratio = contrast(tokenColor(placeholder.color, tokens), tokenColor(input.background, tokens));
+        assert.ok(ratio >= AA_SMALL, `${selector} ${theme.id}: ${ratio.toFixed(2)}:1`);
+      }
+    });
+  }
+}

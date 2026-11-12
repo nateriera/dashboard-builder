@@ -6,6 +6,7 @@
   --ink: #1E2347;
   --dusk: #4A5278;
   --periwinkle: #B7BFD9;
+  --accent-text: var(--ink);
   --brush-fill: rgba(183,191,217,.30);
   --scrim: rgba(14,31,42,.45);
   --slate: #E7E3D9;
@@ -2852,7 +2853,7 @@ body.present #page-tabs { display: none; }
 #btn-filters { font-size: 13px; }
 #btn-present { font-size: 13px; }
 #btn-saved-views { font-size: 13px; }
-#btn-export-html { background: var(--periwinkle); color: var(--ink); border-color: var(--periwinkle); font-size: 13px; }
+#btn-export-html { background: var(--periwinkle); color: var(--accent-text); border-color: var(--periwinkle); font-size: 13px; }
 #app-header .header-actions #btn-export-html:hover { background: var(--paper); border-color: var(--periwinkle); color: var(--ink); }
 .header-actions > #btn-saved-views { align-self: center; }
 .header-more > summary { font-size: 13px; }
@@ -3076,3 +3077,8 @@ body:not(.present) .tile-note :is(.tile-arrange-btn, .tile-settings > summary, .
 body:not(.present) .tile-note :is(.tile-arrange-btn, .tile-settings > summary, .tile-remove) .tl-glyph { display: inline; }
 body:not(.present) .tile-note .db-annotation { font-size: 13px; line-height: 1.35; padding: 2px 4px; }
 body:not(.present) .tile-note .db-annotation::before { content: ""; float: right; width: calc(var(--note-toolbar-w) + var(--note-toolbar-inset) + 4px); height: var(--note-toolbar-h); }
+
+/* Token-driven placeholders on themed input surfaces; native white inputs keep their UA style. */
+.tpl-name-input::placeholder,
+.parameter-step::placeholder,
+.data-sql-input::placeholder { color: var(--slate-500); opacity: 1; }

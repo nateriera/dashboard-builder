@@ -6,6 +6,7 @@
   --ink: #1E2347;
   --dusk: #4A5278;
   --periwinkle: #B7BFD9;
+  --accent-text: var(--ink);
   --brush-fill: rgba(183,191,217,.30);
   --scrim: rgba(14,31,42,.45);
   --slate: #E7E3D9;
@@ -180,7 +181,7 @@ body {
 button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
 
 /* UX-7 V2: title block — plain ivory, one accent moment (the badge). */
-.export-badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--periwinkle); color: var(--ink); font: 500 12px var(--font-body); letter-spacing: 0.02em; }
+.export-badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--periwinkle); color: var(--accent-text); font: 500 12px var(--font-body); letter-spacing: 0.02em; }
 .export-head h1 { margin: 12px 0 8px; line-height: 1.2; }
 .export-fact { margin: 0; font: 14px var(--font-body); color: var(--ink); }
 .export-note { margin: 8px 0 0; font-size: 14px; color: var(--slate-600); max-width: 72ch; }
@@ -377,7 +378,7 @@ body {
 }
 
 /* UX-7 V2: title block — plain ivory, one accent moment (the badge). */
-.export-badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--periwinkle); color: var(--ink); font: 500 12px var(--font-body); letter-spacing: 0.02em; }
+.export-badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--periwinkle); color: var(--accent-text); font: 500 12px var(--font-body); letter-spacing: 0.02em; }
 .export-head h1 { margin: 12px 0 8px; line-height: 1.2; }
 .export-fact { margin: 0; font: 14px var(--font-body); color: var(--ink); }
 .export-note { margin: 8px 0 0; font-size: 14px; color: var(--slate-600); max-width: 72ch; }

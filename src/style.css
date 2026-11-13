@@ -3082,3 +3082,26 @@ body:not(.present) .tile-note .db-annotation::before { content: ""; float: right
 .tpl-name-input::placeholder,
 .parameter-step::placeholder,
 .data-sql-input::placeholder { color: var(--slate-500); opacity: 1; }
+
+/* S7: real palette preference and full-width, wrapping editable titles. */
+body.palette-hidden #palette { display: none; }
+.canvas-controls { display: flex; align-items: flex-start; gap: 12px; }
+.canvas-controls #page-tabs { flex: 1 1 auto; min-width: 0; }
+#btn-palette-toggle { flex: 0 0 auto; padding: 8px 10px; border: 1px solid var(--slate-300); border-radius: 6px; color: var(--ink); background: var(--white); font: inherit; cursor: pointer; }
+#btn-palette-toggle:focus-visible { outline: 2px solid var(--periwinkle); outline-offset: 2px; }
+body.present .canvas-controls { display: none; }
+.tile > .tile-toolbar { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; }
+.tile-title-row { flex: 1 0 100%; min-width: 0; }
+.tile-title-row textarea.tile-title { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.3; padding-block: 2px; }
+.tile-data-row { flex: 1 1 160px; }
+.tile-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 4px; margin-left: auto; }
+.tile-note .tile-title-row { display: none; }
+/* Actions share the source row now; compact them before that row wraps. */
+@container tile (max-width: 600px) {
+  .tile .tile-actions .tl-full { display: none; }
+  .tile .tile-actions .tl-short { display: inline; }
+}
+@container tile (max-width: 440px) {
+  .tile .tile-actions .tl-short { display: none; }
+  .tile .tile-actions .tl-glyph { display: inline; }
+}

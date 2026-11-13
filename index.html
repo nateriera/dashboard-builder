@@ -65,7 +65,10 @@
 
       <main id="grid-wrap">
         <button id="btn-add-chart" type="button">Add chart</button>
-        <nav id="page-tabs" aria-label="Dashboard pages"></nav>
+        <div class="canvas-controls">
+          <button id="btn-palette-toggle" type="button" aria-controls="palette" aria-expanded="true">Hide charts</button>
+          <nav id="page-tabs" aria-label="Dashboard pages"></nav>
+        </div>
         <div class="grid-stack" aria-label="Dashboard grid">
           <div id="grid-guidance" class="grid-guidance" hidden>
             <section class="grid-guidance-card" aria-labelledby="grid-guidance-title">

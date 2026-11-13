@@ -879,6 +879,7 @@ svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--f
     display: inline-block; width: 12px; height: 12px; border-radius: 6px;
     margin-right: 8px;
   }
+  .db-facets-scroll-hint { margin: 0 0 4px; font-size: 12px; color: var(--slate-600); }
   .db-facets { display: grid; gap: 28px 24px; margin-top: 4px; }
   .db-facet-label {
     font-family: var(--font-body); font-size: 12px; font-weight: 500;
@@ -1006,6 +1007,7 @@ svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--f
     display: inline-block; width: 12px; height: 12px; border-radius: 3px;
     margin-right: 8px;
   }
+  .db-facets-scroll-hint { margin: 0 0 4px; font-size: 12px; color: var(--slate-600); }
   .db-facets { display: grid; gap: 28px 24px; margin-top: 4px; }
   .db-facet-label {
     font-family: var(--font-body); font-size: 12px; font-weight: 500;

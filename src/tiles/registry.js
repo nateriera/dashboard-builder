@@ -381,7 +381,7 @@ export const TILE_TYPES = {
   table: {
     label: "Table", description: "Scrollable rows and source columns", fields: [], dynamicFields: true,
     datasets: ["categorical"], defaultDataset: "categorical", defaultSize: {w:12,h:8}, defaultTitle: "Data table",
-    render(el,{data}) { el.replaceChildren(dataTableChart(data)); }
+    render(el,{data,options}) { el.replaceChildren(dataTableChart(data,options)); }
   },
 
   text: {

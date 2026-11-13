@@ -138,6 +138,36 @@ emptyGridOverlay.setAttribute('aria-hidden', 'true');
 gridEl.prepend(emptyGridOverlay);
 let gridGestureActive = false;
 let expandedPaletteWidth = null;
+const PALETTE_CLOSED_KEY = 'dashboard-builder:palette-closed:v1';
+const btnPaletteToggle = document.getElementById('btn-palette-toggle');
+let paletteClosed = false;
+try { paletteClosed = localStorage.getItem(PALETTE_CLOSED_KEY) === '1'; } catch { /* session-only preference */ }
+function applyPalettePreference() {
+  document.body.classList.toggle('palette-hidden', paletteClosed);
+  btnPaletteToggle.textContent = paletteClosed ? 'Show charts' : 'Hide charts';
+  btnPaletteToggle.setAttribute('aria-expanded', String(!paletteClosed));
+}
+applyPalettePreference();
+function setPaletteClosed(closed) {
+  paletteClosed = closed;
+  applyPalettePreference();
+  try { localStorage.setItem(PALETTE_CLOSED_KEY, paletteClosed ? '1' : '0'); } catch { /* keep session state */ }
+  window.dispatchEvent(new Event('resize'));
+}
+btnPaletteToggle.addEventListener('click', () => setPaletteClosed(!paletteClosed));
+
+function resizeTileTitles(root = gridEl) {
+  for (const title of root.querySelectorAll('textarea.tile-title:not([hidden])')) {
+    if (!title.clientWidth) continue; // hidden in present mode
+    title.style.height = 'auto';
+    const style = getComputedStyle(title);
+    title.style.height = `${title.scrollHeight + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth)}px`;
+  }
+}
+document.fonts.ready.then(() => {
+  resizeTileTitles();
+  window.dispatchEvent(new Event('resize'));
+});
 function measureGridGuides() {
   const columns = grid.getColumn();
   const cellHeight = grid.getCellHeight(true);
@@ -156,8 +186,14 @@ function measureGridGuides() {
   }
   const appBody = document.getElementById('app-body');
   const palette = document.getElementById('palette');
-  if (!document.body.classList.contains('palette-collapsed') || expandedPaletteWidth === null) expandedPaletteWidth = palette.getBoundingClientRect().width;
-  document.body.classList.toggle('palette-collapsed', appBody.clientWidth < expandedPaletteWidth + 560);
+  const visibleWidth = palette.getBoundingClientRect().width;
+  if (visibleWidth > 0) expandedPaletteWidth = visibleWidth;
+  // A manually closed or present-mode palette measures zero; retain its real
+  // expanded width so the responsive Add chart modal keeps its own threshold.
+  const collapsed = appBody.clientWidth < (expandedPaletteWidth ?? 240) + 560;
+  document.body.classList.toggle('palette-collapsed', collapsed);
+  btnPaletteToggle.hidden = collapsed;
+  resizeTileTitles();
 }
 function syncGridGuidance() {
   measureGridGuides();
@@ -454,13 +490,22 @@ function buildTileContent(type, meta) {
   const dataRow = document.createElement('div');
   dataRow.className = 'tile-data-row';
 
-  const titleInput = document.createElement("input");
+  const titleInput = document.createElement("textarea");
+  titleInput.rows = 1;
+  titleInput.wrap = 'soft';
   titleInput.className = "tile-title";
   titleInput.hidden = !!entry.noData;
   titleInput.value = meta.title;
   titleInput.title = meta.title;
   titleInput.spellcheck = false;
   titleInput.setAttribute("aria-label", "Tile title");
+  titleInput.addEventListener('input', () => {
+    resizeTileTitles(tile);
+    const widget = tile.closest('.grid-stack-item');
+    if (widget) scheduleResize(widget);
+  });
+  titleInput.addEventListener('pointerdown', event => event.stopPropagation());
+  titleInput.addEventListener('mousedown', event => event.stopPropagation());
   // 'change' (not 'input') so re-rendering the chart below doesn't steal focus.
   titleInput.addEventListener("change", () => {
     meta.title = titleInput.value;
@@ -574,7 +619,8 @@ function buildTileContent(type, meta) {
     confirm.addEventListener("click", () => {
       const widgetEl = tile.closest(".grid-stack-item");
       if (widgetEl) grid.removeWidget(widgetEl);
-      document.querySelector(".palette-item")?.focus();
+      if (paletteClosed) btnPaletteToggle.focus();
+      else document.querySelector(".palette-item")?.focus();
     });
     actions.addEventListener("pointerdown", event => event.stopPropagation());
     actions.addEventListener("mousedown", event => event.stopPropagation());
@@ -595,7 +641,10 @@ function buildTileContent(type, meta) {
     details.scrollIntoView({ behavior: "smooth", block: "nearest" });
     details.querySelector("summary")?.focus();
   });
-  titleRow.append(titleInput, arrangeBtn);
+  titleRow.append(titleInput);
+  const tileActions = document.createElement('div');
+  tileActions.className = 'tile-actions';
+  tileActions.append(arrangeBtn);
   const settings = document.createElement('details'); settings.className = 'tile-settings';
   const summary = document.createElement('summary'); toolbarLabels(summary, 'Chart settings', 'Settings', '⚙'); summary.setAttribute('aria-label', 'Chart settings'); settings.append(summary);
   const settingsBody = document.createElement('div'); settingsBody.className = 'tile-settings-body'; settings.append(settingsBody);
@@ -730,14 +779,14 @@ function buildTileContent(type, meta) {
       label.append(input); settingsBody.append(label);
     }
   }
-  titleRow.append(settings, removeBtn, inspectSelected);
+  tileActions.append(settings, removeBtn, inspectSelected);
   const dataCaption = document.createElement('span');
   dataCaption.className = 'tile-data-caption';
   dataCaption.textContent = 'Data source';
   dataRow.append(dataCaption, dataBtn);
   // A note has no data: its row would only show a caption over a hidden button.
   dataRow.hidden = !!entry.noData;
-  toolbar.append(titleRow, dataRow);
+  toolbar.append(titleRow, dataRow, tileActions);
 
   const chart = document.createElement("div");
   chart.className = "tile-chart";
@@ -813,6 +862,7 @@ function addTile(type, { id, x, y, w, h, title, source, dataset, tileOptions, dr
   // Measure after layout so the chart renders at the tile's real width,
   // then frame the tile's rows to the rendered content.
   requestAnimationFrame(() => {
+    resizeTileTitles(el);
     renderTile(el);
     fitTileNow(el);
   });
@@ -1479,6 +1529,7 @@ function openPaletteModal(trigger) {
   paletteItems[0]?.focus();
 }
 function openPaletteForAdd(trigger) {
+  if (paletteClosed) setPaletteClosed(false);
   if (document.body.classList.contains('palette-collapsed')) openPaletteModal(trigger);
   else paletteItems[0]?.focus();
 }
@@ -2202,6 +2253,7 @@ const btnExitPresent = document.getElementById("btn-exit-present");
 
 function setPresent(on) {
   document.body.classList.toggle("present", on);
+  resizeTileTitles();
   btnExitPresent.hidden = !on;
   grid.setStatic(on); // locks drag + resize
   if (on) {

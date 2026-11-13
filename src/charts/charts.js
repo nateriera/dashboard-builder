@@ -560,16 +560,22 @@ export function treemapChart(data, { label = "label", value = "value", parent = 
   return svgNode;
 }
 
-export function dataTableChart(data) {
-  const wrap=document.createElement("div");wrap.className="db-data-table";
+export function dataTableChart(data, { sizing = "manual" } = {}) {
+  const wrap=document.createElement("div");wrap.className=`db-data-table${sizing==="auto"?" db-data-table-auto":""}`;
   const scroll=document.createElement("div");scroll.className="db-data-table-scroll";scroll.setAttribute("role","region");scroll.setAttribute("aria-label","Data table");
+  scroll.tabIndex=0;scroll.setAttribute("aria-description","Scroll horizontally for more columns and vertically for more rows.");
   const table=document.createElement("table");table.className="db-data-table-grid";
   const columns=[...new Set(data.flatMap(row=>Object.keys(row)))];
+  // Put decision status first; ordinary scrolling can then reveal every
+  // remaining column without a sticky cell covering its neighbours.
+  const statusIndex=columns.findIndex(key=>key.toLowerCase()==="status");
+  if(statusIndex>0)columns.unshift(...columns.splice(statusIndex,1));
+  const hint=document.createElement("div");hint.className="db-data-table-hint";hint.textContent=`${columns.length} columns${statusIndex>=0?" · Status first":""} · Scroll ↔ for more`;
   const thead=document.createElement("thead"),head=document.createElement("tr");
-  for(const key of columns){const th=document.createElement("th");th.scope="col";th.textContent=key;head.append(th);}thead.append(head);
+  for(const key of columns){const th=document.createElement("th");th.scope="col";th.textContent=key;if(key.toLowerCase()==="status")th.className="db-data-table-status";head.append(th);}thead.append(head);
   const tbody=document.createElement("tbody");
-  for(const row of data){const tr=document.createElement("tr");for(const key of columns){const td=document.createElement("td"),v=row[key];td.textContent=v==null?"—":v instanceof Date?v.toISOString().slice(0,10):typeof v==="number"?(Number.isInteger(v)?fmtInt.format(v):fmt2.format(v)):String(v);tr.append(td);}tbody.append(tr);}
-  table.append(thead,tbody);scroll.append(table);wrap.append(scroll);return wrap;
+  for(const row of data){const tr=document.createElement("tr");for(const key of columns){const td=document.createElement("td"),v=row[key];if(key.toLowerCase()==="status")td.className="db-data-table-status";td.textContent=v==null?"—":v instanceof Date?v.toISOString().slice(0,10):typeof v==="number"?(Number.isInteger(v)?fmtInt.format(v):fmt2.format(v)):String(v);tr.append(td);}tbody.append(tr);}
+  table.append(thead,tbody);scroll.append(table);wrap.append(hint,scroll);return wrap;
 }
 
 export function textAnnotation(body = "") {
@@ -1005,4 +1011,15 @@ svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--f
     font-family: var(--font-body); font-size: 12px; font-weight: 500;
     color: var(--slate-600); margin-bottom: 2px;
   } }
+
+/* S4: keep table navigation inside the tile. The cue remains visible even
+   when the horizontal scrollbar is at the bottom of a tall table. */
+.db-data-table { display: flex; flex-direction: column; min-height: 0; }
+.db-data-table-hint { flex: none; padding: 4px 8px; font: 12px/1.4 var(--font-body); color: var(--slate-600); border-bottom: 1px solid var(--slate-200); }
+.db-data-table-scroll { flex: 1 1 auto; min-height: 0; }
+.tile-chart > .db-data-table:not(.db-data-table-auto) { height: 100%; }
+.tile-chart > .db-data-table:not(.db-data-table-auto) > .db-data-table-scroll { max-height: none; }
+@media print {
+  .db-data-table-hint { display: none; }
+}
 </style>`;

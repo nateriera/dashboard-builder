@@ -280,14 +280,28 @@ test('R2/R6: upload row boundaries and oversized dependency reasons are explicit
   const auto=validateLayout(layout()); auto.tiles[0].sizing='auto'; assert.equal(validateLayout(auto).tiles[0].sizing,'auto');
   assert.throws(()=>validateLayout({...auto,rowHeight:72}));
  });
- test('Content fit uses inset margins once and facets adapt without horizontal overflow', async () => {
-   const {rowsForContent,facetColumns}=await import('../src/tiles/geometry.js');
+ test('Content fit counts inset margins once; narrow facets preserve comparison widths and data', async () => {
+   const {rowsForContent,facetGeometry}=await import('../src/tiles/geometry.js');
    assert.equal(rowsForContent(336,24,12),15);
-   assert.deepEqual([220,480,800].map(w=>facetColumns(w,3)),[1,2,3]);
-   const el=document.createElement('div'); Object.defineProperty(el,'clientWidth',{value:320}); Object.defineProperty(el,'clientHeight',{value:500});
-   TILE_TYPES.smallMultiples.render(el,{data:DATASETS.facets,options:{sizing:'manual'}});
-   assert.equal(el.querySelector('.db-facets').style.gridTemplateColumns,'repeat(1, minmax(0, 1fr))');
-   for (const svg of el.querySelectorAll('.db-facet svg')) assert.ok(+svg.getAttribute('width')<=288);
+   for (const count of [2,3,12]) for (const width of [220,480,512,780,1200]) {
+     const geometry=facetGeometry(width,count);
+     assert.equal(geometry.columns,count);
+     assert.ok(geometry.panelWidth>=244);
+     assert.equal(geometry.width,count*geometry.panelWidth+24*(count-1));
+   }
+   for (const key of ['cocEquity','poAttainment']) {
+     const el=document.createElement('div'); Object.defineProperty(el,'clientWidth',{value:320}); Object.defineProperty(el,'clientHeight',{value:500});
+     TILE_TYPES.smallMultiples.render(el,{data:DATASETS[key],options:{sizing:'manual'}});
+     const count=new Set(DATASETS[key].map(d=>d.facet)).size;
+     assert.equal(el.querySelector('.db-facets').style.gridTemplateColumns,`repeat(${count}, minmax(0, 1fr))`);
+     assert.equal(el.querySelectorAll('.db-facet').length,count);
+     assert.equal(el.querySelector('[role="region"]').tabIndex,0);
+     assert.match(el.textContent,/Scroll horizontally/);
+     for (const svg of el.querySelectorAll('.db-facet svg')) {
+       assert.equal(+svg.getAttribute('width'),244);
+       assert.ok(+svg.getAttribute('height')>=100);
+     }
+   }
  });
 
 test('default tile titles avoid collisions while explicit titles stay unchanged', async () => {

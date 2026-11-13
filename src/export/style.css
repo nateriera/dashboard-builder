@@ -412,3 +412,38 @@ body {
 .export-card .export-tile-empty, .export-card .export-tile-error { border: 0; padding: 16px 0; min-height: 0; background: transparent; }
 .export-tile .db-kpi-value { font-size: 32px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 }
+
+/* Export head: keep the existing page/filter DOM and control ownership.
+   The first page's functional filter group shares the head row on screen;
+   saved views, tabs and all chart grids still span the document below it. */
+.export-head { min-width: 0; overflow-wrap: anywhere; }
+.export-head .export-freeze-notice { max-width: 72ch; }
+.export-page > .export-filters {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--slate-200);
+  border-radius: 12px;
+  background: var(--white);
+}
+.export-filter-controls > .export-filter { flex: 1 1 180px; min-width: 0; }
+.export-filters .export-filter :is(select, input:not([type="checkbox"])) { width: 100%; min-width: 0; max-width: 100%; }
+
+@media screen and (min-width: 1000px) {
+  #export-root:has(> .export-page:nth-child(1 of .export-page) > .export-filters) {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+    column-gap: 32px;
+    align-items: start;
+  }
+  #export-root > .export-head { grid-column: 1; grid-row: 1; }
+  #export-root > .export-saved-views { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
+  #export-root > .export-page-tabs { grid-column: 1 / -1; grid-row: 3; }
+  #export-root > .export-page { grid-column: 1 / -1; min-width: 0; }
+  #export-root > .export-page:nth-child(1 of .export-page):has(> .export-filters) { display: contents; }
+  #export-root > .export-page:nth-child(1 of .export-page) > .export-filters { grid-column: 2; grid-row: 1; }
+  #export-root > .export-page:nth-child(1 of .export-page) > .export-page-heading { grid-column: 1 / -1; grid-row: 4; }
+  #export-root > .export-page:nth-child(1 of .export-page) > :is(.export-grid, .export-notice) { grid-column: 1 / -1; grid-row: 5; }
+  /* display:contents removes the section's 24px end margin; keep that
+     separation after its projected chart grid, whose normal margin is -12px. */
+  #export-root > .export-page:nth-child(1 of .export-page):has(> .export-filters) > .export-grid { margin-bottom: 12px; }
+}

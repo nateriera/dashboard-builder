@@ -24,6 +24,17 @@ for (const [name, count] of [['Homeless system performance (CoC)', 2], ['Program
         await page.evaluate(() => window.dispatchEvent(new Event('resize')));
         const region = page.getByRole('region', { name: 'Small multiples panels', exact: true });
         await expect(region).toBeVisible();
+        // Resize schedules a viewport frame and then a chart-render frame.
+        // Wait through both, and require the same region and bounds to survive
+        // another frame before measuring or taking keyboard focus.
+        await expect.poll(() => region.evaluate(async el => {
+          const before = el.getBoundingClientRect();
+          for (let frame = 0; frame < 3; frame++) {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+          }
+          const after = el.getBoundingClientRect();
+          return el.isConnected && ['x', 'y', 'width', 'height'].every(key => Math.abs(before[key] - after[key]) < 0.1);
+        }), { message: `${state}, palette ${palette}: layout settled` }).toBe(true);
         const probe = () => region.evaluate(el => {
           const bounds = el.getBoundingClientRect();
           const panels = [...el.querySelectorAll('.db-facet')].map(panel => {
@@ -42,7 +53,17 @@ for (const [name, count] of [['Homeless system performance (CoC)', 2], ['Program
         results.push({ state, palette, ...measurements });
         if (measurements.scrolls) {
           await expect(page.locator('.db-facets-scroll-hint')).toBeVisible();
-          await region.focus();
+          await expect.poll(async () => {
+            await region.focus();
+            return region.evaluate(async el => {
+              // A render can replace the focused node. Require focus to stay
+              // on this connected region across frames before sending one key.
+              for (let frame = 0; frame < 2; frame++) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+              }
+              return el.isConnected && document.activeElement === el;
+            });
+          }, { message: `${state}, palette ${palette}: scroll region holds focus` }).toBe(true);
           await page.keyboard.press('ArrowRight');
           await expect.poll(() => region.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
           // Every panel, including the last one, is reachable inside the region.

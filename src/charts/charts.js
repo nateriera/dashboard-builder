@@ -80,15 +80,22 @@ export function themedPlot(theme, options = {}) {
     color === undefined || color.type === undefined
       ? { ...base.color, ...color }
       : { ...color };
-  return Plot.plot({
+  const axes = axisLayout({ ...rest, x: { ...base.x, ...x }, y: { ...base.y, ...y } }, t);
+  const render = layout => Plot.plot({
     ...base,
     ...rest,
     style: { ...base.style, ...style },
-    x: { ...base.x, ...x },
-    y: { ...base.y, ...y },
+    ...layout,
     color: color === undefined ? base.color : colorScale,
     marks
   });
+  const plot = render(axes);
+  const scale = plot.scale("y");
+  if (scale && !["band", "point", "ordinal"].includes(scale.type)) {
+    const measured = axisLayout({ ...rest, x: { ...base.x, ...x }, y: { ...base.y, ...y }, yTickDomain: scale.domain }, t);
+    if (measured.marginLeft > axes.marginLeft) return render(measured);
+  }
+  return plot;
 }
 
 // Shared header block: eyebrow, title, subtitle.
@@ -209,13 +216,72 @@ export function categoryAxis(labels, width, theme = getTheme(), { min = 48, maxS
   const marginLeft = Math.min(cap, Math.max(min, need));
   return need <= cap ? { marginLeft } : { marginLeft, tickFormat: label => fitLabel(String(label ?? ""), marginLeft - gap, font) };
 }
-/** Bottom band labels: rotate only when the longest label is wider than its band. */
+// Axis titles use the same 13px font as before. Newlines retain the whole
+// label; extra margins reserve their space instead of scaling the SVG text.
+function wrapAxisTitle(label, room, font) {
+  if (typeof label !== "string") return label;
+  const lines = [];
+  for (const paragraph of label.split("\n")) {
+    let line = "";
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      if (line && labelWidth(`${line} ${word}`, font) <= room) {
+        line += ` ${word}`;
+        continue;
+      }
+      if (line) lines.push(line);
+      line = "";
+      // User-provided units can be one long token. Break it without ellipsis.
+      for (const character of word) {
+        if (line && labelWidth(line + character, font) > room) {
+          lines.push(line);
+          line = "";
+        }
+        line += character;
+      }
+    }
+    lines.push(line.trim());
+  }
+  return lines.join("\n");
+}
+
+function axisLayout(options, theme) {
+  const { width = 640, x, y } = options;
+  const font = `13px ${theme.fonts.body}`;
+  const room = Math.max(40, width - 32); // leave room for Plot's direction arrow
+  const nextX = { ...x, label: wrapAxisTitle(x.label, room, font) };
+  const nextY = { ...y, label: wrapAxisTitle(y.label, room, font) };
+  const top = nextY.label ? nextY.label.split("\n").length * 16 + 12 : 20;
+  const bottom = nextX.label ? nextX.label.split("\n").length * 16 + 40 : ["time", "utc"].includes(x.type) ? 48 : 30;
+  const yTickDomain = options.yTickDomain ?? y.domain;
+  const numericY = yTickDomain?.every(value => typeof value === "number");
+  const yTickWidth = numericY ? Math.max(0, ...yTickDomain.map(value => labelWidth(
+    String(typeof y.tickFormat === "function" ? y.tickFormat(value) : fmtInt.format(value)),
+    `13px ${theme.fonts.mono}`
+  ))) + 14 : 0;
+  const marginLeft = Math.max(options.marginLeft ?? 40, Math.ceil(yTickWidth));
+  const marginTop = Math.max(options.marginTop ?? 20, top);
+  const marginBottom = Math.max(options.marginBottom ?? 30, bottom);
+  if (nextY.label) nextY.labelOffset = marginLeft - 8;
+  if (nextX.label) nextX.labelOffset = marginBottom - 12;
+  return {
+    x: nextX, y: nextY, marginTop, marginBottom, marginLeft,
+    // Small fixed tiles can scroll vertically; never crush the plotting area
+    // to make room for readable titles and categorical ticks.
+    ...(options.height ? { height: Math.max(
+      options.height + marginTop - (options.marginTop ?? 20) + marginBottom - (options.marginBottom ?? 30),
+      marginTop + marginBottom + Math.max(100, (options.fy?.domain?.length ?? y.domain?.length ?? 0) * 20)
+    ) } : {})
+  };
+}
+
+/** Keep every categorical bottom tick; vertical labels avoid both overlap
+ * and the left-edge clipping caused by long labels rotated only 30 degrees. */
 function bandAxis(labels, width, theme = getTheme(), { marginX = 60 } = {}) {
   const font = `${TICK_FONT_PX}px ${theme.chart.fonts.mono}`;
   const longest = Math.max(0, ...labels.map(label => labelWidth(String(label ?? ""), font)));
   const band = (width - marginX) / Math.max(1, labels.length);
   if (longest <= band * 0.92) return { tickRotate: 0, marginBottom: 48 };
-  return { tickRotate: -30, marginBottom: Math.min(140, Math.ceil(longest * 0.5) + 30) };
+  return { tickRotate: -90, marginBottom: Math.ceil(longest) + 28 };
 }
 
 function axisMaximum(rows, field) {

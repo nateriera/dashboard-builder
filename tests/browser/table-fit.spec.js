@@ -34,7 +34,18 @@ for(const name of templates) test(`S4: ${name} keeps all table columns and rows 
     await expect.poll(async()=>(await region.evaluate(tableFitProbe)).minFont).toBeGreaterThanOrEqual(11);
     if(name.startsWith('Performance scorecard'))await expect.poll(async()=>(await region.evaluate(tableFitProbe)).statusVisible).toBe(true);
     // Native keyboard scrolling must work without having to find a scrollbar.
-    await region.focus();
+    // Palette/mode changes redraw the table across resize frames. Confirm
+    // that focus survives those frames before sending the single test key.
+    await page.evaluate(async()=>{
+      for(let frame=0;frame<4;frame++)await new Promise(resolve=>requestAnimationFrame(resolve));
+    });
+    await expect.poll(async()=>{
+      await region.focus();
+      return region.evaluate(async el=>{
+        for(let frame=0;frame<2;frame++)await new Promise(resolve=>requestAnimationFrame(resolve));
+        return el.isConnected && document.activeElement===el;
+      });
+    }).toBe(true);
     await page.keyboard.press('ArrowRight');
     await expect.poll(()=>region.evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);
   }

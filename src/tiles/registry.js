@@ -1,4 +1,4 @@
-import { facetColumns } from './geometry.js';
+import { facetGeometry } from './geometry.js';
 import { renderData } from "../charts/integrity.js";
 import { chartData } from "../ui/chartData.js";
 // Tile registry: the catalog of chart types the composer can place on the grid.
@@ -337,10 +337,10 @@ export const TILE_TYPES = {
         el,
         (width, height) => {
           const count = new Set(data.map(d => d.facet)).size;
-          const columns = facetColumns(width, count);
-          const chartWidth = Math.floor((width - 24 * (columns - 1)) / columns);
-          const chartHeight = Math.max(100, height / Math.ceil(count / columns) - 44);
-          return smallMultiples(data, {
+          const { columns, panelWidth: chartWidth, width: gridWidth } = facetGeometry(width, count);
+          const scrolls = gridWidth > width;
+          const chartHeight = Math.max(100, height - 44 - (scrolls ? 40 : 0));
+          const panels = smallMultiples(data, {
             facet: "facet",
             value: "value",
             columns,
@@ -349,6 +349,24 @@ export const TILE_TYPES = {
             chart: (rows, { yDomain, width: cw }) =>
               columnChart(rows, { x: "label", y: "value", sort: options.tileOptions?.sort === "data" ? null : options.tileOptions?.sort ?? "desc", width: cw, height: chartHeight, yDomain, yLabel: options.tileOptions?.yLabel || null })
           });
+          panels.style.minWidth = `${gridWidth}px`;
+          const region = document.createElement('div');
+          region.className = 'db-facets-scroll';
+          region.style.overflowX = 'auto';
+          region.style.maxWidth = '100%';
+          region.tabIndex = 0;
+          region.setAttribute('role', 'region');
+          region.setAttribute('aria-label', 'Small multiples panels');
+          region.append(panels);
+          const content = document.createElement('div');
+          if (scrolls) {
+            const hint = document.createElement('p');
+            hint.className = 'db-facets-scroll-hint';
+            hint.textContent = 'Scroll horizontally to compare all panels.';
+            content.append(hint);
+          }
+          content.append(region);
+          return content;
         },
         options
       );

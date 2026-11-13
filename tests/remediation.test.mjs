@@ -540,3 +540,17 @@ test('Desktop parity: target field mappings for cross-filter highlighting persis
   assert.deepEqual(validateLayout(layout).tiles[0].tileOptions.crossfilterFieldMappings,{label:'group'});
   assert.throws(()=>validateLayout({...layout,tiles:[{...layout.tiles[0],tileOptions:{crossfilterFieldMappings:{label:'value'}}}]}),/cross-filter field mapping/i);
 });
+
+test('axis titles wrap whole text at narrow tile widths without ellipsis or font scaling', () => {
+  for (const title of ['Median days to close, % of target', 'AReallyLongUnbrokenMeasurementUnitIdentifier']) {
+    const el=document.createElement('div');
+    Object.defineProperty(el,'clientWidth',{value:228});
+    Object.defineProperty(el,'clientHeight',{value:300});
+    TILE_TYPES.dot.render(el,{data:DATASETS.categorical,options:{sizing:'manual',tileOptions:{xLabel:title}}});
+    const label=el.querySelector('[aria-label="x-axis label"] text');
+    assert.ok(label.querySelectorAll('tspan').length>1);
+    assert.equal(label.textContent.replace(/[\s→]/g,''),title.replace(/\s/g,''));
+    assert.ok(!label.textContent.includes('…'));
+    assert.equal(el.querySelector('svg').style.fontSize,'13px');
+  }
+});

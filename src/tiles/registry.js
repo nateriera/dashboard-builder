@@ -266,11 +266,15 @@ export const TILE_TYPES = {
       mount(
         el,
         // The donut is square; cap the width so wide tiles don't blow it up.
+        // The uncapped width and the height before the stacked legend's share
+        // is taken off let donutChart put the legend beside the ring when the
+        // tile is clearly wider than it is tall.
         (width, height) =>
           donutChart(data, {
             value: "value",
             label: "label",
             width: Math.min(width, 400), height,
+            availableWidth: width, availableHeight: height + (options.legendSpace || 0) + (options.donutSpare || 0),
             crossfilterField: options.crossfilterField
           }),
         options
@@ -489,7 +493,7 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
     const previousDetails = options.resizeOnly ? el.querySelector('.chart-data') : null;
     if (!options.resizeOnly) el.querySelectorAll('.chart-data').forEach(details => details.remove());
     lastRender.set(el, { type, data, options });
-    options = { ...options, preferredHeight: type === 'bar' || type === 'dot' ? Math.min(600, Math.max(220, data.length * 24 + 50)) : type === 'donut' ? 340 : type === 'table' ? 420 : type === 'treemap' ? 380 : 260, legendSpace: options.legendSpace ?? (['line','area'].includes(type) ? 32 : 0) };
+    options = { ...options, donutSpare: 0, preferredHeight: type === 'bar' || type === 'dot' ? Math.min(600, Math.max(220, data.length * 24 + 50)) : type === 'donut' ? 340 : type === 'table' ? 420 : type === 'treemap' ? 380 : 260, legendSpace: options.legendSpace ?? (['line','area'].includes(type) ? 32 : 0) };
     try {
       for (const f of entry.fields.filter(f => f.numeric)) {
         for (const r of data) {
@@ -526,7 +530,8 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
       let legendSpace = 0;
       if (type === 'donut') {
         const legend = el.querySelector('.db-legend');
-        legendSpace = Math.max(0, legend.getBoundingClientRect().height + parseFloat(getComputedStyle(legend).marginTop) - 80);
+        // Side by side, the legend takes width, not height, from the ring.
+        legendSpace = el.querySelector('.db-donut-side') ? 0 : Math.max(0, legend.getBoundingClientRect().height + parseFloat(getComputedStyle(legend).marginTop) - 80);
       } else if (type !== 'smallMultiples') {
         // Anything in the chart body besides the plot (Plot's color legend on
         // line/area/stacked charts, the heatmap ramp) takes height from it, or
@@ -544,6 +549,26 @@ for (const [type, entry] of Object.entries(TILE_TYPES)) {
           const interactive=!!options.crossfilterField&&[...svg.querySelectorAll('a')].some(mark=>(mark.getAttributeNS('http://www.w3.org/1999/xlink','href')||mark.getAttribute('href')||'').startsWith('#db-crossfilter:'));
           svg.setAttribute('role',interactive?'group':'img');
           svg.setAttribute('aria-label',interactive?`${title}. Interactive chart; activate a category to filter other charts.`:title);
+        }
+      }
+      // A side-by-side donut is sized from estimates of the tile's chrome. Once
+      // the note and data row are in place, hand any height still unused back
+      // to the ring, so it fills the tile the way the plotted charts do.
+      if (type === 'donut' && el.querySelector('.db-donut-side')) {
+        const top = el.getBoundingClientRect().top;
+        const used = Math.max(...[...el.children].map(node => node.getBoundingClientRect().bottom + parseFloat(getComputedStyle(node).marginBottom))) - top;
+        const spare = Math.floor(el.clientHeight - used) - 4;
+        if (spare > 6) {
+          const extras = [...el.children].filter(node => !node.classList.contains('db-card'));
+          options = { ...options, donutSpare: spare };
+          render(el, { data: renderData(type,data).rows, options });
+          el.append(...extras);
+          for (const svg of el.querySelectorAll('svg')) {
+            const title=options.title||entry.label;
+            const interactive=!!options.crossfilterField&&[...svg.querySelectorAll('a')].some(mark=>(mark.getAttributeNS('http://www.w3.org/1999/xlink','href')||mark.getAttribute('href')||'').startsWith('#db-crossfilter:'));
+            svg.setAttribute('role',interactive?'group':'img');
+            svg.setAttribute('aria-label',interactive?`${title}. Interactive chart; activate a category to filter other charts.`:title);
+          }
         }
       }
       lastRender.set(el, {type, data, options});

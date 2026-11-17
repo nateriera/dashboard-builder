@@ -31,15 +31,25 @@ async function everyTileRendered(page, count) {
   await expect(page.locator('.tile-error')).toHaveCount(0);
 }
 
-test('starter: a Meridian County community-services overview renders at load with zero console errors', async ({ page }) => {
+// The default first screen is the Meridian County homeless-response dashboard
+// (src/data/starterDashboard.json; launch-polish slice). It replaced the
+// community-services overview this test pinned before: 6 tiles, a KPI strip.
+test('starter: the Meridian County homeless-response dashboard renders at load with zero console errors', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await expect(page.locator('#status')).toContainText('Starter dashboard loaded');
-  await everyTileRendered(page, 6);
+  await everyTileRendered(page, 5);
   const titles = await page.locator('.tile [aria-label="Tile title"]').evaluateAll(inputs => inputs.map(i => i.value));
-  expect(titles[0]).toBe('Meridian County services: 311 timeliness below goal, homelessness edging down');
+  expect(titles).toEqual([
+    'Peak 1,709 (Jan 2025); a second rise in early 2026',
+    'Single adults are half of entries',
+    'What if more people moved into housing each month?',
+    'Entries and exits trade places',
+    'About this dashboard'
+  ]);
   expect(titles).not.toContain('Rent burden vs. homelessness rate'); // no cross-domain scatter
-  await expect(page.locator('.db-kpi')).toHaveCount(4);
+  await expect(page.locator('.db-kpi')).toHaveCount(0);
+  await expect(page.locator('.db-donut')).toContainText('8,202');
   expect(errors).toEqual([]);
 });
 

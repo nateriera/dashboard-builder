@@ -149,7 +149,7 @@
       },
       "sizing": "manual",
       "tileOptions": {
-        "body": "Meridian County's homeless response system, from its monthly by-name list (October 2023 – September 2026; September is provisional). Brush January–June 2026 on the count to see who was entering, and set extra_exits to ask where the count goes with that many more exits to housing each month.\nThe projection is arithmetic on the last three months' net change, not a forecast · Synthetic data for Meridian County, a fictitious jurisdiction."
+        "body": "Meridian County's homeless response system, from its monthly by-name list (October 2023 – September 2026; September is provisional). Brush January–June 2026 on the count to see who was entering, and set extra_exits to ask where the count goes with that many more exits to housing each month.\nMeasures: actively homeless, inflow and outflow by month; entries by household group; the projection is arithmetic on the last three months' net change, not a forecast · Synthetic data for Meridian County, a fictitious jurisdiction."
       },
       "drillValues": null,
       "pageId": "page-1",

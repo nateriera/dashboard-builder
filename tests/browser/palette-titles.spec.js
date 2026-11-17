@@ -1,6 +1,12 @@
 import {test,expect} from '@playwright/test';
 import {clickHeaderAction} from './header-actions.js';
 import {paletteTitleProbe} from './palette-title-checks.js';
+import { seedMeridianServicesStarter } from './meridian-services-starter.js';
+
+// These specs ran against the Meridian County services starter, the default
+// first screen until the launch-polish slice; this file counts the old starter's KPI strip in its 12-tile census.
+// Seed that starter explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedMeridianServicesStarter(page); });
 
 test.use({viewport:{width:1280,height:800}});
 async function ready(page){

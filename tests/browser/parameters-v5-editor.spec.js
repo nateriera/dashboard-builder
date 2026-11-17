@@ -1,4 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { seedMeridianServicesStarter } from './meridian-services-starter.js';
+
+// These specs ran against the Meridian County services starter, the default
+// first screen until the launch-polish slice; this file starts from a dashboard with no parameters.
+// Seed that starter explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedMeridianServicesStarter(page); });
 
 async function ready(page) {
   await page.goto('/');
@@ -25,7 +31,8 @@ test('T6 creates a select only after an explicit dataset, column and option refr
   const row=popover.locator('.dashboard-parameter');
   await expect(row).toContainText('8 stored options');
   await expect(row.getByLabel('Value for parameter1')).toHaveValue('Housing');
-  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('dashboard-builder:layout:v1'))).not.toBeNull();
+  // Wait for autosave to hold the new parameter (the seeded layout exists from the start, so its mere presence is no longer the signal).
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dashboard-builder:layout:v1')||'{}').parameters?.length||0)).toBe(1);
   await page.evaluate(()=>{const layout=JSON.parse(localStorage.getItem('dashboard-builder:layout:v1'));layout.parameters[0].value='Removed category';localStorage.setItem('dashboard-builder:layout:v1',JSON.stringify(layout));});
   await page.reload();
   await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored from this browser/);

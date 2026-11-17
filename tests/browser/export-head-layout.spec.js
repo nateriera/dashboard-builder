@@ -1,6 +1,12 @@
 import {test,expect} from '@playwright/test';
 import fs from 'node:fs/promises';
 import {clickHeaderAction,shareHtml} from './header-actions.js';
+import { seedMeridianServicesStarter } from './meridian-services-starter.js';
+
+// These specs ran against the Meridian County services starter, the default
+// first screen until the launch-polish slice; this file builds its filter card on the old starter's household bar (flowByGroup).
+// Seed that starter explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedMeridianServicesStarter(page); });
 
 const payloadOf=html=>JSON.parse(html.match(/<script id="dashboard-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
 const withPayload=(html,payload)=>html.replace(/(<script id="dashboard-data" type="application\/json">)[\s\S]*?(<\/script>)/,()=>`<script id="dashboard-data" type="application/json">${JSON.stringify(payload).replace(/</g,'\\u003c')}</script>`);

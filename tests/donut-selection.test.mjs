@@ -55,3 +55,51 @@ test('donut remainders with more than 200 folded categories remain valid bounded
   const typed=[{label:1},{label:'1'},{label:-0},{label:0},{label:null}];
   assert.deepEqual(applyFilters(typed,[{...selection,values:[1,-0,null]}],{sourceTile:'target'}).rows,[typed[0],typed[2],typed[4]]);
 });
+
+// ── Donut fit: stacked vs side-by-side layout ───────────────────────────────
+const { donutLayout } = await import('../src/charts/charts.js');
+const fitRows = [{label:'A',value:5},{label:'B',value:3},{label:'C',value:2}];
+
+test('donut layout: callers that give no available space get the stacked sizing unchanged', () => {
+  // Stacked: min(width, height - 80, 400), floor 80 — the pre-fit formula.
+  assert.deepEqual(donutLayout({ width: 400, height: 196 }), { side: false, width: 116 });
+  assert.deepEqual(donutLayout({ width: 300, height: 900 }), { side: false, width: 300 });
+  assert.deepEqual(donutLayout({ width: 900, height: 900 }), { side: false, width: 400 });
+  assert.deepEqual(donutLayout({ width: 120, height: 120 }), { side: false, width: 80 });
+  const chart = donutChart(fitRows, { label: 'label', value: 'value', width: 400, height: 196 });
+  assert.equal(chart.className.trim(), 'db-donut');
+  assert.equal(chart.querySelector('svg').getAttribute('width'), '116');
+  assert.equal(chart.querySelector('svg').getAttribute('viewBox'), '0 0 348 348');
+});
+
+test('donut layout: a clearly wide space puts the legend beside a full-height ring', () => {
+  // 529 wide × 226 tall: 529 >= 1.3 × 226, and 529 - 24 - 150 = 355 leaves room → ring = the height.
+  assert.deepEqual(donutLayout({ width: 400, height: 196, availableWidth: 529, availableHeight: 226 }), { side: true, width: 226 });
+  // The ring never takes the legend's minimum column: 300 - 24 - 150 = 126.
+  assert.deepEqual(donutLayout({ width: 300, height: 140, availableWidth: 300, availableHeight: 200 }), { side: true, width: 126 });
+  // Capped at 400 like the stacked ring.
+  assert.deepEqual(donutLayout({ width: 400, height: 500, availableWidth: 1200, availableHeight: 600 }), { side: true, width: 400 });
+  const chart = donutChart(fitRows, { label: 'label', value: 'value', width: 400, height: 196, availableWidth: 529, availableHeight: 226, crossfilterField: 'label' });
+  assert.ok(chart.classList.contains('db-donut-side'));
+  assert.ok(chart.querySelector('.db-legend').classList.contains('db-legend-side'));
+  assert.equal(chart.querySelector('svg').getAttribute('width'), '226');
+  assert.equal(chart.querySelectorAll('a[href^="#db-crossfilter:"]').length, 3, 'slices stay selectable beside the legend');
+  assert.equal(chart.querySelectorAll('text[pointer-events="none"]').length, 2, 'centre labels still let pointer events through');
+  // The centre total keeps the existing scaling: min(22, max(12, width / 15)) rendered px.
+  const svgEl = chart.querySelector('svg'), size = Number(svgEl.getAttribute('viewBox').split(' ')[2]);
+  const rendered = Number(chart.querySelector('text').getAttribute('font-size')) * 226 / size;
+  assert.ok(Math.abs(rendered - 226 / 15) < 0.01, `total renders at ${rendered}px`);
+});
+
+test('donut layout: square, tall or cramped spaces stay stacked', () => {
+  assert.equal(donutLayout({ width: 300, height: 220, availableWidth: 300, availableHeight: 300 }).side, false, 'square');
+  assert.equal(donutLayout({ width: 300, height: 520, availableWidth: 300, availableHeight: 600 }).side, false, 'tall');
+  assert.equal(donutLayout({ width: 360, height: 220, availableWidth: 360, availableHeight: 300 }).side, false, 'only 1.2× wider than tall');
+  assert.equal(donutLayout({ width: 250, height: 100, availableWidth: 250, availableHeight: 150 }).side, false, 'no room for a 96px ring beside a 150px legend');
+  assert.equal(donutLayout({ width: 400, height: 60, availableWidth: 600, availableHeight: 90 }).side, false, 'under 96px tall');
+  // Narrow stacked legends: compact under 280px, figure under its label under 190px.
+  const legendClass = w => donutChart(fitRows, { label: 'label', value: 'value', width: w, height: 700 }).querySelector('.db-legend').className.trim().split(/\s+/).join(' ');
+  assert.equal(legendClass(300), 'db-legend');
+  assert.equal(legendClass(240), 'db-legend db-legend-compact');
+  assert.equal(legendClass(120), 'db-legend db-legend-compact db-legend-narrow');
+});

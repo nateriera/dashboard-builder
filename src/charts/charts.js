@@ -759,21 +759,41 @@ export function smallMultiples(data, {
 // data: rows; value: numeric field; label: category field.
 // Note: Observable Plot has no arc/pie mark, so this renders raw SVG via
 // d3-shape pie+arc generators and htl — same theme, no Plot dependency.
-export function donutChart(data, { value, label, width = 420, height = width + 80, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme(), crossfilterField = null } = {}) {
+// Layout: stacked (ring over a wrapping legend) unless the space is clearly
+// wider than it is tall, where a stacked ring would shrink to the height left
+// after the legend and sit small in dead space. Then the legend moves to the
+// right of the ring and the ring takes the full height. `availableWidth` and
+// `availableHeight` describe the space the whole donut (ring + legend) may
+// use; callers that pass neither get the stacked layout exactly as before.
+const DONUT_SIDE = { ratio: 1.3, gap: 24, legendMin: 150, ringMin: 96 };
+export function donutLayout({ width, height, availableWidth, availableHeight }) {
+  const known = Number.isFinite(availableWidth) && Number.isFinite(availableHeight);
+  const ringRoom = availableWidth - DONUT_SIDE.gap - DONUT_SIDE.legendMin;
+  const side = known && availableWidth >= availableHeight * DONUT_SIDE.ratio && ringRoom >= DONUT_SIDE.ringMin && availableHeight >= DONUT_SIDE.ringMin;
+  return side
+    ? { side: true, width: Math.max(80, Math.min(availableHeight, ringRoom, 400)) }
+    : { side: false, width: Math.max(80, Math.min(width, height - 80, 400)) };
+}
+
+export function donutChart(data, { value, label, width = 420, height = width + 80, availableWidth, availableHeight, outerRadius = 150, innerRadius = 96, valueFormat = fmtInt.format.bind(fmtInt), theme = getTheme(), crossfilterField = null } = {}) {
   const t = theme.chart;
-  const compactLegend = width < 280;
-  width = Math.max(80, Math.min(width, height - 80, 400));
+  const layout = donutLayout({ width, height, availableWidth, availableHeight });
+  const compactLegend = !layout.side && width < 280;
+  // Under about 190px a label and its figure no longer fit on one line; the figure drops beneath the label.
+  const narrowLegend = compactLegend && width < 190;
+  width = layout.width;
   data = donutParts(data, label, value);
   const total = data.reduce((s, d) => s + d[value], 0);
   const slices = d3pie().value((d) => d[value]).sort(null)(data);
   const arcGen = d3arc().innerRadius(innerRadius).outerRadius(outerRadius);
   const colors = data.map((_, i) => t.categorical[i % t.categorical.length]);
-  const size = outerRadius * 2 + 48;
+  // Beside the legend the ring needs no breathing room of its own; stacked keeps the original margin.
+  const size = outerRadius * 2 + (layout.side ? 8 : 48);
   const c = size / 2;
   // Keep the total readable when a narrow tile requires a smaller ring.
   const totalFont = Math.min(22, Math.max(12, width / 15)) * size / width;
   const textScale = size / width;
-  return html`<div class="db-donut">
+  return html`<div class="db-donut ${layout.side ? 'db-donut-side' : ''}">
     ${svg`<svg width="${width}" height="${width}" viewBox="0 0 ${size} ${size}" role="img">
       <g transform="translate(${c} ${c})">
         ${slices.map((s, i) => {
@@ -788,7 +808,7 @@ export function donutChart(data, { value, label, width = 420, height = width + 8
         <text pointer-events="none" text-anchor="middle" dy="${12 * textScale}" font-size="${10 * textScale}" fill="${t.muted}">total</text>
       </g>
     </svg>`}
-    <div class="db-legend ${compactLegend ? 'db-legend-compact' : ''}">
+    <div class="db-legend ${compactLegend ? 'db-legend-compact' : ''} ${layout.side ? 'db-legend-side' : ''} ${narrowLegend ? 'db-legend-narrow' : ''}">
       ${data.map((d, i) => html`<span class="db-legend-item"><span class="db-swatch" style="background:${colors[i]}"></span><span class="db-legend-label">${d[label]}</span><span class="db-fig">${valueFormat(d[value])}</span></span>`)}
     </div>
   </div>`;
@@ -941,6 +961,15 @@ svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--f
   .db-legend-compact .db-swatch { margin: 2px 0 0; }
   .db-legend-compact .db-fig { margin: 0; }
   .db-legend-label { min-width: 0; }
+  .db-legend-narrow .db-legend-item { grid-template-columns: 12px minmax(0, 1fr); }
+  .db-legend-narrow .db-fig { grid-column: 2; }
+  .db-donut-side { flex-direction: row; justify-content: center; gap: 24px; }
+  .db-donut-side > svg { flex: 0 0 auto; }
+  .db-legend-side { display: grid; flex: 0 1 260px; min-width: 0; gap: 6px; margin-top: 0; max-width: 260px; justify-content: stretch; }
+  .db-legend-side .db-legend-item { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: start; line-height: 20px; }
+  .db-legend-side .db-swatch { margin: 4px 0 0; }
+  .db-legend-side .db-fig { margin: 0; }
+  .db-legend-side .db-legend-label { overflow-wrap: anywhere; }
   .db-swatch {
     display: inline-block; width: 12px; height: 12px; border-radius: 6px;
     margin-right: 8px;
@@ -1069,6 +1098,15 @@ svg [aria-label$="-axis tick label"], .chart-data summary { font-family: var(--f
   .db-legend-compact .db-swatch { margin: 2px 0 0; }
   .db-legend-compact .db-fig { margin: 0; }
   .db-legend-label { min-width: 0; }
+  .db-legend-narrow .db-legend-item { grid-template-columns: 12px minmax(0, 1fr); }
+  .db-legend-narrow .db-fig { grid-column: 2; }
+  .db-donut-side { flex-direction: row; justify-content: center; gap: 24px; }
+  .db-donut-side > svg { flex: 0 0 auto; }
+  .db-legend-side { display: grid; flex: 0 1 260px; min-width: 0; gap: 6px; margin-top: 0; max-width: 260px; justify-content: stretch; }
+  .db-legend-side .db-legend-item { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: start; line-height: 20px; }
+  .db-legend-side .db-swatch { margin: 4px 0 0; }
+  .db-legend-side .db-fig { margin: 0; }
+  .db-legend-side .db-legend-label { overflow-wrap: anywhere; }
   .db-swatch {
     display: inline-block; width: 12px; height: 12px; border-radius: 3px;
     margin-right: 8px;

@@ -336,9 +336,51 @@ function buildCoc() {
     { label: "Months to zero at current net rate", value: last3net < 0 ? `${Math.round(latest / -last3net)} months` : "Not reducing", delta: "arithmetic on the last 3 months, not a forecast" }
   ];
 
+  // ── Canonical launch demo (launch-story.md): two datasets that let one
+  // dashboard carry a brush and a what-if. Both are derived from the flow
+  // above and draw from their own stream, so no other number moves.
+  //
+  // flowEntriesByGroup splits each month's inflow by household group and sums
+  // back to it exactly. Planted, and tied to the named events: the Riverside
+  // encampment resolution (Jun–Aug 2024) brought in single adults, and after
+  // the August 2025 rent shock families become a growing share of entries —
+  // the same mix-shift the CoC stays show (families 11.5% → 28.9% of stays).
+  const d = stream("cocDemo");
+  const ENTRY_GROUPS = [...groupShares.map(([label, group]) => [label, group]), ["Not recorded", "Household type not recorded"]];
+  const encAt = at(EVENTS.ENCAMPMENT_RESOLUTION.month), rentAt = at(EVENTS.RENT_SHOCK.month);
+  const flowEntriesByGroup = [];
+  const entriesByMonth = [];
+  FLOW_MONTHS.forEach((ym, i) => {
+    const ramp = clamp((i - rentAt) / 5, 0, 1); // five months from the rent shock to the new mix
+    const fam = 0.165 + 0.2 * ramp + d.normal(0, 0.012);
+    const shares = [0, fam, 0.112 + d.normal(0, 0.008), 0.094 + d.normal(0, 0.008), 0.04 + d.normal(0, 0.005)];
+    const k = i - encAt;
+    const encampment = k >= 0 && k < 3 ? [62, 54, 34][k] : 0; // the event's arrivals: single adults
+    const rest = inflow[i] - encampment;
+    const counts = shares.map((sh) => Math.round(rest * sh));
+    counts[0] = inflow[i] - sum(counts.slice(1)); // single adults take the remainder, so the month reconciles
+    entriesByMonth.push(counts);
+    ENTRY_GROUPS.forEach(([label, group], g) => flowEntriesByGroup.push({ date: ym, label, value: counts[g], group }));
+  });
+  const entryShare = (g, from, to) => { const rows = entriesByMonth.slice(at(from), at(to) + 1); return pct(sum(rows.map((r) => r[g])), sum(rows.map((r) => sum(r)))); };
+
+  // flowWhatIf: reported history plus twelve projected months for each value
+  // of `extra_exits` (more exits to housing per month). The projection is the
+  // last three months' average net change, minus the extra exits — arithmetic,
+  // not a forecast (the same wording flowKpis uses). A number parameter bound
+  // to an `extra_exits is N` filter picks one scenario.
+  const WHATIF_STEPS = [0, 10, 20, 30, 40];
+  const PROJ_MONTHS = months("2026-10", 12);
+  const flowWhatIf = WHATIF_STEPS.flatMap((extra) => [
+    ...FLOW_MONTHS.map((ym, i) => ({ date: ym, value: active[i], series: "Reported", extra_exits: extra })),
+    { date: FLOW_MONTHS.at(-1), value: latest, series: "Projected", extra_exits: extra },
+    ...PROJ_MONTHS.map((ym, k) => ({ date: ym, value: Math.round(latest + (k + 1) * (last3net - extra)), series: "Projected", extra_exits: extra }))
+  ]);
+  const whatIfEnd = Object.fromEntries(WHATIF_STEPS.map((extra) => [extra, flowWhatIf.filter((r) => r.extra_exits === extra).at(-1).value]));
+
   return {
-    datasets: { cocKpis, cocDaysByHousehold, cocExitDestinations, cocLothStays, cocReturnsTiming, cocSpmTable, cocSpmBriefTable: cocSpmTable.map((r) => ({ measure: `${r.measure}, ${r.unit}`, FY2025: r.FY2025, FY2026: r.FY2026, direction: r.direction })), cocEquity, flowInOut, flowActive, flowByGroup, flowKpis, cocMonthlyFlow },
-    facts: { unknownExitPct: pct(sum(cocExitDestinations.filter((r) => /doesn't know|not collected/i.test(r.destination)).map((r) => r.value)), exitsFY26), servedFY26, servedFY25, exitsFY26, ph26, phPct26, phPct25, med26, med25, mean26, mean25, ret6, ret12, ret24, cohort26, ret12Pct26, ret12Pct25, retWithin12, famShare25, famShare26, suppressed, latest, last3net, pit26, activeSeries: active, months: FLOW_MONTHS, staysFY26: staysFY26.length,
+    datasets: { cocKpis, cocDaysByHousehold, cocExitDestinations, cocLothStays, cocReturnsTiming, cocSpmTable, cocSpmBriefTable: cocSpmTable.map((r) => ({ measure: `${r.measure}, ${r.unit}`, FY2025: r.FY2025, FY2026: r.FY2026, direction: r.direction })), cocEquity, flowInOut, flowActive, flowByGroup, flowKpis, cocMonthlyFlow, flowEntriesByGroup, flowWhatIf },
+    facts: { demo: { entriesReconcile: entriesByMonth.every((r, i) => sum(r) === inflow[i] && r.every((v) => v >= 0)), famAll: entryShare(1, FLOW_MONTHS[0], FLOW_MONTHS.at(-1)), famEarly2026: entryShare(1, "2026-01", "2026-06"), famBeforeShock: entryShare(1, FLOW_MONTHS[0], "2025-07"), singleAll: entryShare(0, FLOW_MONTHS[0], FLOW_MONTHS.at(-1)), singleEarly2026: entryShare(0, "2026-01", "2026-06"), singleEncampment: entryShare(0, "2024-06", "2024-08"), inflowAheadEarly2026: ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"].every((ym) => inflow[at(ym)] > outflow[at(ym)]), whatIfEnd, whatIfRows: flowWhatIf.length }, unknownExitPct: pct(sum(cocExitDestinations.filter((r) => /doesn't know|not collected/i.test(r.destination)).map((r) => r.value)), exitsFY26), servedFY26, servedFY25, exitsFY26, ph26, phPct26, phPct25, med26, med25, mean26, mean25, ret6, ret12, ret24, cohort26, ret12Pct26, ret12Pct25, retWithin12, famShare25, famShare26, suppressed, latest, last3net, pit26, activeSeries: active, months: FLOW_MONTHS, staysFY26: staysFY26.length,
       typeMedians26: Object.fromEntries(HH.map((h) => [h.label, typeMedian(staysFY26, h.label)])),
       typeMedians25: Object.fromEntries(HH.map((h) => [h.label, typeMedian(staysFY25, h.label)])),
       blackPH: pct(phByRace26[0], exitsByRace26[0]), whitePH: pct(phByRace26[1], exitsByRace26[1]), blackRet: pct(retByRace26[0], cohortByRace26[0]), whiteRet: pct(retByRace26[1], cohortByRace26[1]), byGroup: flowByGroup }
@@ -882,6 +924,7 @@ function buildSales() {
 export const LABELS = {
   cocKpis: "Meridian CoC — SPM headline KPIs", cocDaysByHousehold: "Meridian CoC — median days homeless by household type, FY2022–26", cocExitDestinations: "Meridian CoC — exits by destination, FY2026", cocLothStays: "Meridian CoC — person-stays (length of time homeless), FY2026", cocReturnsTiming: "Meridian CoC — returns to homelessness by timing", cocSpmTable: "Meridian CoC — System Performance Measures, FY2025 vs FY2026", cocEquity: "Meridian CoC — outcomes by race/ethnicity", cocMonthlyFlow: "Meridian CoC — monthly inflow/outflow/active",
   flowInOut: "Meridian CoC — monthly inflow vs outflow", flowActive: "Meridian CoC — actively homeless by month", flowByGroup: "Meridian CoC — actively homeless by household group", flowKpis: "Meridian CoC — system flow KPIs",
+  flowEntriesByGroup: "Meridian CoC — monthly entries by household group", flowWhatIf: "Meridian CoC — what-if: actively homeless with more exits per month",
   bhKpis: "Meridian CCBHC — headline KPIs", bhGapToBenchmark: "Meridian CCBHC — gap to benchmark by measure", bhSiteTrends: "Meridian CCBHC — DEP-REM-6 by site and quarter", bhHeatmap: "Meridian CCBHC — measure × site rates", bhPhqBands: "Meridian CCBHC — PHQ-9 outcome bands by site", bhMeasureTable: "Meridian CCBHC — measure table (num/den/rate)",
   udsKpis: "Meridian Health Center — UDS headline KPIs", udsCqmTrend: "Meridian Health Center — headline CQMs by year", udsVsNational: "Meridian Health Center — CQM gap vs national", udsPayerMix: "Meridian Health Center — payer mix by year", udsServiceLines: "Meridian Health Center — visits by service line", udsCqmTable: "Meridian Health Center — CQM table", udsQuarterly: "Meridian Health Center — 2026 quarterly estimates", udsCqm: "Meridian Health Center — all CQMs × years",
   odKpis: "Meridian overdose — headline KPIs", odRollingRate: "Meridian overdose — 12-month rolling death rate", odEdVisits: "Meridian overdose — monthly nonfatal ED visits", odStateRates: "Overdose death rates by state (synthetic)", odBySubstance: "Meridian overdose — rate by substance and year", odMonthly: "Meridian overdose — monthly deaths and ED visits",
@@ -940,6 +983,13 @@ export function checkAnchors({ families }) {
   const types = Object.keys(f("coc").typeMedians26);
   check("CoC mix-shift: every household type improves ≥5%, overall median moves <3%", `families ${f("coc").famShare25}% → ${f("coc").famShare26}% of stays; overall ${f("coc").med25} → ${f("coc").med26}; ${types.map((k) => `${k} ${f("coc").typeMedians25[k]}→${f("coc").typeMedians26[k]}`).join(", ")}`,
     types.every((k) => f("coc").typeMedians26[k] <= 0.95 * f("coc").typeMedians25[k]) && Math.abs(f("coc").med26 - f("coc").med25) < 0.03 * f("coc").med25);
+  // Canonical launch demo (launch-story.md): the pattern a brush and the what-if control must show.
+  const demo = f("coc").demo;
+  check("Demo: monthly entries by group are nonnegative and sum to each month's inflow", demo.entriesReconcile, demo.entriesReconcile);
+  check("Demo: families are 33–40% of entries in Jan–Jun 2026, at least 10 pts above all 36 months", `${demo.famEarly2026}% vs ${demo.famAll}% overall (${demo.famBeforeShock}% before Aug 2025); single adults ${demo.singleEarly2026}% vs ${demo.singleAll}%`, demo.famEarly2026 >= 33 && demo.famEarly2026 <= 40 && demo.famEarly2026 - demo.famAll >= 10);
+  check("Demo: inflow exceeds outflow in every month of Jan–Jun 2026", demo.inflowAheadEarly2026, demo.inflowAheadEarly2026);
+  check("Demo: single adults are over 60% of entries in the encampment months (Jun–Aug 2024)", demo.singleEncampment, demo.singleEncampment >= 60);
+  check("Demo: what-if projection falls 120 further per +10 exits by Sep 2027", Object.entries(demo.whatIfEnd).map(([k, v]) => `+${k}: ${v}`).join(", "), [10, 20, 30, 40].every((k) => demo.whatIfEnd[0] - demo.whatIfEnd[k] === 12 * k) && demo.whatIfRows === 245);
   return results;
 }
 

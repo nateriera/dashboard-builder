@@ -11,6 +11,8 @@
   "flowActive": "Meridian CoC — actively homeless by month",
   "flowByGroup": "Meridian CoC — actively homeless by household group",
   "flowKpis": "Meridian CoC — system flow KPIs",
+  "flowEntriesByGroup": "Meridian CoC — monthly entries by household group",
+  "flowWhatIf": "Meridian CoC — what-if: actively homeless with more exits per month",
   "bhKpis": "Meridian CCBHC — headline KPIs",
   "bhGapToBenchmark": "Meridian CCBHC — gap to benchmark by measure",
   "bhSiteTrends": "Meridian CCBHC — DEP-REM-6 by site and quarter",

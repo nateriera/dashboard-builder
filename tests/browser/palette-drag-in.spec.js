@@ -1,4 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { seedMeridianServicesStarter } from './meridian-services-starter.js';
+
+// These specs ran against the Meridian County services starter, the default
+// first screen until the launch-polish slice; this file drops into an empty top-left area the old starter's layout left free.
+// Seed that starter explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedMeridianServicesStarter(page); });
 
 const STORAGE_KEY = 'dashboard-builder:layout:v1';
 const TYPE = 'column';

@@ -1,0 +1,156 @@
+{
+  "app": "dashboard-builder",
+  "version": 5,
+  "rowHeight": 24,
+  "defaultDataset": {
+    "kind": "dataset",
+    "ref": "flowEntriesByGroup"
+  },
+  "filters": [
+    {
+      "id": "filter-extra-exits",
+      "field": "extra_exits",
+      "op": "is",
+      "values": [
+        0
+      ],
+      "scope": "charts",
+      "targets": [
+        {
+          "tileId": "what-if",
+          "field": "extra_exits"
+        }
+      ]
+    }
+  ],
+  "parameters": [
+    {
+      "name": "extra_exits",
+      "type": "number",
+      "value": 0,
+      "min": 0,
+      "max": 40,
+      "step": 10,
+      "integer": true,
+      "bindings": [
+        {
+          "kind": "filter",
+          "filterId": "filter-extra-exits"
+        }
+      ]
+    }
+  ],
+  "savedViews": [],
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Overview"
+    }
+  ],
+  "currentPageId": "page-1",
+  "theme": "paper",
+  "tiles": [
+    {
+      "id": "count",
+      "type": "line",
+      "title": "Peak 1,709 (Jan 2025); a second rise in early 2026",
+      "source": "",
+      "dataset": "flowActive",
+      "binding": {
+        "mode": "explicit",
+        "ref": "flowActive"
+      },
+      "sizing": "manual",
+      "tileOptions": {
+        "yLabel": "People actively homeless"
+      },
+      "drillValues": null,
+      "pageId": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 7,
+      "h": 16
+    },
+    {
+      "id": "entries",
+      "type": "donut",
+      "title": "Single adults are half of entries",
+      "source": "",
+      "dataset": "flowEntriesByGroup",
+      "binding": {
+        "mode": "explicit",
+        "ref": "flowEntriesByGroup"
+      },
+      "sizing": "manual",
+      "tileOptions": {},
+      "drillValues": null,
+      "pageId": "page-1",
+      "x": 7,
+      "y": 0,
+      "w": 5,
+      "h": 16
+    },
+    {
+      "id": "what-if",
+      "type": "line",
+      "title": "What if more people moved into housing each month?",
+      "source": "",
+      "dataset": "flowWhatIf",
+      "binding": {
+        "mode": "explicit",
+        "ref": "flowWhatIf"
+      },
+      "sizing": "manual",
+      "tileOptions": {
+        "yLabel": "People actively homeless"
+      },
+      "drillValues": null,
+      "pageId": "page-1",
+      "x": 0,
+      "y": 16,
+      "w": 6,
+      "h": 14
+    },
+    {
+      "id": "flow",
+      "type": "area",
+      "title": "Entries and exits trade places",
+      "source": "",
+      "dataset": "flowInOut",
+      "binding": {
+        "mode": "explicit",
+        "ref": "flowInOut"
+      },
+      "sizing": "manual",
+      "tileOptions": {
+        "yLabel": "People per month"
+      },
+      "drillValues": null,
+      "pageId": "page-1",
+      "x": 6,
+      "y": 16,
+      "w": 6,
+      "h": 14
+    },
+    {
+      "id": "about",
+      "type": "text",
+      "title": "About this dashboard",
+      "source": "Sample data",
+      "dataset": null,
+      "binding": {
+        "mode": "none"
+      },
+      "sizing": "manual",
+      "tileOptions": {
+        "body": "Meridian County's homeless response system, from its monthly by-name list (October 2023 – September 2026; September is provisional). Brush January–June 2026 on the count to see who was entering, and set extra_exits to ask where the count goes with that many more exits to housing each month.\nMeasures: actively homeless, inflow and outflow by month; entries by household group; the projection is arithmetic on the last three months' net change, not a forecast · Synthetic data for Meridian County, a fictitious jurisdiction."
+      },
+      "drillValues": null,
+      "pageId": "page-1",
+      "x": 0,
+      "y": 30,
+      "w": 12,
+      "h": 5
+    }
+  ]
+}

@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { shareHtml } from './header-actions.js';
+import { seedMeridianServicesStarter } from './meridian-services-starter.js';
+
+// These specs ran against the Meridian County services starter, the default
+// first screen until the launch-polish slice; this file exports a dashboard with no bound parameter (no export confirm).
+// Seed that starter explicitly. Assertions unchanged.
+test.beforeEach(async ({ page }) => { await seedMeridianServicesStarter(page); });
 
 // UX-7: exported viewer variant (title block, conditional filters, one
 // document with anchor navigation, cards, print).

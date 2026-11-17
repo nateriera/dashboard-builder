@@ -104,7 +104,7 @@ try {
   const moved = await node(tile);
   if (moved.x !== 7 || moved.y !== 0 || moved.w !== 5 || moved.h !== 16) throw Error(`Donut did not reach 7,0 5×16: ${JSON.stringify(moved)}`);
   await tile.locator('.tile-title').fill(DONUT);
-  await tile.locator('.tile-title').press('Enter');
+  await tile.locator('.tile-title').blur(); // Enter would add a line break: the title is a multi-line field
   await page.waitForTimeout(500); await shot(1600);
   const after = await node(await tileByTitle(DONUT));
 

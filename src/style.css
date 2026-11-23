@@ -3012,6 +3012,9 @@ body.palette-collapsed .grid-guidance { width: min(320px, calc(100% - 24px)); }
 .share-modal-field input { min-height: 36px; padding: 6px 10px; border: 1px solid var(--slate-300); border-radius: 6px; background: var(--white); color: var(--ink); font: 14px var(--font-body); }
 .share-modal-field-group { display: grid; gap: 4px; }
 .share-modal-help { margin: 0; color: var(--slate-500); font-size: 12px; }
+.share-modal-error { margin: 0; color: var(--danger); font-size: 13px; }
+.share-modal-field:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; }
+.share-modal-field input[type="checkbox"] { width: 18px; min-height: 18px; accent-color: var(--ink); }
 .share-modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .share-modal-actions button { min-height: 36px; padding: 6px 14px; border: 1px solid var(--slate-300); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; cursor: pointer; }
 .share-modal-actions .share-modal-primary { border-color: var(--ink); background: var(--ink); color: var(--white); }

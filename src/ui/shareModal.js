@@ -3,6 +3,7 @@
 // the dashboard untouched; Download hands the collected values back.
 import { focusDialog } from './focus.js';
 import { META_MAX_LENGTH, metaFromInputs } from '../data/layoutMeta.js';
+import { validatePassword } from '../export/protect.js';
 
 let open = null;
 
@@ -62,6 +63,65 @@ export function openShareModal({ meta, trigger, onDownload }) {
   field('preparedBy', 'Prepared by');
   field('dataPeriod', 'Data period', 'Describe the dates covered by the data. This is not the export date.');
 
+  // Password protection (§6.1): opt-in, default off. The password is handed
+  // to onDownload as a separate argument — it is never written into the
+  // layout metadata, never autosaved, never logged.
+  const cryptoAvailable = typeof crypto !== 'undefined' && !!crypto.subtle;
+  const protectGroup = document.createElement('div');
+  protectGroup.className = 'share-modal-field-group';
+  const protectLabel = document.createElement('label');
+  protectLabel.className = 'share-modal-field';
+  const protectCheckbox = document.createElement('input');
+  protectCheckbox.type = 'checkbox';
+  protectCheckbox.name = 'protect';
+  protectCheckbox.disabled = !cryptoAvailable;
+  const protectText = document.createElement('span');
+  protectText.textContent = 'Protect with password';
+  protectLabel.append(protectCheckbox, protectText);
+  protectGroup.append(protectLabel);
+  const protectHelp = document.createElement('p');
+  protectHelp.className = 'share-modal-help';
+  protectHelp.textContent = cryptoAvailable
+    ? 'Anyone opening the file needs the password. There is no recovery — if you forget it, export again.'
+    : 'Password protection needs WebCrypto, which this browser does not provide.';
+  protectGroup.append(protectHelp);
+  panel.append(protectGroup);
+
+  const passwordGroup = document.createElement('div');
+  passwordGroup.className = 'share-modal-field-group';
+  passwordGroup.hidden = true;
+  const passwordField = (key, labelText) => {
+    const label = document.createElement('label');
+    label.className = 'share-modal-field';
+    const name = document.createElement('span');
+    name.textContent = labelText;
+    const input = document.createElement('input');
+    input.type = 'password';
+    input.name = key;
+    input.autocomplete = 'new-password';
+    label.append(name, input);
+    passwordGroup.append(label);
+    return input;
+  };
+  const passwordInput = passwordField('password', 'Password (at least 12 characters)');
+  const confirmInput = passwordField('passwordConfirm', 'Confirm password');
+  panel.append(passwordGroup);
+  // A stale error must not linger once the user starts correcting the fields.
+  for (const input of [passwordInput, confirmInput]) {
+    input.addEventListener('input', () => { errorEl.hidden = true; });
+  }
+
+  const errorEl = document.createElement('p');
+  errorEl.className = 'share-modal-error';
+  errorEl.setAttribute('role', 'alert');
+  errorEl.hidden = true;
+  panel.append(errorEl);
+  protectCheckbox.addEventListener('change', () => {
+    passwordGroup.hidden = !protectCheckbox.checked;
+    errorEl.hidden = true;
+    if (protectCheckbox.checked) passwordInput.focus();
+  });
+
   const actions = document.createElement('div');
   actions.className = 'share-modal-actions';
   const cancel = document.createElement('button');
@@ -77,9 +137,22 @@ export function openShareModal({ meta, trigger, onDownload }) {
 
   panel.addEventListener('submit', event => {
     event.preventDefault();
+    let password = null;
+    if (protectCheckbox.checked) {
+      const problem = validatePassword(passwordInput.value, confirmInput.value);
+      if (problem) {
+        errorEl.textContent = problem;
+        errorEl.hidden = false;
+        passwordInput.focus();
+        return;
+      }
+      password = passwordInput.value;
+    }
     const values = metaFromInputs(Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input.value])));
+    passwordInput.value = '';
+    confirmInput.value = '';
     closeShareModal();
-    onDownload(values);
+    onDownload(values, password);
   });
   backdrop.addEventListener('pointerdown', event => { if (event.target === backdrop) closeShareModal(); });
   backdrop.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); closeShareModal(); } }, true);

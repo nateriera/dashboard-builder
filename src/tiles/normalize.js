@@ -110,3 +110,107 @@ export function promoteDate(v) {
   }
   return v;
 }
+
+// ── Protected HTML export (§5) ────────────────────────────────────────────
+// Column minimization for exported files. Projection is column-only and
+// happens at export time, on copies — the composer's stored, cached and
+// sample data are never mutated, and no row is ever dropped by count.
+
+/** Extra row keys a tile type's render consumes beyond its declared fields.
+ *  Histogram reads `value ?? y ?? x` on plain rows and `start, end, value,
+ *  key` on pre-binned rows (src/charts/charts.js); KPI cards read `invert`
+ *  (src/charts/charts.js, kpiRow). Every other type needs only its fields. */
+export const EXPORT_ROW_EXTRAS = {
+  histogram: ['x', 'y', 'start', 'end', 'key'],
+  kpi: ['invert']
+};
+
+/** The row keys an exported tile keeps: its declared field keys plus
+ *  extras. Returns null for dynamic-field (table) tiles: every column is
+ *  the data, so there is nothing to project. */
+export function exportRowKeys(entry, extraKeys = []) {
+  if (entry.dynamicFields) return null;
+  if (entry.noData) return [];
+  return [...new Set([...entry.fields.map((f) => f.key), ...extraKeys])];
+}
+
+/** Project rows onto the export allowlist (§5.1): field keys + extras
+ *  (type extras and filter-target fields, supplied by the caller).
+ *  Table tiles are exempt and returned copied whole; text tiles have no
+ *  rows. A key absent from a row is simply absent from the projected row —
+ *  no nulls are inserted. Never mutates its input. */
+export function projectExportRows(entry, rows, extraKeys = []) {
+  if (entry.dynamicFields) return rows.map((row) => ({ ...row }));
+  if (entry.noData) return [];
+  const keep = new Set(exportRowKeys(entry, extraKeys));
+  return rows.map((row) => {
+    const out = {};
+    for (const key of Object.keys(row)) if (keep.has(key)) out[key] = row[key];
+    return out;
+  });
+}
+
+/** Project one inlined backup dataset for the HTML export (§5.5).
+ *  `dataset` is an inlined record {name, columns, rows, fieldKeys, mapping,
+ *  raw} as built by inlineDatasets. `referencingTiles` are the layout tiles
+ *  that use this dataset — directly, via a saved query's dependencies, or
+ *  by following the dashboard default. `fieldsForType` maps a tile type to
+ *  its registry entry; `filterFieldsForTile(tileId, pageId)` returns the
+ *  filter-target fields for one tile.
+ *  `minimize: false` returns the dataset unchanged (the JSON export path,
+ *  §5.6). A dataset any table tile uses is exempt and returned unchanged:
+ *  its columns are the data. If no referencing tile contributes a key, the
+ *  dataset is returned unchanged rather than emptied (fail safe).
+ *  Returns a new record; never mutates the input. */
+export function projectBackupDataset(dataset, referencingTiles, fieldsForType, filterFieldsForTile, minimize = true) {
+  if (!minimize) return dataset;
+  const rowKeys = new Set();
+  const rawKeys = new Set();
+  for (const tile of referencingTiles) {
+    const entry = fieldsForType(tile.type);
+    if (!entry) continue;
+    if (entry.dynamicFields) return dataset; // table tile: exempt
+    if (entry.noData) continue;
+    const extras = EXPORT_ROW_EXTRAS[tile.type] || [];
+    const filterFields = filterFieldsForTile ? filterFieldsForTile(tile.id, tile.pageId) : [];
+    const keys = [...new Set([...entry.fields.map((f) => f.key), ...extras, ...filterFields])];
+    for (const key of keys) rowKeys.add(key);
+    // Raw columns: the dataset's stored mapping first, guessed mapping as
+    // fallback (dashboard-default uploads store an empty mapping).
+    const mapping = dataset.mapping || {};
+    const guessed = guessMapping(entry, dataset.columns || []);
+    for (const key of keys) {
+      if (!entry.fields.some((f) => f.key === key)) continue;
+      const col = mapping[key] || guessed[key];
+      if (col != null) rawKeys.add(col);
+    }
+    for (const field of filterFields) rawKeys.add(field);
+  }
+  if (rowKeys.size === 0 && rawKeys.size === 0) return dataset;
+  const project = (rows, keys) => rows.map((row) => {
+    const out = {};
+    for (const key of Object.keys(row)) if (keys.has(key)) out[key] = row[key];
+    return out;
+  });
+  // dataset.rows are normalized (field keys) when fieldKeys is non-empty;
+  // dashboard-default uploads store the raw parse as rows instead (see
+  // src/main.js: the dashboard upload saves fieldKeys: [] with raw rows).
+  const rowsAreRaw = !dataset.fieldKeys || dataset.fieldKeys.length === 0;
+  const rows = project(dataset.rows || [], rowsAreRaw ? rawKeys : rowKeys);
+  const raw = dataset.raw
+    ? { columns: dataset.raw.columns.filter((c) => rawKeys.has(c)), rows: project(dataset.raw.rows, rawKeys) }
+    : null;
+  const columns = raw
+    ? dataset.columns.filter((c) => rawKeys.has(c))
+    : [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  return {
+    ...dataset,
+    columns,
+    rows,
+    fieldKeys: (dataset.fieldKeys || []).filter((k) => rowKeys.has(k)),
+    mapping: Object.fromEntries(
+      Object.entries(dataset.mapping || {}).filter(([k, v]) => rowKeys.has(k) && rawKeys.has(v))
+    ),
+    raw
+  };
+}

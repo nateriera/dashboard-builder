@@ -40,12 +40,20 @@ test('S6: donut Other selects its folded original records in the composer and of
       const values = await other.evaluate(mark=>JSON.parse(decodeURIComponent(mark.getAttribute('href').slice('#db-crossfilter:'.length))));
       expect(values).toEqual(['F','G','H','I']);
       await other.click();
-      expect(await records(target)).toEqual(raw.rows.slice(5).map(row=>Object.values(row)));
+      // §5.4: the export omits tile.sourceRows, so the exported disclosure
+      // and drillthrough show the projected chart rows (label, value) for
+      // the same folded records — the composer keeps the full source rows.
+      if (surface===page) {
+        expect(await records(target)).toEqual(raw.rows.slice(5).map(row=>Object.values(row)));
+      } else {
+        expect(await records(target)).toEqual([['F','4'],['G','3'],['H','2'],['I','1']]);
+      }
       const selected=donut.locator('.chart-drillthrough');
       await expect(selected).toHaveCount(1);
       if (surface===page) await donut.getByRole('button',{name:'Inspect 4 selected records',exact:true}).click();
       await expect(selected.locator('tbody tr')).toHaveCount(4);
-      expect(await selected.locator('tbody tr td:first-child').allTextContents()).toEqual(raw.rows.slice(5).map(row=>row.label));
+      expect(await selected.locator('tbody tr td:first-child').allTextContents()).toEqual(
+        surface===page ? raw.rows.slice(5).map(row=>row.label) : ['F','G','H','I']);
     }
   } finally { await context.close(); }
   const many=Array.from({length:211},(_,index)=>({label:`Category ${String(index).padStart(3,'0')}`,value:211-index}));

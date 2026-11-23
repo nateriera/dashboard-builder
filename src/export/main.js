@@ -12,6 +12,7 @@ import { chartData } from "../ui/chartData.js";
 import { retainSourceRows } from '../data/rowProvenance.js';
 import { timeBrushPoints, timeBrushSelection } from '../charts/timeMarks.js';
 import { exportMetaFacts, exportFactLines, tileSourceLine, formatExportStamp, filterAppliesToPage, crossfilterShownOnPage, packTileRows, describeFilterValue, printFilterSummary, viewerStateEquals, relativePresetLabel } from './viewerModel.js';
+import { isEncryptedPayload, decryptPayload } from './protect.js';
 
 document.head.appendChild(chartStyles);
 
@@ -19,16 +20,13 @@ function readPayload() {
   try {
     const el = document.getElementById("dashboard-data");
     if (!el) return null;
-    const data = JSON.parse(el.textContent);
-    if (!data || !Array.isArray(data.tiles)) return null;
-    for (const tile of data.tiles) if (Array.isArray(tile.rows)) retainSourceRows(tile.rows, tile.sourceRows);
-    return data;
+    return JSON.parse(el.textContent);
   } catch {
     return null;
   }
 }
 
-const payload = readPayload();
+const rawPayload = readPayload();
 const root = document.getElementById("export-root");
 const crossfilterHref = mark => mark.getAttributeNS?.("http://www.w3.org/1999/xlink", "href") || mark.getAttribute?.("href") || "";
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -41,18 +39,74 @@ function el(tag, className, text) {
 
 // The export carries its theme; activate it for rendering without touching
 // the viewer's own stored preference (previewTheme, not setTheme).
-previewTheme(payload && payload.theme);
-
-if (!payload) {
+if (rawPayload && isEncryptedPayload(rawPayload)) {
+  // Protected export (§6.4): nothing from the payload is rendered — not
+  // even its title — until the password unlocks it.
+  document.title = "Dashboard";
+  showUnlockScreen(rawPayload);
+} else if (rawPayload && Array.isArray(rawPayload.tiles)) {
+  for (const tile of rawPayload.tiles) if (Array.isArray(tile.rows)) retainSourceRows(tile.rows, tile.sourceRows);
+  previewTheme(rawPayload.theme);
+  document.title = exportMetaFacts(rawPayload.meta).title;
+  renderExport(rawPayload);
+} else {
   document.title = "Dashboard";
   root.innerHTML = "";
   const p = document.createElement("p");
   p.className = "export-notice";
   p.textContent = "This file doesn't contain dashboard data.";
   root.appendChild(p);
-} else {
-  document.title = exportMetaFacts(payload.meta).title;
-  renderExport(payload);
+}
+
+// Password unlock screen for protected exports (§6.4). The password lives
+// only in a local variable for one attempt and the input is cleared on
+// every outcome; every failure shows the same generic message.
+function showUnlockScreen(envelope) {
+  root.innerHTML = "";
+  const box = el('div', 'export-unlock');
+  box.append(
+    el('h1', null, 'Protected dashboard'),
+    el('p', 'export-unlock-note', 'This file is protected with a password. Enter it to view the dashboard.')
+  );
+  const form = document.createElement('form');
+  form.className = 'export-unlock-form';
+  const label = el('label', 'export-unlock-label', 'Password');
+  const input = document.createElement('input');
+  input.type = 'password';
+  input.name = 'password';
+  input.autocomplete = 'current-password';
+  input.required = true;
+  input.setAttribute('aria-label', 'Password');
+  label.append(input);
+  const error = el('p', 'export-unlock-error', '');
+  error.setAttribute('role', 'alert');
+  error.hidden = true;
+  const button = document.createElement('button');
+  button.type = 'submit';
+  button.className = 'export-unlock-submit';
+  button.textContent = 'Unlock';
+  form.append(label, error, button);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const password = input.value;
+    try {
+      const plaintext = await decryptPayload(envelope, password);
+      const payload = JSON.parse(plaintext);
+      if (!payload || !Array.isArray(payload.tiles)) throw new Error('Invalid payload.');
+      input.value = '';
+      for (const tile of payload.tiles) if (Array.isArray(tile.rows)) retainSourceRows(tile.rows, tile.sourceRows);
+      previewTheme(payload.theme);
+      renderExport(payload);
+    } catch {
+      input.value = '';
+      error.textContent = 'Wrong password. Try again.';
+      error.hidden = false;
+      input.focus();
+    }
+  });
+  box.append(form);
+  root.append(box);
+  input.focus();
 }
 
 function renderExport(payload) {

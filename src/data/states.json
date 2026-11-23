@@ -1,257 +1,206 @@
 [
   {
-    "fips": "01",
-    "state": "Alabama",
+    "id": "01",
     "value": 16.1
   },
   {
-    "fips": "02",
-    "state": "Alaska",
+    "id": "02",
     "value": 20.2
   },
   {
-    "fips": "04",
-    "state": "Arizona",
+    "id": "04",
     "value": 26.0
   },
   {
-    "fips": "05",
-    "state": "Arkansas",
+    "id": "05",
     "value": 32.3
   },
   {
-    "fips": "06",
-    "state": "California",
+    "id": "06",
     "value": 21.3
   },
   {
-    "fips": "08",
-    "state": "Colorado",
+    "id": "08",
     "value": 35.1
   },
   {
-    "fips": "09",
-    "state": "Connecticut",
+    "id": "09",
     "value": 12.2
   },
   {
-    "fips": "10",
-    "state": "Delaware",
+    "id": "10",
     "value": 13.1
   },
   {
-    "fips": "11",
-    "state": "District of Columbia",
+    "id": "11",
     "value": 33.8
   },
   {
-    "fips": "12",
-    "state": "Florida",
+    "id": "12",
     "value": 10.6
   },
   {
-    "fips": "13",
-    "state": "Georgia",
+    "id": "13",
     "value": 12.6
   },
   {
-    "fips": "15",
-    "state": "Hawaii",
+    "id": "15",
     "value": 38.3
   },
   {
-    "fips": "16",
-    "state": "Idaho",
+    "id": "16",
     "value": 23.7
   },
   {
-    "fips": "17",
-    "state": "Illinois",
+    "id": "17",
     "value": 15.3
   },
   {
-    "fips": "18",
-    "state": "Indiana",
+    "id": "18",
     "value": 14.5
   },
   {
-    "fips": "19",
-    "state": "Iowa",
+    "id": "19",
     "value": 38.1
   },
   {
-    "fips": "20",
-    "state": "Kansas",
+    "id": "20",
     "value": 16.6
   },
   {
-    "fips": "21",
-    "state": "Kentucky",
+    "id": "21",
     "value": 21.3
   },
   {
-    "fips": "22",
-    "state": "Louisiana",
+    "id": "22",
     "value": 39.0
   },
   {
-    "fips": "23",
-    "state": "Maine",
+    "id": "23",
     "value": 14.9
   },
   {
-    "fips": "24",
-    "state": "Maryland",
+    "id": "24",
     "value": 8.9
   },
   {
-    "fips": "25",
-    "state": "Massachusetts",
+    "id": "25",
     "value": 15.9
   },
   {
-    "fips": "26",
-    "state": "Michigan",
+    "id": "26",
     "value": 26.7
   },
   {
-    "fips": "27",
-    "state": "Minnesota",
+    "id": "27",
     "value": 33.4
   },
   {
-    "fips": "28",
-    "state": "Mississippi",
+    "id": "28",
     "value": 24.3
   },
   {
-    "fips": "29",
-    "state": "Missouri",
+    "id": "29",
     "value": 14.3
   },
   {
-    "fips": "30",
-    "state": "Montana",
+    "id": "30",
     "value": 21.2
   },
   {
-    "fips": "31",
-    "state": "Nebraska",
+    "id": "31",
     "value": 31.7
   },
   {
-    "fips": "32",
-    "state": "Nevada",
+    "id": "32",
     "value": 32.8
   },
   {
-    "fips": "33",
-    "state": "New Hampshire",
+    "id": "33",
     "value": 23.3
   },
   {
-    "fips": "34",
-    "state": "New Jersey",
+    "id": "34",
     "value": 28.1
   },
   {
-    "fips": "35",
-    "state": "New Mexico",
+    "id": "35",
     "value": 24.6
   },
   {
-    "fips": "36",
-    "state": "New York",
+    "id": "36",
     "value": 11.7
   },
   {
-    "fips": "37",
-    "state": "North Carolina",
+    "id": "37",
     "value": 31.0
   },
   {
-    "fips": "38",
-    "state": "North Dakota",
+    "id": "38",
     "value": 24.8
   },
   {
-    "fips": "39",
-    "state": "Ohio",
+    "id": "39",
     "value": 42.0
   },
   {
-    "fips": "40",
-    "state": "Oklahoma",
+    "id": "40",
     "value": 22.4
   },
   {
-    "fips": "41",
-    "state": "Oregon",
+    "id": "41",
     "value": 14.0
   },
   {
-    "fips": "42",
-    "state": "Pennsylvania",
+    "id": "42",
     "value": 32.8
   },
   {
-    "fips": "44",
-    "state": "Rhode Island",
+    "id": "44",
     "value": 17.7
   },
   {
-    "fips": "45",
-    "state": "South Carolina",
+    "id": "45",
     "value": 24.5
   },
   {
-    "fips": "46",
-    "state": "South Dakota",
+    "id": "46",
     "value": 8.6
   },
   {
-    "fips": "47",
-    "state": "Tennessee",
+    "id": "47",
     "value": 38.5
   },
   {
-    "fips": "48",
-    "state": "Texas",
+    "id": "48",
     "value": 27.2
   },
   {
-    "fips": "49",
-    "state": "Utah",
+    "id": "49",
     "value": 22.9
   },
   {
-    "fips": "50",
-    "state": "Vermont",
+    "id": "50",
     "value": 30.8
   },
   {
-    "fips": "51",
-    "state": "Virginia",
+    "id": "51",
     "value": 37.6
   },
   {
-    "fips": "53",
-    "state": "Washington",
+    "id": "53",
     "value": 23.4
   },
   {
-    "fips": "54",
-    "state": "West Virginia",
+    "id": "54",
     "value": 24.1
   },
   {
-    "fips": "55",
-    "state": "Wisconsin",
+    "id": "55",
     "value": 41.3
   },
   {
-    "fips": "56",
-    "state": "Wyoming",
+    "id": "56",
     "value": 27.8
   }
 ]

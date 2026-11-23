@@ -38,6 +38,31 @@ async function expectSourceData(tile) {
   await details.locator('summary').click();
 }
 
+// §5.4: the export omits tile.sourceRows, so the exported disclosure and
+// drillthrough show the projected chart rows, not the full source rows.
+const projectedRows = [
+  { label:'Mapped A',value:'12' },
+  { label:'Mapped B',value:'7' }
+];
+
+async function expectProjectedData(tile) {
+  const details = tile.locator('.chart-data:not(.chart-drillthrough)');
+  await details.locator('summary').click();
+  await expect(details.locator('tbody tr')).toHaveCount(2);
+  expect(await readRecords(details)).toEqual(projectedRows);
+  await details.locator('summary').click();
+}
+
+async function expectSelectedProjected(tile) {
+  await tile.locator('svg [aria-label^="Category: Mapped A"]').click();
+  const details = tile.locator('.chart-drillthrough');
+  await expect(details).toHaveCount(1);
+  await expect(details.locator('tbody tr')).toHaveCount(1);
+  expect(await readRecords(details)).toEqual([projectedRows[0]]);
+  // Selection resolves against the mapped chart key even though records show the projected row.
+  await expect(tile.locator('svg [aria-label^="Category: Mapped A"]')).toHaveCount(1);
+}
+
 async function expectMappedChart(tile) {
   await expect(tile.locator('.tile-chart svg')).toBeVisible();
   await expect(tile.locator('.tile-error')).toHaveCount(0);
@@ -99,8 +124,8 @@ for (const kind of ['upload', 'query']) {
         const exportedTile = offline.locator('.export-tile');
         await expect(exportedTile).toHaveCount(1);
         await expectMappedChart(exportedTile);
-        await expectSourceData(exportedTile);
-        await expectSelectedSource(exportedTile, {composer:false});
+        await expectProjectedData(exportedTile);
+        await expectSelectedProjected(exportedTile);
       } finally { await context.close(); }
     }
 

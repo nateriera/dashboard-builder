@@ -148,7 +148,15 @@ for (const type of ['line', 'area']) {
       await expect(offlineTarget.locator('.chart-data summary')).toContainText('(3,001 rows)');
       const offlineSelected = await brushVisibleRecords(offline, offlineSource);
       expect(offlineSelected).toEqual(selected);
-      await expectOriginalRecords(offlineTarget, offlineSelected);
+      // §5.4: the export omits tile.sourceRows, so the exported disclosure
+      // shows the projected line/area rows (date, value, series) for the
+      // same selected records — not the full source records.
+      const projected = offlineSelected.map(row => ({
+        date: row.observed,
+        value: String(Number(row.amount)),
+        series: row.segment
+      }));
+      await expectOriginalRecords(offlineTarget, projected);
     } finally { await context.close(); }
   });
 }

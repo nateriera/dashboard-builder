@@ -252,7 +252,11 @@ See the [JSON backup and HTML sharing guide](docs/json-backup-html-sharing.md)
 for the difference between the editable backup and the standalone viewer.
 
 HTML export carries materialized query results, all tile rows, theme and options;
-its viewer runs without SQL or network access. It rejects an export if the
+its viewer runs without SQL or network access. Each tile carries only the
+columns its chart needs (plus any dashboard-filter fields); table tiles are
+the exception and carry every column. **Share as HTML** also offers an
+optional password lock (12 or more characters, never stored, no recovery):
+a locked file shows only an unlock screen until the password is entered. It rejects an export if the
 dashboard changes during preparation. Errors remain visible per tile.
 **Share as HTML** first asks for an optional dashboard title, preparer and data
 period. These are stored on the layout as `meta` and never inferred; blank

@@ -22,7 +22,7 @@ import { TILE_TYPES, DATASETS, DATASET_LABELS, CORE_DATASET_KEYS, resizeTileChar
 import starterDashboard from "./data/starterDashboard.json";
 import { ROW_HEIGHT } from "./tiles/geometry.js";
 import { fitTileToContent } from "./tiles/autofit.js";
-import { guessMapping, normalizeRows } from "./tiles/normalize.js";
+import { guessMapping, normalizeRows, projectExportRows, EXPORT_ROW_EXTRAS, projectBackupDataset } from "./tiles/normalize.js";
 import {
   isUploadRef,
   uploadId,
@@ -67,6 +67,7 @@ import { anchorPopover } from './ui/anchoredPopover.js';
 import { focusDialog } from './ui/focus.js';
 import { openShareModal } from './ui/shareModal.js';
 import { exportMetaFacts } from './data/layoutMeta.js';
+import { encryptPayload } from './export/protect.js';
 
 // The chart kit's component CSS (cards, headers, KPIs, legends), injected
 // once. It styles itself through theme CSS variables (see src/themes/).
@@ -429,13 +430,62 @@ function resolveUploadRows(dataset) {
   return mergeSourceColumns(dataset.rows, sourceRows);
 }
 
+// Filter-target fields for one tile (§5.2): the source-column names of the
+// filters that act on it (scope/page/targets match, mirroring
+// filterAppliesToTile in src/export/viewerModel.js). Field presence in rows
+// is deliberately NOT checked here — a field absent from every row is
+// harmless to keep, and the backup path has no tile rows to check against.
+// Dropping such a field would silently disable the filter in the viewer
+// (applyFilters skips filters whose field no row has) and hide its control.
+function filterFieldsForTile(tileId, pageId) {
+  const fields = new Set();
+  for (const filter of filters) {
+    if (filter.source === 'crossfilter' && filter.sourceTile === tileId) continue;
+    if (filter.scope === 'page' && filter.pageId !== pageId) continue;
+    const connection = filter.targets?.find((target) => target.tileId === tileId);
+    if (filter.targets && !connection) continue;
+    fields.add(connection?.field || filter.field);
+  }
+  return [...fields];
+}
+
+// Layout tiles that use one upload dataset: direct tile refs, tiles
+// following the dashboard default, and tiles whose saved query depends on
+// it. Used to compute the backup projection's union allowlist (§5.5).
+function referencingTilesForDataset(layout, ref) {
+  const tiles = [];
+  for (const tile of layout.tiles) {
+    if (tile.dataset === ref) { tiles.push(tile); continue; }
+    if (tile.dataset == null && layout.defaultDataset?.kind === 'dataset' && layout.defaultDataset.ref === ref) { tiles.push(tile); continue; }
+    if (isQueryRef(tile.dataset)) {
+      const q = getQuery(queryId(tile.dataset));
+      if (q?.dependencies?.includes(ref)) tiles.push(tile);
+    }
+  }
+  return tiles;
+}
+
 // Resolve a tile's render-ready (normalized) rows for static export.
 // Mirrors renderTile/renderQueryTile's data logic; returns {rows} or {error}
 // without touching the DOM or mutating tile metadata.
 async function resolveExportRows(meta, entry) {
   const withRawRows = (rows,preBinnedHistogram=false) => {
     const clean = materializeExportRows(rows, sourceRowsFor(rows));
-    return { ...prepareTileRows(meta, clean.rows), rawRows: clean.rows, sourceRows: clean.sourceRows, dropped: droppedCount(rows), blanked: clean.blanked, preBinnedHistogram };
+    const prepared = prepareTileRows(meta, clean.rows);
+    // Minimization (§5): project the exported rows onto the tile's
+    // allowlist (field keys + type extras + this tile's filter-target
+    // fields). prepareTileRows above still runs on the full rows so its
+    // empty/filtered computation is unchanged; the exported rawRows are
+    // the projected ones. sourceRows are omitted from the export entirely
+    // (§5.4) — the viewer's only consumer is the "View data" disclosure,
+    // which falls back to the projected rows.
+    const extraKeys = [...(EXPORT_ROW_EXTRAS[meta.type] || []), ...filterFieldsForTile(meta.id, meta.pageId)];
+    const projected = projectExportRows(entry, clean.rows, extraKeys);
+    const minimized = !entry.dynamicFields && !entry.noData;
+    const droppedColumns = minimized
+      ? new Set(clean.rows.flatMap((row) => Object.keys(row))).size - new Set(projected.flatMap((row) => Object.keys(row))).size
+      : 0;
+    return { ...prepared, rawRows: projected, dropped: droppedCount(rows), blanked: clean.blanked, preBinnedHistogram, droppedColumns, minimized };
   };
   if (entry.noData) return { rows: [] };
   if (isQueryRef(meta.dataset)) {
@@ -1963,7 +2013,7 @@ function download(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-function inlineLayoutBackup(layout) {
+function inlineLayoutBackup(layout, { minimize = false } = {}) {
   // Inline small uploaded datasets so the exported file is self-contained.
   // Includes the dashboard-wide default dataset, not just per-tile uploads.
   const refs = layout.tiles.map((t) => t.dataset).filter(isUploadRef);
@@ -1977,6 +2027,14 @@ function inlineLayoutBackup(layout) {
     else refs.push(...listDatasets().map(ds => 'upload:' + ds.id));
   }
   const { inlined, skipped } = inlineDatasets([...new Set(refs)]);
+  if (minimize) {
+    // HTML export (§5.5): project each inlined dataset onto the union
+    // allowlist of the tiles that use it. The JSON export leaves minimize
+    // off (§5.6) and stays lossless.
+    for (const [id, dataset] of Object.entries(inlined)) {
+      inlined[id] = projectBackupDataset(dataset, referencingTilesForDataset(layout, `upload:${id}`), (type) => TILE_TYPES[type], filterFieldsForTile, true);
+    }
+  }
   let blanked = 0;
   for (const dataset of Object.values(inlined)) {
     const clean = materializeExportRows(dataset.rows, dataset.raw?.rows || dataset.rows);
@@ -2033,7 +2091,7 @@ document.getElementById("btn-export").addEventListener("click", async () => {
 // dist/ by `vite build`), injects the dashboard payload with resolved
 // per-tile rows, and downloads the result. The exported file renders the
 // same themed charts with no network dependencies and no editor chrome.
-async function exportHtml() {
+async function exportHtml(password = null) {
   const exportRevision = datasetVersion();
   const snapshotSignature = () => { const { savedAt, ...layout } = serializeLayout(); return JSON.stringify(layout); };
   const exportLayout = snapshotSignature();
@@ -2081,7 +2139,7 @@ async function exportHtml() {
     }
     const tiles = [];
     const erroredTiles = new Map(visibleErroredTiles().map(tile => [tile.id, tile.title]));
-    let blanked = 0, dropped = 0;
+    let blanked = 0, dropped = 0, minimizedTiles = 0, minimizedColumns = 0, hasTableTile = false;
     for (const savedTile of layout.tiles) {
       const meta = tileMeta.get(savedTile.id) || savedTile;
       const entry = TILE_TYPES[meta.type];
@@ -2090,6 +2148,8 @@ async function exportHtml() {
       if (resolved.error) erroredTiles.set(meta.id, meta.title || "Untitled tile");
       blanked += resolved.blanked || 0;
       dropped += resolved.dropped || 0;
+      if (resolved.minimized) { minimizedTiles++; minimizedColumns += resolved.droppedColumns || 0; }
+      if (entry.dynamicFields) hasTableTile = true;
       tiles.push({
         id: meta.id,
         type: meta.type,
@@ -2104,7 +2164,6 @@ async function exportHtml() {
         tileOptions: meta.tileOptions || {},
         preBinnedHistogram:resolved.preBinnedHistogram===true,
         rows: resolved.error ? null : resolved.rawRows || resolved.rows || null,
-        sourceRows: resolved.error ? null : resolved.sourceRows || null,
         error: resolved.error || null,
         emptyMessage: null
       });
@@ -2115,7 +2174,7 @@ async function exportHtml() {
       return;
     }
 
-    const {backup,skipped}=inlineLayoutBackup(layout);
+    const {backup,skipped}=inlineLayoutBackup(layout, { minimize: true });
     const payload = {
       app: "dashboard-builder",
       version: 5,
@@ -2136,7 +2195,13 @@ async function exportHtml() {
       tiles
     };
     // Escape < so a data value can never break out of the JSON script tag.
-    const json = JSON.stringify(payload).replace(/</g, "\\u003c");
+    const plaintext = JSON.stringify(payload).replace(/</g, "\\u003c");
+    // Password protection (§6): encrypt the whole minimized payload. The
+    // size check runs on the final injected string — base64 inflates it
+    // by about a third — and the same < escaping applies to the envelope.
+    const json = password
+      ? JSON.stringify(await encryptPayload(plaintext, password)).replace(/</g, "\\u003c")
+      : plaintext;
     if (json.length > 20 * 1024 * 1024) {
       const mb = (json.length / (1024 * 1024)).toFixed(1);
       if (!window.confirm(`This export is about ${mb} MB (large datasets are inlined). Continue?`)) {
@@ -2155,7 +2220,7 @@ async function exportHtml() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (skipped.length ? ` Editable backup has unavailable dependencies: ${skipped.join(', ')}.` : '') + (erroredNames.length ? ` · errored tile data omitted: ${erroredNames.join(", ")}` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
+    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (password ? ' Password-protected.' : '') + (minimizedTiles ? ` Minimized: ${minimizedColumns} column${minimizedColumns === 1 ? '' : 's'} dropped from ${minimizedTiles} tile${minimizedTiles === 1 ? '' : 's'}.` : '') + (hasTableTile ? ' Table tiles keep all columns — password-protect to share them safely.' : '') + (skipped.length ? ` Editable backup has unavailable dependencies: ${skipped.join(', ')}.` : '') + (erroredNames.length ? ` · errored tile data omitted: ${erroredNames.join(", ")}` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
   } catch (err) {
     setStatus(`HTML export failed: ${err && err.message ? err.message : err}`);
   }
@@ -2168,9 +2233,9 @@ document.getElementById("btn-export-html").addEventListener("click", event => {
   openShareModal({
     meta: dashboardMeta,
     trigger: event.currentTarget,
-    onDownload: meta => {
+    onDownload: (meta, password) => {
       if (JSON.stringify(meta) !== JSON.stringify(dashboardMeta)) { dashboardMeta = meta; scheduleAutosave(); }
-      exportHtml();
+      exportHtml(password || null);
     }
   });
 });

@@ -15,6 +15,8 @@ import {
   normalizeRows
 } from "../tiles/registry.js";
 import { readUpload } from "../data/readUpload.js";
+import { isDesktop } from "../desktop/bridge.js";
+import { confirmLargeFile, pickDataFile } from "../desktop/intake.js";
 import { fetchCsvText, parsePastedTable } from "../data/importSource.js";
 import { parseFile } from "../data/parse.js";
 import { saveDataset, persistDataset, uploadId, isUploadRef } from "../data/store.js";
@@ -399,9 +401,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     } finally { if (pop.isConnected) setUploadBusy(false, sourceStatus.textContent); }
   });
 
-  fileInput.addEventListener("change", async () => {
-    const file = fileInput.files[0];
+  async function handleChosenFile(file) {
     if (!file || uploadBusy) return;
+    if (!confirmLargeFile(file.name, file.size)) { fileInput.value = ""; return; }
     setUploadBusy(true, `Reading ${file.name}…`);
     errorEl.hidden = true;
     try {
@@ -419,7 +421,20 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
       fileInput.value = "";
       if (pop.isConnected) setUploadBusy(false);
     }
-  });
+  }
+
+  fileInput.addEventListener("change", () => handleChosenFile(fileInput.files[0]));
+
+  // Desktop shell: clicking the label opens the native file dialog instead
+  // of the hidden input; the picked file re-enters through handleChosenFile.
+  if (isDesktop) {
+    dropLabel.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (uploadBusy) return;
+      const file = await pickDataFile();
+      if (file) handleChosenFile(file);
+    });
+  }
 
   applyBtn.addEventListener("click", async () => {
     if (uploadBusy || !state.normalized || !state.fileName) return;

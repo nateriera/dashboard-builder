@@ -5,6 +5,9 @@ import { validateParameters, substituteParameters } from "./data/parameters.js";
 import { datasetVersion, listDatasets, storageIssues, rollbackDatasets, subscribeDatasetChanges } from "./data/store.js";
 import { querySnapshot, rollbackQueries, serializeQueries } from "./data/queries.js";
 import { LIMITS } from "./data/limits.js";
+import { readUpload } from "./data/readUpload.js";
+import { isDesktop, onDragDrop, pickFile, pickSavePath, readTextFile, statFile, writeTextFile } from "./desktop/bridge.js";
+import { baseName, fileFromPath } from "./desktop/intake.js";
 // Dashboard Builder — MVP composer (Shape A: standalone vanilla app).
 //
 // A drag-and-drop dashboard composer: the left palette lists chart types from
@@ -1947,6 +1950,55 @@ async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
     return { error: message };
   }
 }
+// Dashboard-wide upload intake, shared by the Data popover's onUpload and
+// the desktop window-drop path (handleDashboardFile below).
+async function handleDashboardUpload({ name, columns, rows, profile }) {
+  try {
+    profile ??= profileRows(columns, rows);
+    const { id } = saveDataset({
+      name,
+      columns,
+      rows,
+      fieldKeys: [],
+      mapping: {},
+      raw: { columns, rows }
+    });
+    const persisted = await persistDataset(id);
+    openGuidedStart({
+      id,
+      name,
+      profile,
+      onUseData: () => {
+        applyDashboardDefault({ kind: "dataset", ref: `upload:${id}` }, `Dashboard data: ${name}`);
+        if (!persisted) setPersistenceWarning(`Upload “${name}” is available for this session only; browser storage is unavailable.`);
+      },
+      onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
+      onKeep: () => {
+        setStatus(persisted ? `Upload saved: ${name}. Current dashboard kept.` : `Upload available for this session only: ${name}. Current dashboard kept.`);
+        if (!persisted) setPersistenceWarning(`Upload “${name}” is available for this session only; browser storage is unavailable.`);
+      }
+    });
+  } catch (error) {
+    reportUploadFailure(error.message || String(error));
+    throw error;
+  }
+}
+
+// A whole File (e.g. dropped on the desktop window) enters through the
+// same readUpload → handleDashboardUpload funnel as the popover's uploads.
+async function handleDashboardFile(file) {
+  let parsed;
+  try {
+    parsed = await readUpload(file, document.getElementById("app-header"));
+  } catch (error) {
+    reportUploadFailure(error.message || String(error));
+    return;
+  }
+  // handleDashboardUpload reports its own failures; the rethrow is for the
+  // popover's inline error display, which a drop does not have.
+  await handleDashboardUpload({ name: file.name, ...parsed }).catch(() => {});
+}
+
 if (btnData) {
   btnData.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1963,37 +2015,7 @@ if (btnData) {
         applyDashboardDefault(dd);
         setStatus(`Dashboard data: ${dashboardDefaultName()}`);
       },
-      onUpload: async ({ name, columns, rows, profile }) => {
-        try {
-          profile ??= profileRows(columns, rows);
-          const { id } = saveDataset({
-            name,
-            columns,
-            rows,
-            fieldKeys: [],
-            mapping: {},
-            raw: { columns, rows }
-          });
-          const persisted = await persistDataset(id);
-          openGuidedStart({
-            id,
-            name,
-            profile,
-            onUseData: () => {
-              applyDashboardDefault({ kind: "dataset", ref: `upload:${id}` }, `Dashboard data: ${name}`);
-              if (!persisted) setPersistenceWarning(`Upload “${name}” is available for this session only; browser storage is unavailable.`);
-            },
-            onApply: (selection) => applyGuidedDashboard({ ...selection, persisted }),
-            onKeep: () => {
-              setStatus(persisted ? `Upload saved: ${name}. Current dashboard kept.` : `Upload available for this session only: ${name}. Current dashboard kept.`);
-              if (!persisted) setPersistenceWarning(`Upload “${name}” is available for this session only; browser storage is unavailable.`);
-            }
-          });
-        } catch (error) {
-          reportUploadFailure(error.message || String(error));
-          throw error;
-        }
-      },
+      onUpload: handleDashboardUpload,
       onFailure: reportUploadFailure
     });
   });
@@ -2001,7 +2023,17 @@ if (btnData) {
 
 document.getElementById("btn-save").addEventListener("click", saveNow);
 
-function download(filename, text) {
+// Download a text file. On the desktop shell this routes through the
+// native save dialog instead of a browser download. Resolves true when
+// the file was written (or the browser download started), false when the
+// user cancelled the save dialog.
+async function download(filename, text) {
+  if (isDesktop) {
+    const path = await pickSavePath(filename);
+    if (!path) return false;
+    await writeTextFile(path, text);
+    return true;
+  }
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2011,6 +2043,7 @@ function download(filename, text) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  return true;
 }
 
 function inlineLayoutBackup(layout, { minimize = false } = {}) {
@@ -2074,10 +2107,12 @@ document.getElementById("btn-export").addEventListener("click", async () => {
   if (erroredNames.length && !window.confirm(`These tiles are in an error state and will export without their data:\n${erroredNames.map(name => `- ${name}`).join("\n")}\nContinue exporting?`)) { setStatus("JSON export cancelled."); return; }
   layout.omittedDependencies = skipped;
   if (skipped.length && !window.confirm('This JSON will omit these dependencies:\n' + skipped.join('\n') + '\nExport with unavailable-data references retained?')) { setStatus('JSON export cancelled.'); return; }
-  download(
+  const saved = await download(
     `dashboard-layout-${new Date().toISOString().slice(0, 10)}.json`,
     JSON.stringify(layout, null, 2)
-  );
+  ).catch((err) => { setStatus(`JSON export failed: ${err.message}`); return null; });
+  if (saved === false) { setStatus("JSON export cancelled."); return; }
+  if (saved === null) return;
   setStatus(
     (skipped.length
       ? `Exported layout JSON (not inlined, over size limit: ${skipped.join(", ")})`
@@ -2211,16 +2246,25 @@ async function exportHtml(password = null) {
     }
     if (exportRevision !== datasetVersion() || exportLayout !== snapshotSignature()) throw new Error("Dashboard changed during export. Export again.");
     const html = template.replace("__DASHBOARD_PAYLOAD__", () => json);
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "dashboard.html";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setStatus(`Exported dashboard.html (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (password ? ' Password-protected.' : '') + (minimizedTiles ? ` Minimized: ${minimizedColumns} column${minimizedColumns === 1 ? '' : 's'} dropped from ${minimizedTiles} tile${minimizedTiles === 1 ? '' : 's'}.` : '') + (hasTableTile ? ' Table tiles keep all columns — password-protect to share them safely.' : '') + (skipped.length ? ` Editable backup has unavailable dependencies: ${skipped.join(', ')}.` : '') + (erroredNames.length ? ` · errored tile data omitted: ${erroredNames.join(", ")}` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
+    let exportedName = "dashboard.html";
+    if (isDesktop) {
+      // Desktop: the native save dialog replaces the browser download.
+      const path = await pickSavePath("dashboard.html", [{ name: "HTML dashboard", extensions: ["html"] }]);
+      if (!path) { setStatus("HTML export cancelled."); return; }
+      await writeTextFile(path, html);
+      exportedName = baseName(path);
+    } else {
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "dashboard.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    setStatus(`Exported ${exportedName} (${(html.length / 1024).toFixed(0)} KB, ${tiles.length} tiles).` + (password ? ' Password-protected.' : '') + (minimizedTiles ? ` Minimized: ${minimizedColumns} column${minimizedColumns === 1 ? '' : 's'} dropped from ${minimizedTiles} tile${minimizedTiles === 1 ? '' : 's'}.` : '') + (hasTableTile ? ' Table tiles keep all columns — password-protect to share them safely.' : '') + (skipped.length ? ` Editable backup has unavailable dependencies: ${skipped.join(', ')}.` : '') + (erroredNames.length ? ` · errored tile data omitted: ${erroredNames.join(", ")}` : '') + (blanked ? ` · ${blankingNotice(blanked, 'non-finite')}` : ''), { dropped });
   } catch (err) {
     setStatus(`HTML export failed: ${err && err.message ? err.message : err}`);
   }
@@ -2242,67 +2286,150 @@ document.getElementById("btn-export-html").addEventListener("click", event => {
 
 const fileInput = document.getElementById("file-import");
 document.getElementById("btn-import").addEventListener("click", () => fileInput.click());
+
+// The layout import path, shared by the web file input below and desktop
+// Open: decode + validate, confirm the replacement, retain a recovery
+// copy, roll back on failure. Resolves true when the layout was replaced.
+async function importLayoutText(name, text) {
+  const rollbackErrors = [];
+  const attemptRollback = async step => {
+    try { await step(); }
+    catch (rollbackError) { rollbackErrors.push(rollbackError); }
+  };
+  try {
+    const data = validateLayout(decodeLayoutFile(name, text));
+    assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
+    if (!window.confirm("Importing replaces the current dashboard (all pages). A recovery copy of the current state will be kept. Continue?")) return false;
+    const previous = serializeLayout();
+    const queriesBefore = querySnapshot();
+    const layoutRaw = localStorage.getItem(STORAGE_KEY);
+    const queryRaw = localStorage.getItem('dashbuilder.queries.v1');
+    const newIds = Object.keys(data.datasets).filter(id => !hasDataset(id));
+    // Retain a durable recovery copy before the first replacement mutation.
+    localStorage.setItem(STORAGE_KEY + ':recovery',JSON.stringify({ layout: previous, queries: queriesBefore }));
+    let restored = 0, restoredQueries = 0;
+    clearTimeout(saveTimer);
+    bulkLoading = true;
+    try {
+      // Detached construction checks run before any durable dataset write.
+      for (const t of data.tiles) buildTileContent(t.type,t);
+      restored = await restoreDatasets(data.datasets);
+      restoredQueries = restoreQueries(data.queries);
+      replaceLayout(data);
+      localStorage.setItem('dashbuilder.queries.v1',serializeQueries());
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(serializeLayout()));
+    } catch (err) {
+      await attemptRollback(() => rollbackQueries(queriesBefore));
+      await attemptRollback(() => {
+        try { loadLayout(previous); }
+        // loadLayout clears its own bulk flag; the import still owns this rollback.
+        finally { bulkLoading = true; }
+      });
+      if (restored) await attemptRollback(() => rollbackDatasets(newIds));
+      await attemptRollback(() => {
+        if (queryRaw === null) localStorage.removeItem('dashbuilder.queries.v1'); else localStorage.setItem('dashbuilder.queries.v1',queryRaw);
+      });
+      await attemptRollback(() => {
+        if (layoutRaw === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY,layoutRaw);
+      });
+      throw err;
+    } finally { bulkLoading = false; }
+    refreshQueryTiles();
+    const bits = [];
+    if (restored) bits.push(`${restored} dataset${restored === 1 ? "" : "s"}`);
+    if (restoredQueries) bits.push(`${restoredQueries} quer${restoredQueries === 1 ? "y" : "ies"}`);
+    setStatus(`Imported ${name}` + (bits.length ? ` (${bits.join(", ")} restored)` : ""));
+    return true;
+  } catch (err) {
+    setStatus(`Import failed: ${err.message}` + (rollbackErrors.length ? ' Rollback incomplete; the pre-import recovery copy was retained.' : ''));
+    return false;
+  }
+}
+
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   if (!file) return;
   if (file.size > LIMITS.layoutBytes) { setStatus("Import limit is 32 MiB."); fileInput.value = ""; return; }
   const reader = new FileReader();
   reader.onload = async () => {
-    const rollbackErrors = [];
-    const attemptRollback = async step => {
-      try { await step(); }
-      catch (rollbackError) { rollbackErrors.push(rollbackError); }
-    };
-    try {
-      const data = validateLayout(decodeLayoutFile(file.name,reader.result));
-      assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
-      if (!window.confirm("Importing replaces the current dashboard (all pages). A recovery copy of the current state will be kept. Continue?")) { fileInput.value = ""; return; }
-      const previous = serializeLayout();
-      const queriesBefore = querySnapshot();
-      const layoutRaw = localStorage.getItem(STORAGE_KEY);
-      const queryRaw = localStorage.getItem('dashbuilder.queries.v1');
-      const newIds = Object.keys(data.datasets).filter(id => !hasDataset(id));
-      // Retain a durable recovery copy before the first replacement mutation.
-      localStorage.setItem(STORAGE_KEY + ':recovery',JSON.stringify({ layout: previous, queries: queriesBefore }));
-      let restored = 0, restoredQueries = 0;
-      clearTimeout(saveTimer);
-      bulkLoading = true;
-      try {
-        // Detached construction checks run before any durable dataset write.
-        for (const t of data.tiles) buildTileContent(t.type,t);
-        restored = await restoreDatasets(data.datasets);
-        restoredQueries = restoreQueries(data.queries);
-        replaceLayout(data);
-        localStorage.setItem('dashbuilder.queries.v1',serializeQueries());
-        localStorage.setItem(STORAGE_KEY,JSON.stringify(serializeLayout()));
-      } catch (err) {
-        await attemptRollback(() => rollbackQueries(queriesBefore));
-        await attemptRollback(() => {
-          try { loadLayout(previous); }
-          // loadLayout clears its own bulk flag; the import still owns this rollback.
-          finally { bulkLoading = true; }
-        });
-        if (restored) await attemptRollback(() => rollbackDatasets(newIds));
-        await attemptRollback(() => {
-          if (queryRaw === null) localStorage.removeItem('dashbuilder.queries.v1'); else localStorage.setItem('dashbuilder.queries.v1',queryRaw);
-        });
-        await attemptRollback(() => {
-          if (layoutRaw === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY,layoutRaw);
-        });
-        throw err;
-      } finally { bulkLoading = false; }
-      refreshQueryTiles();
-      const bits = [];
-      if (restored) bits.push(`${restored} dataset${restored === 1 ? "" : "s"}`);
-      if (restoredQueries) bits.push(`${restoredQueries} quer${restoredQueries === 1 ? "y" : "ies"}`);
-      setStatus(`Imported ${file.name}` + (bits.length ? ` (${bits.join(", ")} restored)` : ""));
-    } catch (err) {
-      setStatus(`Import failed: ${err.message}` + (rollbackErrors.length ? ' Rollback incomplete; the pre-import recovery copy was retained.' : ''));
-    }
-    fileInput.value = "";
+    try { await importLayoutText(file.name, reader.result); }
+    finally { fileInput.value = ""; }
   };
   reader.readAsText(file);
 });
+
+// ── Desktop shell: project files + window drag-drop ─────────────────────
+// Inert in a browser (every branch is behind isDesktop). The current
+// project path lives only in this module variable — it is not persisted
+// into the layout, the meta, or localStorage in slice 1.
+let currentProjectPath = null;
+
+if (isDesktop) {
+  const menu = document.querySelector(".header-more-menu");
+  const exportBtn = document.getElementById("btn-export");
+  const makeMenuButton = (id, label, title) => {
+    const btn = document.createElement("button");
+    btn.id = id;
+    btn.type = "button";
+    btn.textContent = label;
+    btn.title = title;
+    menu.insertBefore(btn, exportBtn);
+    return btn;
+  };
+  const openBtn = makeMenuButton("btn-open-project", "Open…", "Open a dashboard layout file");
+  const saveBtn = makeMenuButton("btn-save-project", "Save", "Save the dashboard layout to its file");
+  const saveAsBtn = makeMenuButton("btn-save-project-as", "Save As…", "Save the dashboard layout to a new file");
+
+  openBtn.addEventListener("click", async () => {
+    try {
+      const path = await pickFile([{ name: "Dashboard layout", extensions: ["json", "html", "htm"] }]);
+      if (!path) return;
+      if (await statFile(path) > LIMITS.layoutBytes) { setStatus("Import limit is 32 MiB."); return; }
+      const text = await readTextFile(path);
+      if (await importLayoutText(baseName(path), text)) currentProjectPath = path;
+    } catch (err) {
+      setStatus(`Open failed: ${err.message}`);
+    }
+  });
+
+  const saveProject = async (forceDialog) => {
+    try {
+      let path = currentProjectPath;
+      if (forceDialog || !path) {
+        path = await pickSavePath("dashboard.json", [{ name: "Dashboard layout", extensions: ["json"] }]);
+        if (!path) { setStatus("Save cancelled."); return; }
+      }
+      const { backup, skipped } = inlineLayoutBackup(serializeLayout());
+      backup.omittedDependencies = skipped;
+      await writeTextFile(path, JSON.stringify(backup, null, 2));
+      currentProjectPath = path;
+      setStatus(`Saved ${path}`);
+    } catch (err) {
+      setStatus(`Save failed: ${err.message}`);
+    }
+  };
+  saveBtn.addEventListener("click", () => saveProject(false));
+  saveAsBtn.addEventListener("click", () => saveProject(true));
+
+  // Files dropped on the window load as the dashboard dataset, through
+  // the same intake as the Data popover (first CSV/JSON wins).
+  onDragDrop(async (payload) => {
+    if (!payload || payload.type !== "drop") return;
+    const paths = payload.paths || [];
+    const dataPath = paths.find((p) => /\.(csv|json)$/i.test(p));
+    if (!dataPath) {
+      if (paths.length) setStatus("Drop a CSV or JSON file to load it as the dashboard dataset.");
+      return;
+    }
+    if (paths.length > 1) setStatus(`Loading ${baseName(dataPath)} — dropped files beyond the first were ignored.`);
+    try {
+      const file = await fileFromPath(dataPath);
+      if (file) await handleDashboardFile(file);
+    } catch (err) {
+      reportUploadFailure(err.message || String(err));
+    }
+  }).catch(() => {});
+}
 
 document.getElementById("btn-clear").addEventListener("click", () => {
   if (!grid.save(false).length) return;
@@ -2396,7 +2523,7 @@ function starterLayout() {
     if (raw !== null) {
       const getCopy = document.createElement("button");
       getCopy.type = "button"; getCopy.textContent = "Download retained copy";
-      getCopy.onclick = () => download("unreadable-dashboard.json", raw);
+      getCopy.onclick = () => { download("unreadable-dashboard.json", raw).catch(() => {}); };
       notice.append(getCopy);
     }
     const dismiss = document.createElement("button");

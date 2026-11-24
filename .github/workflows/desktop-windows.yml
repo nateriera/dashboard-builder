@@ -1,0 +1,50 @@
+name: Desktop build (Windows)
+
+# The Windows leg of the desktop edition: GitHub's windows-latest runner
+# builds the Tauri app and uploads the MSI + NSIS installers as artifacts
+# so their sizes can be recorded. Adapted from the tauri-spike's
+# windows-build.yml.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri app (MSI + NSIS)
+        run: npm run desktop:build
+
+      - name: List bundle sizes
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse src-tauri/target/release/bundle |
+            Where-Object { -not $_.PSIsContainer } |
+            ForEach-Object { "{0} {1}" -f $_.Length, $_.FullName }
+          Get-Item src-tauri/target/release/dashboard-builder.exe |
+            ForEach-Object { "{0} {1}" -f $_.Length, $_.FullName }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

@@ -39,11 +39,53 @@ import {
 // ── Lazy singleton ────────────────────────────────────────────────────────
 let dbPromise = null;
 
+// Engine insurance (Nov 24, 2026 ruling — the shell-first desktop
+// decision): the WASM address space leaves roughly 3.1 GiB usable, so the
+// engine gets a deliberate 2 GiB memory budget — headroom for the host
+// page/WebView itself — and work that exceeds it spills or fails
+// gracefully instead of taking the tab down. Where the runtime exposes
+// OPFS, the spill (temp) directory points at it: DuckDB-WASM 1.32 routes
+// opfs:// file opens to OPFS handles, so spilled intermediates land on
+// disk. Both settings are read back after being applied; a mismatch is
+// logged, never fatal.
+export const DUCKDB_MEMORY_LIMIT = "2GB";
+const DUCKDB_OPFS_TEMP_DIRECTORY = "opfs://duckdb-temp";
+
+async function readSetting(conn, name) {
+  const result = await conn.query(`SELECT current_setting('${name}') AS value`);
+  const rows = result.toArray();
+  return rows.length ? String(rows[0].toJSON().value) : null;
+}
+
+async function applyEngineSettings(conn) {
+  await conn.query(`SET memory_limit='${DUCKDB_MEMORY_LIMIT}'`);
+  const memoryLimit = await readSetting(conn, "memory_limit");
+  if (!memoryLimit || !memoryLimit.startsWith("2")) {
+    console.warn(`DuckDB memory_limit read-back was ${memoryLimit}, expected ${DUCKDB_MEMORY_LIMIT}.`);
+  }
+  const opfsAvailable =
+    typeof navigator !== "undefined" &&
+    navigator.storage &&
+    typeof navigator.storage.getDirectory === "function";
+  if (opfsAvailable) {
+    try {
+      await conn.query(`SET temp_directory='${DUCKDB_OPFS_TEMP_DIRECTORY}'`);
+      const tempDirectory = await readSetting(conn, "temp_directory");
+      if (tempDirectory !== DUCKDB_OPFS_TEMP_DIRECTORY) {
+        console.warn(`DuckDB temp_directory read-back was ${tempDirectory}, expected ${DUCKDB_OPFS_TEMP_DIRECTORY}.`);
+      }
+    } catch (err) {
+      console.warn("DuckDB OPFS temp directory unavailable; keeping the default temp directory.", err);
+    }
+  }
+}
+
 async function initDB() {
   const worker = new Worker(duckdbWorkerUrl);
   const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
   await db.instantiate(duckdbWasmUrl);
   const conn = await db.connect();
+  await applyEngineSettings(conn);
   return { db, conn };
 }
 

@@ -3,7 +3,9 @@
 // Every export is a thin wrapper over `window.__TAURI__` (exposed because
 // tauri.conf.json sets `withGlobalTauri: true`). Outside the shell — a
 // plain browser — `isDesktop` is false and the wrappers reject, so no
-// existing module changes behavior when the bridge is unused.
+// existing module changes behavior when the bridge is unused. The one
+// exception is confirmDialog, which degrades to the browser's own
+// window.confirm outside the shell (see its comment).
 //
 // File access never goes through a broad filesystem API: reads and writes
 // call the three narrow commands in src-tauri/src/lib.rs (stat_file,
@@ -33,6 +35,18 @@ export async function pickSavePath(defaultName, filters) {
   const t = requireTauri();
   const selected = await t.dialog.save({ defaultPath: defaultName, filters });
   return typeof selected === "string" && selected ? selected : null;
+}
+
+/** Ask the user a yes/no question; resolves to their answer. In the
+ * shell this is the dialog plugin's native confirm — `window.confirm`
+ * presents no UI in the WebView and returns true immediately, which
+ * would silently auto-approve every prompt routed through it. In a
+ * browser it is `window.confirm` itself, with unchanged semantics. */
+export async function confirmDialog(message) {
+  if (isDesktop) return !!(await requireTauri().dialog.confirm(message));
+  return typeof window !== "undefined" && typeof window.confirm === "function"
+    ? window.confirm(message)
+    : false;
 }
 
 /** Byte size of the file at `path` (the stat_file command). */

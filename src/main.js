@@ -6,7 +6,7 @@ import { datasetVersion, listDatasets, storageIssues, rollbackDatasets, subscrib
 import { querySnapshot, rollbackQueries, serializeQueries } from "./data/queries.js";
 import { LIMITS } from "./data/limits.js";
 import { readUpload } from "./data/readUpload.js";
-import { isDesktop, onDragDrop, pickFile, pickSavePath, readTextFile, statFile, writeTextFile } from "./desktop/bridge.js";
+import { confirmDialog, isDesktop, onDragDrop, pickFile, pickSavePath, readTextFile, statFile, writeTextFile } from "./desktop/bridge.js";
 import { baseName, fileFromPath } from "./desktop/intake.js";
 // Dashboard Builder — MVP composer (Shape A: standalone vanilla app).
 //
@@ -2299,7 +2299,7 @@ async function importLayoutText(name, text) {
   try {
     const data = validateLayout(decodeLayoutFile(name, text));
     assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
-    if (!window.confirm("Importing replaces the current dashboard (all pages). A recovery copy of the current state will be kept. Continue?")) return false;
+    if (!(await confirmDialog("Importing replaces the current dashboard (all pages). A recovery copy of the current state will be kept. Continue?"))) return false;
     const previous = serializeLayout();
     const queriesBefore = querySnapshot();
     const layoutRaw = localStorage.getItem(STORAGE_KEY);

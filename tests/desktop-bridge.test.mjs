@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  confirmDialog,
   isDesktop,
   pickFile,
   pickSavePath,
@@ -50,14 +51,28 @@ test("warning message names the file and its size", () => {
   assert.match(msg, /Continue\?/);
 });
 
-test("confirmLargeFile only asks at or above the threshold", () => {
+test("confirmLargeFile only asks at or above the threshold", async () => {
   let asked = 0;
   const yes = () => { asked++; return true; };
-  assert.equal(confirmLargeFile("a.csv", 10, yes), true);
+  assert.equal(await confirmLargeFile("a.csv", 10, yes), true);
   assert.equal(asked, 0);
-  assert.equal(confirmLargeFile("a.csv", LARGE_FILE_WARN_BYTES, yes), true);
+  assert.equal(await confirmLargeFile("a.csv", LARGE_FILE_WARN_BYTES, yes), true);
   assert.equal(asked, 1);
-  assert.equal(confirmLargeFile("a.csv", LARGE_FILE_WARN_BYTES, () => false), false);
+  assert.equal(await confirmLargeFile("a.csv", LARGE_FILE_WARN_BYTES, () => false), false);
+});
+
+test("confirmLargeFile awaits an async confirm function, both branches", async () => {
+  const seen = [];
+  const yesAsync = async (message) => { seen.push(message); return true; };
+  const noAsync = async () => false;
+  assert.equal(await confirmLargeFile("big.csv", LARGE_FILE_WARN_BYTES, yesAsync), true);
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /big\.csv/);
+  assert.equal(await confirmLargeFile("big.csv", LARGE_FILE_WARN_BYTES, noAsync), false);
+});
+
+test("confirmDialog resolves a boolean outside the shell (no browser confirm in this harness)", async () => {
+  assert.equal(await confirmDialog("Continue?"), false);
 });
 
 test("baseName takes the last path segment on either separator", () => {

@@ -403,7 +403,7 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
 
   async function handleChosenFile(file) {
     if (!file || uploadBusy) return;
-    if (!confirmLargeFile(file.name, file.size)) { fileInput.value = ""; return; }
+    if (!(await confirmLargeFile(file.name, file.size))) { fileInput.value = ""; return; }
     setUploadBusy(true, `Reading ${file.name}…`);
     errorEl.hidden = true;
     try {

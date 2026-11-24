@@ -166,7 +166,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, bindingCou
   body.append(sourceUrl, urlButton, pasteArea, pasteButton, sourceStatus);
 
   async function handleFile(file) {
-    if (!confirmLargeFile(file.name, file.size)) { fileInput.value = ""; return; }
+    if (!(await confirmLargeFile(file.name, file.size))) { fileInput.value = ""; return; }
     err.hidden = true;
     dropText.textContent = `Reading ${file.name}…`;
     try {

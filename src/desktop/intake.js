@@ -9,7 +9,7 @@
 // parse pipeline — parseFile's 16 MiB cap (LIMITS.fileBytes) still applies
 // afterwards, unchanged.
 
-import { isDesktop, pickFile, readTextFile, statFile } from "./bridge.js";
+import { confirmDialog, isDesktop, pickFile, readTextFile, statFile } from "./bridge.js";
 
 /** Files at or above this size get a confirm-to-proceed warning on intake. */
 export const LARGE_FILE_WARN_BYTES = 250 * 1024 * 1024;
@@ -23,12 +23,14 @@ export function largeFileWarningMessage(name, sizeBytes) {
   return `This file (${name}) is ${mb} MB. Files this large can be slow or run into the in-browser engine's limits. Continue?`;
 }
 
-/** True when the intake may proceed: either the file is below the warning
- * threshold, or the user confirmed the warning. `confirmFn` is injectable
- * for tests; in the app it is window.confirm. */
-export function confirmLargeFile(name, sizeBytes, confirmFn = (message) => window.confirm(message)) {
+/** Resolves true when the intake may proceed: either the file is below
+ * the warning threshold, or the user confirmed the warning. `confirmFn`
+ * is injectable for tests; in the app it is the bridge's confirmDialog
+ * — the native Tauri confirm in the shell (window.confirm presents
+ * no UI there), window.confirm itself in a browser. */
+export async function confirmLargeFile(name, sizeBytes, confirmFn = confirmDialog) {
   if (!needsLargeFileWarning(sizeBytes)) return true;
-  return !!confirmFn(largeFileWarningMessage(name, sizeBytes));
+  return !!(await confirmFn(largeFileWarningMessage(name, sizeBytes)));
 }
 
 /** Last path segment of a filesystem path (POSIX or Windows separators). */
@@ -48,7 +50,7 @@ export function makeFile(text, name) {
 export async function fileFromPath(path) {
   const size = await statFile(path);
   const name = baseName(path);
-  if (!confirmLargeFile(name, size)) return null;
+  if (!(await confirmLargeFile(name, size))) return null;
   const text = await readTextFile(path);
   return makeFile(text, name);
 }

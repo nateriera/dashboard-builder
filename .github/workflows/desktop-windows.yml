@@ -10,6 +10,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least privilege: the job only checks out the repo, builds, and uploads
+# run artifacts. Nothing here writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   build-windows:
     runs-on: windows-latest

@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@tauri-apps/cli": "^2.12.6",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.1.1",
     "puppeteer-core": "^25.12.0",
@@ -41,7 +42,10 @@
 
     "predev": "npm run build:export-template",
     "test:browser": "playwright test",
-    "shots": "npm run build && node scripts/screenshots.mjs"
+    "shots": "npm run build && node scripts/screenshots.mjs",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build"
   },
   "type": "module"
 }

@@ -8,6 +8,8 @@ import { anchorPopover } from "./anchoredPopover.js";
 
 import { DATASET_LABELS } from "../tiles/registry.js";
 import { readUpload } from "../data/readUpload.js";
+import { isDesktop } from "../desktop/bridge.js";
+import { confirmLargeFile, pickDataFile } from "../desktop/intake.js";
 import { fetchCsvText, parsePastedTable } from "../data/importSource.js";
 import { parseFile } from "../data/parse.js";
 import { profileRows } from "../data/profile.js";
@@ -164,6 +166,7 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, bindingCou
   body.append(sourceUrl, urlButton, pasteArea, pasteButton, sourceStatus);
 
   async function handleFile(file) {
+    if (!(await confirmLargeFile(file.name, file.size))) { fileInput.value = ""; return; }
     err.hidden = true;
     dropText.textContent = `Reading ${file.name}…`;
     try {
@@ -184,6 +187,16 @@ export function toggleDashboardPopover({ anchor, current, sampleKeys, bindingCou
   fileInput.addEventListener("change", () => {
     if (fileInput.files[0]) handleFile(fileInput.files[0]);
   });
+
+  // Desktop shell: clicking the label opens the native file dialog instead
+  // of the hidden input; the picked file re-enters through handleFile.
+  if (isDesktop) {
+    dropLabel.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const file = await pickDataFile();
+      if (file) handleFile(file);
+    });
+  }
 
   urlButton.addEventListener("click", async () => {
     urlButton.disabled = true;

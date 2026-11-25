@@ -372,6 +372,7 @@ let dashboardDefault = { kind: "samples" };
 let filters = [];
 let parameters = [];
 let savedViews = [];
+let dashboardShareNote; // Share-only cover note; never serialized with the layout.
 let dashboardMeta; // UX-7 D1: optional {title, preparedBy, dataPeriod}, collected at share time
 let pages = [{ id:'page-1', name:'Page 1' }];
 let currentPageId = 'page-1';
@@ -1409,6 +1410,7 @@ function loadLayout(data, { fit = false } = {}) {
     parameters = data.parameters || [];
     savedViews = data.savedViews || [];
     dashboardMeta = data.meta ? { ...data.meta } : undefined;
+    dashboardShareNote = undefined;
     refreshSavedViews();
     refreshDashboardButton();
     if (data.theme) {
@@ -2126,7 +2128,7 @@ document.getElementById("btn-export").addEventListener("click", async () => {
 // dist/ by `vite build`), injects the dashboard payload with resolved
 // per-tile rows, and downloads the result. The exported file renders the
 // same themed charts with no network dependencies and no editor chrome.
-async function exportHtml(password = null) {
+async function exportHtml(password = null, note) {
   const exportRevision = datasetVersion();
   const snapshotSignature = () => { const { savedAt, ...layout } = serializeLayout(); return JSON.stringify(layout); };
   const exportLayout = snapshotSignature();
@@ -2219,7 +2221,7 @@ async function exportHtml(password = null) {
       savedViews:viewerViews,
       kind: "dashboard-export",
       layout: backup,
-      ...(layout.meta ? { meta: { ...layout.meta } } : {}),
+      ...(layout.meta || note ? { meta: { ...layout.meta, ...(note ? { note } : {}) } } : {}),
       title: exportMetaFacts(layout.meta).title,
       exportedAt,
       exportedAtOffset: -new Date(exportedAt).getTimezoneOffset(),
@@ -2276,10 +2278,12 @@ async function exportHtml(password = null) {
 document.getElementById("btn-export-html").addEventListener("click", event => {
   openShareModal({
     meta: dashboardMeta,
+    note: dashboardShareNote,
     trigger: event.currentTarget,
-    onDownload: (meta, password) => {
+    onDownload: (meta, password, note) => {
+      dashboardShareNote = note;
       if (JSON.stringify(meta) !== JSON.stringify(dashboardMeta)) { dashboardMeta = meta; scheduleAutosave(); }
-      exportHtml(password || null);
+      exportHtml(password || null, note);
     }
   });
 });

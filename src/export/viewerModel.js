@@ -120,8 +120,8 @@ export function viewerStateEquals({ filters, parameters }, { filters: baseFilter
   const editable = list => list.filter(filter => filter.source !== 'crossfilter');
   const cross = list => list.filter(filter => filter.source === 'crossfilter').map(crossKey).sort();
   const baseById = new Map(editable(baseFilters).map(filter => [filter.id, filterKey(filter)]));
-  if (editable(filters).some(filter => baseById.has(filter.id) && baseById.get(filter.id) !== filterKey(filter))) return false;
+  if (editable(filters).length !== baseById.size || editable(filters).some(filter => baseById.get(filter.id) !== filterKey(filter))) return false;
   if (JSON.stringify(cross(filters)) !== JSON.stringify(cross(baseFilters))) return false;
   const baseValues = new Map((baseParameters || []).map(parameter => [parameter.name, JSON.stringify(parameter.value ?? null)]));
-  return (parameters || []).every(parameter => !baseValues.has(parameter.name) || baseValues.get(parameter.name) === JSON.stringify(parameter.value ?? null));
+  return (parameters || []).length === baseValues.size && (parameters || []).every(parameter => baseValues.has(parameter.name) && baseValues.get(parameter.name) === JSON.stringify(parameter.value ?? null));
 }

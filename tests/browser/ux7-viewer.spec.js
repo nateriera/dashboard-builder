@@ -98,7 +98,7 @@ test('Empty-state parity: the exported starter prints no placeholder for empty P
   };
   // Starter, no metadata: header is badge, title, stamp, note — no fact lines, nothing dangling.
   const empty = await exportStarter();
-  expect(await empty.locator('.export-head > *').evaluateAll(nodes => nodes.map(node => node.className || node.tagName))).toEqual(['export-badge', 'H1', 'export-meta', 'export-note']);
+  expect(await empty.locator('.export-head > *:not(.export-as-shared)').evaluateAll(nodes => nodes.map(node => node.className || node.tagName))).toEqual(['export-badge', 'H1', 'export-meta', 'export-note']);
   await expect(empty.locator('.export-fact')).toHaveCount(0);
   // Starter tiles with an empty source have no source line; the one sourced tile keeps it verbatim.
   await expect(empty.locator('.export-card-source')).toHaveText(['Source: Sample data']);
@@ -108,7 +108,7 @@ test('Empty-state parity: the exported starter prints no placeholder for empty P
   // Metadata set: the fact lines print exactly as before, in order.
   const set = await exportStarter({ 'Prepared by': 'Klaro Impact', 'Data period': 'July–September 2026' });
   await expect(set.locator('.export-fact')).toHaveText(['Prepared by: Klaro Impact', 'Data period: July–September 2026']);
-  expect(await set.locator('.export-head > *').evaluateAll(nodes => nodes.map(node => node.className || node.tagName))).toEqual(['export-badge', 'H1', 'export-fact', 'export-fact', 'export-meta', 'export-note']);
+  expect(await set.locator('.export-head > *:not(.export-as-shared)').evaluateAll(nodes => nodes.map(node => node.className || node.tagName))).toEqual(['export-badge', 'H1', 'export-fact', 'export-fact', 'export-meta', 'export-note']);
   await set.close();
   // Mixed: only the present fact prints; whitespace-only sources print nothing, present sources print trimmed.
   const html = await page.evaluate(async () => await (await fetch('/export-template.html')).text());
@@ -184,7 +184,7 @@ test('V4/D2: a multi-page export shows every page in one document with anchor na
     filters: [{ id: 'global', field: 'label', op: 'is', values: ['Housing', 'Food'] }, { id: 'local', field: 'value', op: 'between', values: [1, 20], scope: 'page', pageId: 'detail' }],
     tiles: [bar('a', { pageId: 'overview' }), bar('b', { pageId: 'detail', source: '' }), bar('c', { pageId: 'detail', x: 6 })]
   }));
-  const tabs = page.locator('.export-page-tabs a');
+  const tabs = page.locator('.export-head .export-page-tabs a');
   await expect(tabs).toHaveText(['Overview', 'Detail with a long, descriptive page name', 'Notes']);
   expect(await tabs.evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(['#page-overview', '#page-detail', '#page-notes']);
   await expect(page.locator('[role="tab"]')).toHaveCount(0);
@@ -272,7 +272,7 @@ test('V5: print hides data tables (even open), controls, navigation and badge; p
   await details.locator('summary').click();
   await expect(details).toHaveAttribute('open', '');
   await expect(page.locator('.export-print-filters')).toHaveCount(2);
-  await expect(page.locator('.export-print-filters').first()).toBeHidden();
+  await expect(page.locator('.export-print-filters').first()).toBeVisible();
   await page.emulateMedia({ media: 'print' });
   for (const selector of ['details.chart-data', '.export-filters', '.export-restore', '.export-page-tabs', '.export-badge', '.export-saved-views']) {
     for (const node of await page.locator(selector).all()) await expect(node, selector).toBeHidden();

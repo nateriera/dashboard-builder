@@ -569,3 +569,38 @@ body {
      separation after its projected chart grid, whose normal margin is -12px. */
   #export-root > .export-page:nth-child(1 of .export-page):has(> .export-filters) > .export-grid { margin-bottom: 12px; }
 }
+
+/* Recipient document chrome shares the viewer's paper and quiet rules. */
+.export-head { padding-bottom: 16px; border-bottom: 1px solid var(--slate-200); }
+.export-cover-note { max-width: 72ch; margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.export-head .export-page-tabs { margin: 12px 0 0; border: 0; gap: 4px 16px; }
+.export-head .export-page-tabs a { border: 0; padding: 2px 0; border-radius: 0; text-decoration: underline; text-underline-offset: 3px; }
+.export-as-shared { margin-top: 12px; padding: 6px 10px; border: 1px solid var(--slate-300); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; cursor: pointer; }
+.export-as-shared[hidden] { display: none; }
+#export-root .export-reading-nav { display: flex; flex-wrap: wrap; gap: 4px; margin: 24px 0 0; justify-content: space-between; }
+#export-root .export-reading-nav a { padding: 8px 12px; border-radius: 6px; background: var(--white); color: var(--ink); font: 14px var(--font-body); text-decoration: none; overflow-wrap: anywhere; }
+#export-root .export-attribution { display: block; grid-column: 1 / -1; padding: 16px 0 0; background: transparent; color: var(--slate-600); font: 12px var(--font-body); letter-spacing: normal; }
+#export-root .export-unlock { padding: 32px; border-radius: 12px; box-shadow: var(--shadow-card); border-top: 3px solid var(--periwinkle); }
+#export-root .export-unlock h1 { font: 400 28px/1.2 var(--font-display); letter-spacing: .04em; margin-bottom: 12px; }
+#export-root .export-unlock-note { padding-bottom: 16px; border-bottom: 1px solid var(--slate-200); }
+@media screen {
+  .export-print-filters.export-summary-active:not([hidden]) { display: block; margin: 0 0 16px; color: var(--slate-600); font-size: 12px; overflow-wrap: anywhere; }
+}
+@media screen and (min-width: 1000px) {
+  #export-root > .export-page:nth-child(1 of .export-page) > .export-print-filters { grid-column: 1 / -1; grid-row: 5; }
+  #export-root > .export-page:nth-child(1 of .export-page) > :is(.export-grid, .export-notice) { grid-row: 6; }
+  #export-root > .export-page:nth-child(1 of .export-page) > .export-reading-nav { grid-column: 1 / -1; grid-row: 7; }
+}
+/* Bounded reflow only: preserve the desktop placements and print flow. */
+@media screen and (max-width: 699px) {
+  #export-root .export-grid { grid-template-columns: minmax(0, 1fr); }
+  .export-grid > .export-tile { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .export-card .db-chart-body, .export-card .chart-data { min-width: 0; max-width: 100%; overflow-x: auto; }
+}
+
+.export-print-cover-note { display: none; }
+@media print {
+  .export-reading-nav { display: none !important; }
+  .export-head > .export-cover-note { display: none; }
+  .export-print-cover-note { display: block; margin-bottom: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+}

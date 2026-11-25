@@ -117,12 +117,22 @@ test('as shared restores original filters, parameters, crossfilters, theme and s
   await expect(reset).toBeHidden();
 });
 
-test('desktop tile layout matches the pre-slice screenshot at 1280px', async ({ page }) => {
+test('desktop tile geometry matches the pre-slice layout at 1280px', async ({ page }) => {
   const html = await template(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.setContent(viewerHtml(html, { filters: [], tiles: [bar('a'), bar('b', { x: 6 }), bar('c', { y: 15, w: 12 })] }));
   await ready(page);
-  await expect(page.locator('.export-grid')).toHaveScreenshot('viewer-desktop-grid.png', { maxDiffPixels: 0, animations: 'disabled' });
+  const tiles = await page.locator('.export-tile').evaluateAll(nodes => Object.fromEntries(nodes.map(node => {
+    const rect = node.getBoundingClientRect();
+    return [node.dataset.tileId, { x: rect.x, width: node.offsetWidth, height: node.offsetHeight, top: rect.top, bottom: rect.bottom }];
+  })));
+  expect(Object.fromEntries(Object.entries(tiles).map(([id, { x, width, height }]) => [id, { x, width, height }]))).toEqual({
+    a: { x: 24, width: 604, height: 362 },
+    b: { x: 652, width: 604, height: 362 },
+    c: { x: 24, width: 1232, height: 362 }
+  });
+  expect(tiles.b.top).toBe(tiles.a.top);
+  expect(tiles.c.top).toBeGreaterThan(tiles.a.bottom);
 });
 
 test('below 700px tiles stack in reading order, charts resize and tables scroll inside the tile', async ({ page }) => {

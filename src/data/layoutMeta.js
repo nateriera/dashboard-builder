@@ -3,6 +3,12 @@
 
 export const META_FIELDS = ['title', 'preparedBy', 'dataPeriod'];
 export const META_MAX_LENGTH = 200;
+// Share-only text: deliberately excluded from META_FIELDS/layout validation.
+export const SHARE_NOTE_MAX_LENGTH = 480;
+export function shareNoteFromInput(value) {
+  const note = String(value ?? '').slice(0, SHARE_NOTE_MAX_LENGTH);
+  return note.trim() ? note : undefined;
+}
 
 /**
  * Validate the optional layout `meta` object (D1). Absent stays absent;
@@ -34,6 +40,7 @@ export function exportMetaFacts(meta) {
   return {
     title: value('title') || 'Untitled dashboard',
     preparedBy: value('preparedBy') || 'Not provided',
-    dataPeriod: value('dataPeriod') || 'Not specified'
+    dataPeriod: value('dataPeriod') || 'Not specified',
+    ...(value('note') ? { note: meta.note } : {})
   };
 }

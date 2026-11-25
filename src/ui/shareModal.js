@@ -2,7 +2,7 @@
 // of the existing HTML export flow; nothing here is inferred. Cancel leaves
 // the dashboard untouched; Download hands the collected values back.
 import { focusDialog } from './focus.js';
-import { META_MAX_LENGTH, metaFromInputs } from '../data/layoutMeta.js';
+import { META_MAX_LENGTH, metaFromInputs, SHARE_NOTE_MAX_LENGTH, shareNoteFromInput } from '../data/layoutMeta.js';
 import { validatePassword } from '../export/protect.js';
 
 let open = null;
@@ -15,7 +15,7 @@ export function closeShareModal() {
   release();
 }
 
-export function openShareModal({ meta, trigger, onDownload }) {
+export function openShareModal({ meta, note, trigger, onDownload }) {
   if (open) return;
   const backdrop = document.createElement('div');
   backdrop.className = 'share-modal-backdrop';
@@ -40,9 +40,9 @@ export function openShareModal({ meta, trigger, onDownload }) {
     const input = document.createElement('input');
     input.type = 'text';
     input.name = key;
-    input.maxLength = META_MAX_LENGTH;
+    input.maxLength = key === 'note' ? SHARE_NOTE_MAX_LENGTH : META_MAX_LENGTH;
     input.autocomplete = 'off';
-    input.value = meta?.[key] ?? '';
+    input.value = key === 'note' ? (note ?? '') : (meta?.[key] ?? '');
     label.append(name, input);
     const group = document.createElement('div');
     group.className = 'share-modal-field-group';
@@ -62,6 +62,7 @@ export function openShareModal({ meta, trigger, onDownload }) {
   field('title', 'Dashboard title');
   field('preparedBy', 'Prepared by');
   field('dataPeriod', 'Data period', 'Describe the dates covered by the data. This is not the export date.');
+  field('note', 'Cover note', `One plain-text paragraph, up to ${SHARE_NOTE_MAX_LENGTH} characters. Included only in the shared file.`);
 
   // Password protection (§6.1): opt-in, default off. The password is handed
   // to onDownload as a separate argument — it is never written into the
@@ -152,7 +153,7 @@ export function openShareModal({ meta, trigger, onDownload }) {
     passwordInput.value = '';
     confirmInput.value = '';
     closeShareModal();
-    onDownload(values, password);
+    onDownload(values, password, shareNoteFromInput(fields.note.value));
   });
   backdrop.addEventListener('pointerdown', event => { if (event.target === backdrop) closeShareModal(); });
   backdrop.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); closeShareModal(); } }, true);

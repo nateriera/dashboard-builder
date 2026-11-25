@@ -129,3 +129,30 @@ test('UX-7 V3: Restore is disabled exactly when the working state equals the exp
   assert.equal(viewerStateEquals({ ...same, parameters: [{ name: 'p', value: 2 }] }, base), false);
   assert.equal(viewerStateEquals({ ...same, filters: [{ ...same.filters[0], relativePreset: 'last-7-days' }, same.filters[1]] }, base), false);
 });
+
+test('Viewer slice 1: share-only note preserves author text, caps at 480 and adds no layout field', async () => {
+  const { shareNoteFromInput, SHARE_NOTE_MAX_LENGTH } = await import('../src/data/layoutMeta.js');
+  assert.equal(SHARE_NOTE_MAX_LENGTH, 480);
+  assert.equal(shareNoteFromInput(' \t '), undefined);
+  assert.equal(shareNoteFromInput('  <b>Read this</b>  '), '  <b>Read this</b>  ');
+  assert.equal(shareNoteFromInput('x'.repeat(600)), 'x'.repeat(480));
+  const meta = { title: 'Review', preparedBy: '', dataPeriod: '' };
+  assert.deepEqual(validateLayoutMeta({ ...meta, note: 'Share only' }), meta);
+  assert.deepEqual(roundTrip(envelope({ meta: { ...meta, note: 'Share only' } })).meta, meta);
+  assert.deepEqual(metaFromInputs({ note: 'Share only' }), undefined);
+});
+
+test('Viewer slice 1: cover note facts are optional and verbatim, including text that resembles markup', () => {
+  const note = '  <b>Read this</b> https://example.com  ';
+  assert.equal(exportMetaFacts({ note }).note, note);
+  for (const note of [undefined, null, '', ' \t ', 12]) assert.equal(Object.hasOwn(exportMetaFacts({ note }), 'note'), false);
+});
+
+test('Viewer slice 1: state equality detects removed and added controls as well as changed values', () => {
+  const base = { filters: [{ id: 'f', op: 'is', values: ['A'] }], parameters: [{ name: 'p', value: 1 }] };
+  assert.equal(viewerStateEquals({ ...base, filters: [] }, base), false);
+  assert.equal(viewerStateEquals({ ...base, filters: [...base.filters, { id: 'g', values: [] }] }, base), false);
+  assert.equal(viewerStateEquals({ ...base, parameters: [] }, base), false);
+  assert.equal(viewerStateEquals({ ...base, parameters: [...base.parameters, { name: 'q', value: 2 }] }, base), false);
+  assert.equal(viewerStateEquals(structuredClone(base), base), true);
+});

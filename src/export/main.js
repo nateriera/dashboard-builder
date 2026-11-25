@@ -110,6 +110,9 @@ function showUnlockScreen(envelope) {
 }
 
 function renderExport(payload) {
+  renderExport.dispose?.();
+  // Keep the original shared state independent of an applied saved view.
+  payload.sharedDefaults ||= clone({ filters: payload.filters || [], parameters: payload.parameters || [], theme: payload.theme, currentPageId: payload.currentPageId });
   // Restore's "exported state". A saved view replaces it with that view's
   // state when applied (UX-7 D3); otherwise it is the state as exported.
   payload.viewerDefaults ||= {
@@ -127,6 +130,7 @@ function renderExport(payload) {
   const head = el('header', 'export-head');
   head.append(el('span', 'export-badge', 'Offline snapshot'), el('h1', null, facts.title),
     ...exportFactLines(payload.meta).map(line => el('p', 'export-fact', line)));
+  if (facts.note) head.append(el('p', 'export-cover-note', facts.note));
   const stamp = payload.exportedAt
     ? formatExportStamp(payload.exportedAt, Number.isFinite(payload.exportedAtOffset) ? payload.exportedAtOffset : -new Date(payload.exportedAt).getTimezoneOffset())
     : null;
@@ -144,6 +148,19 @@ function renderExport(payload) {
     head.append(disclosure);
   }
   root.appendChild(head);
+  const asShared = el('button', 'export-restore export-as-shared', 'Reset to as shared');
+  asShared.type = 'button';
+  asShared.hidden = true;
+  asShared.addEventListener('click', () => {
+    Object.assign(payload, clone(payload.sharedDefaults));
+    payload.currentPageId = payload.sharedDefaults.currentPageId;
+    delete payload.viewerDefaults;
+    delete payload.activeViewId;
+    delete payload.selectedViewId;
+    previewTheme(payload.theme);
+    renderExport(payload);
+  });
+  head.append(asShared);
 
   if (Array.isArray(payload.savedViews) && payload.savedViews.length) {
     const views = el('section', 'export-saved-views'); views.setAttribute('aria-label', 'Saved dashboard views');
@@ -151,6 +168,8 @@ function renderExport(payload) {
     const select = document.createElement('select'); select.setAttribute('aria-label', 'Saved dashboard view');
     const placeholder = el('option', null, 'Choose a view'); placeholder.value = ''; select.appendChild(placeholder);
     for (const view of payload.savedViews) { const option = el('option', null, view.disabled === true ? `${view.name} — Disabled: ${view.disabledReason}` : view.name); option.value = view.id; option.disabled = view.disabled === true; select.appendChild(option); }
+    select.value = payload.selectedViewId || payload.activeViewId || '';
+    select.addEventListener('change', () => { payload.selectedViewId = select.value; schedulePaint(); });
     const apply = el('button', null, 'Apply view'); apply.type = 'button';
     apply.addEventListener('click', () => {
       const view = payload.savedViews.find(item => item.id === select.value); if (!view || view.disabled === true) return;
@@ -167,6 +186,8 @@ function renderExport(payload) {
       }
       // D3: the applied view's state becomes what Restore returns to.
       payload.viewerDefaults = { filters: clone(payload.filters), parameters: clone(payload.parameters) };
+      payload.activeViewId = view.id;
+      payload.selectedViewId = view.id;
       payload.currentPageId = view.currentPageId; payload.theme = view.theme; previewTheme(view.theme); renderExport(payload);
     });
     label.appendChild(select); views.append(label, apply); root.appendChild(views);
@@ -174,9 +195,10 @@ function renderExport(payload) {
 
   // ── V4: anchor navigation (multi-page only) ──────────────────────────
   if (multiPage) {
-    const nav = el('nav', 'export-page-tabs'); nav.setAttribute('aria-label', 'Dashboard pages');
+    const nav = el('nav', 'export-page-tabs');
     for (const page of pages) { const link = el('a', null, page.name); link.href = `#${pageHeadingId(page.id)}`; nav.append(link); }
-    root.appendChild(nav);
+    nav.setAttribute('aria-label', 'Contents');
+    head.append(nav);
   }
 
   // ── Shared filter state (one state, rendered per page group) ─────────
@@ -200,16 +222,17 @@ function renderExport(payload) {
   let inspection = null;
   const syncControls = except => { for (const binding of filterBindings) if (binding !== except) binding.sync(); };
   const filterField = filter => filter.targets?.[0]?.field || filter.field;
+  const controlLabel = control => control.label || control.name || filterField(control);
 
   function buildControl(filter) {
     const parameter = liveBindings.get(filter.id);
     const field = filterField(filter);
     const label = el('label', 'export-filter');
-    label.appendChild(el('span', null, field));
+    label.appendChild(el('span', null, controlLabel(filter)));
     const binding = { filter };
     if (parameter) {
       label.classList.add('export-parameter-control');
-      label.appendChild(el('span', null, parameter.name));
+      label.appendChild(el('span', null, controlLabel(parameter)));
       const parameterControls = [];
       const rangeValues = value => value?.from == null || value?.to == null ? null : [value.from, value.to];
       const parameterValues = parameter.type === 'number-range' || parameter.type === 'date-range'
@@ -335,6 +358,9 @@ function renderExport(payload) {
   // ── V3/V4: one section per page, each with its applicable filter group ─
   const pageViews = pages.map(page => {
     const section = el('section', 'export-page'); section.dataset.pageId = page.id;
+    // The wide header projects the first page's children into the root grid.
+    // Reserve later rows so following pages cannot fill holes above its tiles.
+    section.style.gridRow = String(7 + pages.indexOf(page));
     if (multiPage) {
       const heading = el('h2', 'export-page-heading', page.name); heading.id = pageHeadingId(page.id); heading.tabIndex = -1;
       section.setAttribute('aria-labelledby', heading.id); section.append(heading);
@@ -355,9 +381,25 @@ function renderExport(payload) {
     if (pageTiles.length) {
       grid = el('div', 'export-grid'); grid.dataset.pageId = page.id; section.append(grid);
     } else section.append(el('p', 'export-notice', 'This page contains no charts.'));
+    if (multiPage) {
+      const readingNav = el('nav', 'export-reading-nav');
+      readingNav.setAttribute('aria-label', `Continue from ${page.name}`);
+      const index = pages.indexOf(page);
+      for (const [target, direction] of [[pages[index - 1], 'Previous'], [pages[index + 1], 'Next']]) {
+        if (!target) continue;
+        const link = el('a', null, `${direction}: ${target.name}`);
+        link.href = `#${pageHeadingId(target.id)}`;
+        readingNav.append(link);
+      }
+      section.append(readingNav);
+    }
     root.appendChild(section);
     return { page, section, group, chips, restore, summary, pageFilters, pageTiles, grid };
   });
+
+  const footer = el('footer', 'export-badge export-attribution', 'Built with Dashboard Builder');
+  footer.style.gridRow = String(7 + pages.length);
+  root.append(footer);
 
   const rendered = [];
   const brushStates = new WeakMap();
@@ -382,6 +424,8 @@ function renderExport(payload) {
   const paint = () => {
     const activeCrossfilters = filters.filter(filter => filter.source === 'crossfilter');
     const atExport = viewerStateEquals({ filters, parameters }, payload.viewerDefaults);
+    const atShared = viewerStateEquals({ filters, parameters }, payload.sharedDefaults);
+    asShared.hidden = atShared && !payload.activeViewId && !payload.selectedViewId && payload.theme === payload.sharedDefaults.theme && payload.currentPageId === payload.sharedDefaults.currentPageId;
     for (const view of pageViews) {
       const shown = activeCrossfilters.filter(filter => crossfilterShownOnPage(filter, view.page.id, tiles));
       view.chips.replaceChildren();
@@ -398,11 +442,19 @@ function renderExport(payload) {
       else view.group.remove();
       view.restore.disabled = atExport;
       const summary = printFilterSummary([
-        ...view.pageFilters.map(filter => ({ label: filterField(filter), value: describeFilterValue(filter) })),
+        ...view.pageFilters.map(filter => ({ label: controlLabel(filter), value: describeFilterValue(filter) })),
+        ...payload.sharedDefaults.filters.filter(filter => filter.source !== 'crossfilter' && !filters.some(current => current.id === filter.id) && filterAppliesToPage(filter, view.page.id, tiles)).map(filter => ({ label: controlLabel(filter), value: 'Not applied' })),
+        ...parameters.map(parameter => ({ label: controlLabel(parameter), value: typeof parameter.value === 'object' ? JSON.stringify(parameter.value) : String(parameter.value ?? 'Not set') })),
         ...shown.map(filter => ({ label: payload.tiles.find(tile => tile.id === filter.sourceTile)?.title || 'Chart selection', value: crossfilterLabel(filter) }))
       ]);
-      view.summary.textContent = summary || '';
-      view.summary.hidden = !summary;
+      // One filter summary node serves screen and print. The first page's
+      // printed summary also carries the author note, once, as front matter.
+      const coverNote = view === pageViews[0] ? facts.note : null;
+      view.summary.replaceChildren();
+      if (coverNote) view.summary.append(el('span', 'export-print-cover-note', coverNote));
+      if (summary) view.summary.append(el('span', null, summary));
+      view.summary.hidden = !summary && !coverNote;
+      view.summary.classList.toggle('export-summary-active', !atShared || view.pageFilters.some(filter => filter.values.length || filter.relativePreset) || shown.length > 0 || parameters.length > 0);
     }
     for (const { t, entry, chartEl } of rendered) {
       if (t.emptyMessage) {
@@ -595,13 +647,22 @@ function renderExport(payload) {
   window.addEventListener("beforeprint", paint);
   window.addEventListener("afterprint", paint);
   // Paint after layout so charts measure their real widths.
-  requestAnimationFrame(paint);
+  const firstPaint = requestAnimationFrame(paint);
 
   let timer = null;
-  window.addEventListener("resize", () => {
+  const resize = () => {
     clearTimeout(timer);
     timer = setTimeout(paint, 150);
-  });
+  };
+  window.addEventListener("resize", resize);
+  renderExport.dispose = () => {
+    cancelAnimationFrame(firstPaint);
+    clearTimeout(paintTimer);
+    clearTimeout(timer);
+    window.removeEventListener("resize", resize);
+    window.removeEventListener("beforeprint", paint);
+    window.removeEventListener("afterprint", paint);
+  };
 }
 
 function paintEmpty(chartEl, t, message) {

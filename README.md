@@ -6,7 +6,7 @@
 
 ![Dashboard Builder: drag a donut chart onto the Meridian County homeless-response dashboard and resize it, brush January–June 2026 on the monthly count to cross-filter the other charts, move a what-if parameter to change the projection, then share the dashboard as a standalone offline HTML file](docs/screenshots/demo.gif)
 
-The demo is the bundled Meridian County homeless-response example, built on synthetic data for a fictitious county. A donut dragged in from the palette shows who is entering homelessness. Brushing January–June 2026 on the monthly count cross-filters the other charts: entries ran ahead of exits in every one of those months, and families were 37% of the people entering, against 23% across all three years. A number parameter, `extra_exits`, asks what the next twelve months look like with that many more exits to housing each month. **Share as HTML** then writes the whole dashboard to one file that opens offline with that control still live. To open the example yourself, choose **More actions → Import JSON / HTML** and select [`docs/examples/meridian-homeless-response.json`](docs/examples/meridian-homeless-response.json).
+The demo is the bundled Meridian County homeless-response example, built on synthetic data for a fictitious county. A donut dragged in from the palette shows who is entering homelessness. Brushing January–June 2026 on the monthly count cross-filters the other charts: entries ran ahead of exits in every one of those months, and families were 37% of the people entering, against 23% across all three years. A number parameter, `extra_exits`, asks what the next twelve months look like with that many more exits to housing each month. **Share as HTML** then writes the whole dashboard to one file that opens offline with that control still live. The demo opens on this example in a fresh browser profile. To restore it later, choose **More actions → Import JSON / HTML** and select [`docs/examples/meridian-homeless-response.json`](docs/examples/meridian-homeless-response.json).
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deploy demo](https://github.com/nateriera/dashboard-builder/actions/workflows/pages.yml/badge.svg)](https://github.com/nateriera/dashboard-builder/actions)
@@ -73,6 +73,10 @@ data. The composer may offer a small set of charts when existing column-name
 mapping rules can map the fields conservatively. Review, change field choices,
 or uncheck suggestions before building. You can also set the upload as dashboard data or keep the
 current dashboard. Profiling and chart suggestions run locally in the browser.
+
+## Known issues
+
+- The households multi-select listbox clips its fifth row in both layouts. Scroll within the listbox to reach the last option.
 
 ## Contributing
 

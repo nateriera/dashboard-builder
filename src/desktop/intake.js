@@ -6,13 +6,13 @@
 //
 // The warning is an intake-layer guard only: it fires before a file is
 // read, and cancelling aborts the intake cleanly. It does not change the
-// parse pipeline — parseFile's 16 MiB cap (LIMITS.fileBytes) still applies
+// parse pipeline — parseFile's cap (LIMITS.fileBytes) still applies
 // afterwards, unchanged.
 
 import { confirmDialog, isDesktop, pickFile, readTextFile, statFile } from "./bridge.js";
 
 /** Files at or above this size get a confirm-to-proceed warning on intake. */
-export const LARGE_FILE_WARN_BYTES = 250 * 1024 * 1024;
+export const LARGE_FILE_WARN_BYTES = 32 * 1024 * 1024;
 
 export function needsLargeFileWarning(sizeBytes) {
   return typeof sizeBytes === "number" && sizeBytes >= LARGE_FILE_WARN_BYTES;

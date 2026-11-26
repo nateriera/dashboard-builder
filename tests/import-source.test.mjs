@@ -16,7 +16,7 @@ test('paste rejects empty, header-only, and irregular tabular content', () => {
 });
 
 test('paste enforces existing byte, row, and column limits', () => {
-  assert.throws(() => parsePastedTable('x\n' + 'a'.repeat(16 * 1024 * 1024)), /16 MiB/i);
+  assert.throws(() => parsePastedTable('x\n' + 'a'.repeat(64 * 1024 * 1024)), /64 MiB/i);
   assert.throws(() => parsePastedTable(Array.from({ length: 102 }, (_, i) => `c${i}`).join('\t') + '\n' + Array(102).fill('v').join('\t')), /column limit/i);
 });
 
@@ -41,6 +41,6 @@ test('URL fetch reports HTTP and unsupported response errors and enforces downlo
   await assert.rejects(fetchCsvText('https://example.com/data.csv', { fetchImpl: fail }), /HTTP 404/i);
   const html = async () => new Response('<html>login</html>', { headers: { 'content-type': 'text/html' } });
   await assert.rejects(fetchCsvText('https://example.com/data.csv', { fetchImpl: html }), /CSV response/i);
-  const big = async () => new Response('x'.repeat(16 * 1024 * 1024 + 1), { headers: { 'content-type': 'text/csv' } });
-  await assert.rejects(fetchCsvText('https://example.com/data.csv', { fetchImpl: big }), /16 MiB/i);
+  const big = async () => new Response('x'.repeat(64 * 1024 * 1024 + 1), { headers: { 'content-type': 'text/csv' } });
+  await assert.rejects(fetchCsvText('https://example.com/data.csv', { fetchImpl: big }), /64 MiB/i);
 });

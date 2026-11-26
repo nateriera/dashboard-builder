@@ -243,7 +243,7 @@ test('R6: 250,000-row fixtures have safe domains and bounded plotted marks', () 
   const prepared=renderData('scatter',rows); assert.equal(prepared.rows.length,LIMITS.marks); assert.match(prepared.note,/250,000/); assert.equal(prepared.rows.at(-1).x,249999);
   const el=document.createElement('div'); TILE_TYPES.scatter.render(el,{data:rows,options:{tileOptions:{trend:true}}}); assert.ok(el.querySelector('svg'));
   assert.throws(()=>renderData('smallMultiples',Array.from({length:13},(_,i)=>({facet:i}))),/Facet limit/);
-  assert.throws(()=>parseFile('a.csv','a\n'+'x'.repeat(LIMITS.fileBytes)),/16 MiB/);
+  assert.throws(()=>parseFile('a.csv','a\n'+'x'.repeat(LIMITS.fileBytes)),/64 MiB/);
   assert.throws(()=>parseFile('a.json',JSON.stringify([Object.fromEntries(Array.from({length:101},(_,i)=>['c'+i,i]))])),/Column/);
   assert.throws(()=>materializeResult({numRows:LIMITS.queryRows+1}),/result limit/);
 });

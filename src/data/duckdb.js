@@ -78,6 +78,11 @@ async function applyEngineSettings(conn) {
       console.warn("DuckDB OPFS temp directory unavailable; keeping the default temp directory.", err);
     }
   }
+  // Mythos F2: no SQL may reach the network or the filesystem (read_csv_auto
+  // on a URL, extension autoload/install), and no later statement may undo
+  // that. Lock last: once locked, no SET succeeds on this database.
+  await conn.query("SET enable_external_access=false");
+  await conn.query("SET lock_configuration=true");
 }
 
 async function initDB() {

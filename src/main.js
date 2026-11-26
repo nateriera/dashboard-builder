@@ -49,7 +49,7 @@ import {
   listQueries,
   detachQueryParameterConsumer
 } from "./data/queries.js";
-import { isMissingTableError, sampleTableName, uploadTableName } from "./data/sql.js";
+import { isMissingTableError, queryReferencedColumns, queryUploadRefs, rowColumns, sampleTableName, uploadTableName } from "./data/sql.js";
 import { toggleDataPopover, closeDataPopover } from "./ui/dataPopover.js";
 import { paintQueryReview } from "./ui/queryReview.js";
 import { toggleDashboardPopover, closeDashboardPopover } from "./ui/dashboardDataPopover.js";
@@ -453,20 +453,47 @@ function filterFieldsForTile(tileId, pageId) {
   return [...fields];
 }
 
-// Layout tiles that use one upload dataset: direct tile refs, tiles
-// following the dashboard default, and tiles whose saved query depends on
-// it. Used to compute the backup projection's union allowlist (§5.5).
+// Layout tiles bound to one upload dataset: direct tile refs and tiles
+// following the dashboard default. Tiles that reach it only through a saved
+// query are deliberately absent — see queryConsumersForExport.
 function referencingTilesForDataset(layout, ref) {
   const tiles = [];
   for (const tile of layout.tiles) {
     if (tile.dataset === ref) { tiles.push(tile); continue; }
-    if (tile.dataset == null && layout.defaultDataset?.kind === 'dataset' && layout.defaultDataset.ref === ref) { tiles.push(tile); continue; }
-    if (isQueryRef(tile.dataset)) {
-      const q = getQuery(queryId(tile.dataset));
-      if (q?.dependencies?.includes(ref)) tiles.push(tile);
-    }
+    if (tile.dataset == null && layout.defaultDataset?.kind === 'dataset' && layout.defaultDataset.ref === ref) tiles.push(tile);
   }
   return tiles;
+}
+
+// Saved-query SQL that an export must account for: the stored SQL plus a
+// transform chain's source SQL/table (the compiled SQL already embeds it).
+function exportQuerySql(q) {
+  const source = q.chain?.source;
+  return [q.sql, source?.sql, source?.table && `"${String(source.table).replaceAll('"', '""')}"`].filter(Boolean).join('\n');
+}
+
+// Upload consumption by the layout's query tiles, derived from each query's
+// SQL at export time. A stored `dependencies` list is never trusted for
+// this: plain-SQL queries saved before the Mythos fix list every upload
+// that existed when they were applied, referenced or not. Returns
+// Map<"upload:<id>", Set<row key>> — the dataset's DuckDB table columns
+// that the consuming SQL names (all of them for a star select).
+function queryConsumersForExport(layout) {
+  const consumed = new Map();
+  const uploadIds = listDatasets().map((ds) => ds.id);
+  for (const tile of layout.tiles) {
+    if (!isQueryRef(tile.dataset)) continue;
+    const q = getQuery(queryId(tile.dataset));
+    if (!q) continue;
+    const sql = exportQuerySql(q);
+    for (const ref of queryUploadRefs(sql, uploadIds)) {
+      const keys = consumed.get(ref) || new Set();
+      const ds = getDataset(uploadId(ref));
+      if (ds) for (const key of queryReferencedColumns(sql, rowColumns(ds.rows || []))) keys.add(key);
+      consumed.set(ref, keys);
+    }
+  }
+  return consumed;
 }
 
 // Resolve a tile's render-ready (normalized) rows for static export.
@@ -2056,7 +2083,11 @@ function inlineLayoutBackup(layout, { minimize = false } = {}) {
     refs.push(layout.defaultDataset.ref);
   }
   const queryRefs = layout.tiles.map(t => t.dataset).filter(isQueryRef);
-  for (const qref of queryRefs) {
+  // HTML export: query tiles pull in only the uploads their SQL actually
+  // reads (I1). The lossless JSON backup keeps its stored-dependency rule.
+  const consumed = minimize ? queryConsumersForExport(layout) : new Map();
+  if (minimize) refs.push(...consumed.keys());
+  else for (const qref of queryRefs) {
     const q = getQuery(queryId(qref));
     if (q?.dependencies) refs.push(...q.dependencies.filter(isUploadRef));
     else refs.push(...listDatasets().map(ds => 'upload:' + ds.id));
@@ -2064,10 +2095,13 @@ function inlineLayoutBackup(layout, { minimize = false } = {}) {
   const { inlined, skipped } = inlineDatasets([...new Set(refs)]);
   if (minimize) {
     // HTML export (§5.5): project each inlined dataset onto the union
-    // allowlist of the tiles that use it. The JSON export leaves minimize
-    // off (§5.6) and stays lossless.
+    // allowlist of the tiles bound to it plus the columns consuming query
+    // SQL names (I2). The table-tile exemption applies only to direct
+    // bindings (I3). The JSON export leaves minimize off (§5.6) and stays
+    // lossless.
     for (const [id, dataset] of Object.entries(inlined)) {
-      inlined[id] = projectBackupDataset(dataset, referencingTilesForDataset(layout, `upload:${id}`), (type) => TILE_TYPES[type], filterFieldsForTile, true);
+      const queryKeys = consumed.get(`upload:${id}`);
+      inlined[id] = projectBackupDataset(dataset, referencingTilesForDataset(layout, `upload:${id}`), (type) => TILE_TYPES[type], filterFieldsForTile, true, queryKeys ? { queryKeys: [...queryKeys] } : {});
     }
   }
   let blanked = 0;

@@ -1,4 +1,5 @@
 import { LIMITS } from "./limits.js";
+import { scanSql } from "./sqlLexer.js";
 // Pure SQL helpers for the DuckDB-WASM layer (phase 2b). No DOM, no wasm,
 // no kit imports — directly unit-testable in node.
 //
@@ -31,6 +32,61 @@ export function isQueryRef(ref) {
 
 export function queryId(ref) {
   return ref.slice("query:".length);
+}
+
+// ── SQL references (export minimization) ──────────────────────────────────
+// What a saved query's SQL names, read lexically: identifiers in code,
+// quoted identifiers (unquoted), and the text of string literals (so
+// `query_table('upload_x')` counts). Comments name nothing. Everything is
+// lowercased: DuckDB resolves identifiers case-insensitively. Over-naming
+// is the safe direction here — a word that merely equals a table or column
+// name keeps that table/column; nothing the SQL never names is kept.
+
+function sqlReferences(sql) {
+  const names = new Set();
+  let code = "";
+  for (const { context, text } of scanSql(sql)) {
+    if (context === "code") {
+      code += text;
+      for (const word of text.match(/[A-Za-z_][A-Za-z0-9_$]*/g) || []) names.add(word.toLowerCase());
+      continue;
+    }
+    code += " ";
+    if (context === "quoted identifier") names.add(text.slice(1, -1).replace(/""/g, '"').toLowerCase());
+    else if (context === "string") names.add(text.slice(1, -1).replace(/''/g, "'").toLowerCase());
+    else if (context === "dollar-quoted string") {
+      const tag = /^\$[A-Za-z0-9_]*\$/.exec(text)[0];
+      names.add(text.slice(tag.length, -tag.length).toLowerCase());
+    }
+  }
+  // A star or COLUMNS(...) selects columns the SQL never names one by one;
+  // `count(*)` does not.
+  const star = /(?:^|[,(.]|\b(?:select|distinct|all)\b)\s*\*(?!\s*\))/i.test(code) || /\bcolumns\s*\(/i.test(code);
+  return { names, star };
+}
+
+/** Upload refs ("upload:<id>") a query's SQL reads, derived from the SQL
+ *  itself rather than a stored dependency list. `uploadIds` are the store's
+ *  ids; a referenced `upload_<id>` table not among them is still returned
+ *  (so the export can report it missing). */
+export function queryUploadRefs(sql, uploadIds = []) {
+  if (typeof sql !== "string" || !sql) return [];
+  const { names } = sqlReferences(sql);
+  const out = new Set();
+  const known = new Map(uploadIds.map((id) => [uploadTableName(id).toLowerCase(), id]));
+  for (const name of names) {
+    if (known.has(name)) out.add(`upload:${known.get(name)}`);
+    else if (/^upload_[a-z0-9_-]{1,100}$/.test(name)) out.add(`upload:${name.slice("upload_".length)}`);
+  }
+  return [...out];
+}
+
+/** The subset of `columns` a query's SQL references by name; every column
+ *  when the SQL selects by star or COLUMNS(...). */
+export function queryReferencedColumns(sql, columns = []) {
+  if (typeof sql !== "string" || !sql) return [];
+  const { names, star } = sqlReferences(sql);
+  return star ? [...columns] : columns.filter((col) => names.has(String(col).toLowerCase()));
 }
 
 // ── DDL / DML generation ──────────────────────────────────────────────────

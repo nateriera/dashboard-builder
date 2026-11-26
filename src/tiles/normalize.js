@@ -161,9 +161,16 @@ export function projectExportRows(entry, rows, extraKeys = []) {
  *  §5.6). A dataset any table tile uses is exempt and returned unchanged:
  *  its columns are the data. If no referencing tile contributes a key, the
  *  dataset is returned unchanged rather than emptied (fail safe).
+ *  `queryKeys` (option) marks a dataset that saved queries consume: the
+ *  dataset row keys (its DuckDB table columns) those queries' SQL names.
+ *  They join the allowlist, and such a dataset is never returned whole by
+ *  the fail-safe branch — with nothing named it keeps no columns. Callers
+ *  pass only directly bound tiles as `referencingTiles`, so the table-tile
+ *  exemption never reaches a dataset a table tile uses only via a query.
  *  Returns a new record; never mutates the input. */
-export function projectBackupDataset(dataset, referencingTiles, fieldsForType, filterFieldsForTile, minimize = true) {
+export function projectBackupDataset(dataset, referencingTiles, fieldsForType, filterFieldsForTile, minimize = true, { queryKeys = null } = {}) {
   if (!minimize) return dataset;
+  const viaQuery = Array.isArray(queryKeys);
   const rowKeys = new Set();
   const rawKeys = new Set();
   for (const tile of referencingTiles) {
@@ -186,16 +193,25 @@ export function projectBackupDataset(dataset, referencingTiles, fieldsForType, f
     }
     for (const field of filterFields) rawKeys.add(field);
   }
-  if (rowKeys.size === 0 && rawKeys.size === 0) return dataset;
+  // dataset.rows are normalized (field keys) when fieldKeys is non-empty;
+  // dashboard-default uploads store the raw parse as rows instead (see
+  // src/main.js: the dashboard upload saves fieldKeys: [] with raw rows).
+  const rowsAreRaw = !dataset.fieldKeys || dataset.fieldKeys.length === 0;
+  if (viaQuery) {
+    const rawColumns = new Set(dataset.raw?.columns || dataset.columns || []);
+    for (const key of queryKeys) {
+      if (rowsAreRaw) { rawKeys.add(key); continue; }
+      rowKeys.add(key);
+      const col = dataset.mapping?.[key] ?? (rawColumns.has(key) ? key : null);
+      if (col != null) rawKeys.add(col);
+    }
+  }
+  if (rowKeys.size === 0 && rawKeys.size === 0 && !viaQuery) return dataset;
   const project = (rows, keys) => rows.map((row) => {
     const out = {};
     for (const key of Object.keys(row)) if (keys.has(key)) out[key] = row[key];
     return out;
   });
-  // dataset.rows are normalized (field keys) when fieldKeys is non-empty;
-  // dashboard-default uploads store the raw parse as rows instead (see
-  // src/main.js: the dashboard upload saves fieldKeys: [] with raw rows).
-  const rowsAreRaw = !dataset.fieldKeys || dataset.fieldKeys.length === 0;
   const rows = project(dataset.rows || [], rowsAreRaw ? rawKeys : rowKeys);
   const raw = dataset.raw
     ? { columns: dataset.raw.columns.filter((c) => rawKeys.has(c)), rows: project(dataset.raw.rows, rawKeys) }

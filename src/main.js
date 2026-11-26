@@ -749,11 +749,11 @@ function buildTileContent(type, meta) {
   };
   populateChartTypes();
   chartTypeSelect.addEventListener('focus', () => populateChartTypes(chartTypeSelect.value));
-  chartTypeSelect.addEventListener('change', () => {
+  chartTypeSelect.addEventListener('change', async () => {
     const nextType = chartTypeSelect.value;
     if (!compatibleChartTypes(meta).includes(nextType)) { chartTypeSelect.value = meta.type; return; }
     const losses = chartOptionLosses(meta);
-    if (losses.length && !window.confirm(`Changing chart type resets: ${losses.join(", ")}. Continue?`)) {
+    if (losses.length && !(await confirmDialog(`Changing chart type resets: ${losses.join(", ")}. Continue?`))) {
       chartTypeSelect.value = meta.type;
       return;
     }
@@ -1766,12 +1766,12 @@ function refreshSavedViews() {
   if (savedViews.some(view => view.id === selected)) savedViewPicker.value = selected;
   document.getElementById('btn-apply-view').disabled = !savedViewPicker.value;
 }
-document.getElementById('btn-save-view')?.addEventListener('click', () => {
+document.getElementById('btn-save-view')?.addEventListener('click', async () => {
   const name = window.prompt('Name this saved view:')?.trim();
   if (!name) return;
   if (name.length > 80) { setStatus('Saved view names are limited to 80 characters.'); return; }
   const existing = savedViews.find(view => view.name.toLocaleLowerCase() === name.toLocaleLowerCase());
-  if (existing && !window.confirm(`Replace saved view “${existing.name}”?`)) return;
+  if (existing && !(await confirmDialog(`Replace saved view “${existing.name}”?`))) return;
   const view = { id: existing?.id || `view-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, name,
     theme: getThemeId(), currentPageId, filters: structuredClone(filters), parameters: structuredClone(parameters.map(({bindings,...parameter})=>parameter)) };
   savedViews = [...savedViews.filter(item => item.id !== view.id), view];
@@ -1913,7 +1913,7 @@ function applyDashboardDefault(dd, statusMsg) {
   if (statusMsg) setStatus(statusMsg);
 }
 async function applyGuidedDashboard({ id, name, suggestions, persisted }) {
-  if (serializeLayout().tiles.length && !window.confirm("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy.")) return false;
+  if (serializeLayout().tiles.length && !(await confirmDialog("Replace the current dashboard with these suggested charts? Export JSON first if you want to keep a separate copy."))) return false;
   let step = "Preparing uploaded data";
   try {
     const original = getDataset(id);
@@ -2140,9 +2140,9 @@ document.getElementById("btn-export").addEventListener("click", async () => {
     }
   }
   const erroredNames = [...erroredTiles.values()];
-  if (erroredNames.length && !window.confirm(`These tiles are in an error state and will export without their data:\n${erroredNames.map(name => `- ${name}`).join("\n")}\nContinue exporting?`)) { setStatus("JSON export cancelled."); return; }
+  if (erroredNames.length && !(await confirmDialog(`These tiles are in an error state and will export without their data:\n${erroredNames.map(name => `- ${name}`).join("\n")}\nContinue exporting?`))) { setStatus("JSON export cancelled."); return; }
   layout.omittedDependencies = skipped;
-  if (skipped.length && !window.confirm('This JSON will omit these dependencies:\n' + skipped.join('\n') + '\nExport with unavailable-data references retained?')) { setStatus('JSON export cancelled.'); return; }
+  if (skipped.length && !(await confirmDialog('This JSON will omit these dependencies:\n' + skipped.join('\n') + '\nExport with unavailable-data references retained?'))) { setStatus('JSON export cancelled.'); return; }
   const saved = await download(
     `dashboard-layout-${new Date().toISOString().slice(0, 10)}.json`,
     JSON.stringify(layout, null, 2)
@@ -2204,7 +2204,7 @@ async function exportHtml(password = null, note) {
       confirmations.push('These saved views will be disabled in the HTML export because their parameters differ from the materialized values:\n' + exportViews.excluded.map(view=>`- ${view.name}: ${view.reason}`).join('\n'));
     }
     if(liveParameterCount)confirmations.push(`${liveParameterCount} bound parameters will be live controls in the viewer`);
-    if (confirmations.length && !window.confirm(confirmations.join('\n\n') + '\n\nContinue exporting?')) {
+    if (confirmations.length && !(await confirmDialog(confirmations.join('\n\n') + '\n\nContinue exporting?'))) {
       setStatus('HTML export cancelled.');
       return;
     }
@@ -2240,7 +2240,7 @@ async function exportHtml(password = null, note) {
       });
     }
     const erroredNames = [...erroredTiles.values()];
-    if (erroredNames.length && !window.confirm(`These tiles are in an error state and will export without their data:\n${erroredNames.map(name => `- ${name}`).join("\n")}\nContinue exporting?`)) {
+    if (erroredNames.length && !(await confirmDialog(`These tiles are in an error state and will export without their data:\n${erroredNames.map(name => `- ${name}`).join("\n")}\nContinue exporting?`))) {
       setStatus('HTML export cancelled.');
       return;
     }
@@ -2275,7 +2275,7 @@ async function exportHtml(password = null, note) {
       : plaintext;
     if (json.length > 20 * 1024 * 1024) {
       const mb = (json.length / (1024 * 1024)).toFixed(1);
-      if (!window.confirm(`This export is about ${mb} MB (large datasets are inlined). Continue?`)) {
+      if (!(await confirmDialog(`This export is about ${mb} MB (large datasets are inlined). Continue?`))) {
         setStatus("HTML export cancelled.");
         return;
       }
@@ -2469,10 +2469,10 @@ if (isDesktop) {
   }).catch(() => {});
 }
 
-document.getElementById("btn-clear").addEventListener("click", () => {
+document.getElementById("btn-clear").addEventListener("click", async () => {
   if (!grid.save(false).length) return;
   const name = pages.find(page => page.id === currentPageId)?.name || "current page";
-  if (!window.confirm(`Clear current page “${name}”? This removes its tiles.`)) return;
+  if (!(await confirmDialog(`Clear current page “${name}”? This removes its tiles.`))) return;
   grid.removeAll();
   tileMeta.clear();
   saveNow();

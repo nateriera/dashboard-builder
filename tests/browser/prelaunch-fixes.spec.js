@@ -76,7 +76,7 @@ test('prelaunch: starter templates show bundled images and user templates keep s
   await ready(page);
   await dismissHint(page);
   await clickHeaderAction(page, '#btn-templates');
-  await expect(page.locator('.tpl-card')).toHaveCount(12);
+  await expect(page.locator('.tpl-card')).toHaveCount(14);
   await expect(page.locator('.tpl-preview.has-screenshot img')).toHaveCount(11);
   const names = await page.locator('.tpl-card .tpl-card-name').allTextContents();
   expect(names.slice(0, 11)).toEqual([

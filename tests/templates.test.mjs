@@ -17,8 +17,8 @@ globalThis.localStorage = dom.window.localStorage;
 globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 globalThis.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {} });
 
-const { TILE_TYPES, DATASETS, CORE_DATASET_KEYS, MERIDIAN_DATASETS } = await import('../src/tiles/registry.js');
-const { BUILT_IN_TEMPLATES } = await import('../src/templates.js');
+const { TILE_TYPES, DATASETS, CORE_DATASET_KEYS, MERIDIAN_DATASETS, COC_EDITION_DATASET_KEYS, COC_EDITION_DATASET_COLUMNS, DATASET_LABELS, meridianHmis } = await import('../src/tiles/registry.js');
+const { BUILT_IN_TEMPLATES, COC_EDITION_TEMPLATES } = await import('../src/templates.js');
 const { validateLayout } = await import('../src/data/layout.js');
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -115,3 +115,76 @@ test('the seeded generator passes every plausibility anchor and reproduces the c
   assert.doesNotMatch(out, /^FAIL|DRIFT/m, out);
   assert.match(out, /Checked 11 family files/);
 });
+
+// ── CoC edition (Stage 1b) ───────────────────────────────────────────────
+test('CoC edition: two packets, board packet first, kept apart from the general templates', () => {
+  assert.deepEqual(COC_EDITION_TEMPLATES.map(t => t.id), ['coc-board-packet', 'coc-funder-report']);
+  assert.deepEqual(COC_EDITION_TEMPLATES.map(t => t.name), ['Board packet (CoC edition)', 'Funder report (CoC edition)']);
+  for (const tpl of COC_EDITION_TEMPLATES) {
+    assert.equal(tpl.edition, 'coc');
+    assert.equal(tpl.theme, 'paper', tpl.id);
+    assert.match(tpl.description, /\?$/, `${tpl.id} description states its question`);
+    assert.ok(!BUILT_IN_TEMPLATES.some(t => t.id === tpl.id), `${tpl.id} is not a general template`);
+  }
+});
+
+test('CoC edition: packets validate with no overlaps; print-first, so they may run past one screen', () => {
+  for (const tpl of COC_EDITION_TEMPLATES) {
+    const layout = validateLayout({ app: 'dashboard-builder', version: 3, rowHeight: tpl.rowHeight, theme: tpl.theme, tiles: tpl.tiles });
+    assert.equal(layout.tiles.length, tpl.tiles.length, tpl.id);
+    for (const [i, a] of tpl.tiles.entries()) for (const b of tpl.tiles.slice(i + 1)) {
+      const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+      assert.ok(!overlap, `${tpl.id}: "${a.title}" overlaps "${b.title}"`);
+    }
+    for (const t of tpl.tiles) assert.ok(t.w >= 1 && t.x + t.w <= 12, `${tpl.id}: ${t.title} fits the grid`);
+    assert.equal(tpl.rowHeight, 24);
+    assert.equal(tpl.tiles[0].type, 'kpi', `${tpl.id} leads with its KPI strip`);
+  }
+});
+
+test('CoC edition: every packet tile binds a purpose-built edition dataset carrying its fields and offered in its picker', () => {
+  for (const tpl of COC_EDITION_TEMPLATES) {
+    for (const t of tpl.tiles) {
+      const entry = TILE_TYPES[t.type];
+      if (entry.noData) { assert.equal(t.dataset, undefined); continue; }
+      assert.ok(COC_EDITION_DATASET_KEYS.includes(t.dataset), `${tpl.id}: ${t.dataset} is an edition dataset`);
+      assert.ok(Object.hasOwn(MERIDIAN_DATASETS, t.dataset) && Object.hasOwn(DATASETS, t.dataset), t.dataset);
+      const columns = new Set(DATASETS[t.dataset].flatMap(row => Object.keys(row)));
+      for (const f of entry.fields.filter(f => !f.optional)) assert.ok(columns.has(f.key), `${tpl.id}: ${t.title} needs ${f.key}`);
+      assert.ok(entry.datasets.includes(t.dataset), `${tpl.id}: ${t.dataset} is offered in the ${t.type} picker`);
+    }
+  }
+});
+
+test('CoC edition: declared dataset columns (used to fill pickers without building the data) match the rows', () => {
+  for (const key of COC_EDITION_DATASET_KEYS) {
+    assert.deepEqual([...new Set(DATASETS[key].flatMap(row => Object.keys(row)))], COC_EDITION_DATASET_COLUMNS[key], key);
+  }
+  for (const key of COC_EDITION_DATASET_KEYS) {
+    assert.ok(Array.isArray(DATASETS[key]) && DATASETS[key].length > 0, key);
+    assert.match(DATASET_LABELS[key], /\([\d,]+\)$/, `${key} label carries its row count`);
+  }
+  // The microdata sits beside DATASETS, not in it: every DATASETS entry is loaded into DuckDB on the SQL panel's first open.
+  const hmis = meridianHmis();
+  for (const table of ['persons', 'enrollments', 'income_assessments']) assert.ok(hmis[table].length > 1000, table);
+  assert.ok(!Object.values(hmis).some(rows => Object.values(DATASETS).includes(rows)), 'microdata is not a DATASETS entry');
+});
+
+test('CoC edition: every packet tile renders in the export render path without a tile error', () => {
+  for (const tpl of COC_EDITION_TEMPLATES) {
+    for (const t of tpl.tiles) {
+      const el = document.createElement('div');
+      el.style.width = `${t.w * 100}px`; el.style.height = `${t.h * 24}px`;
+      document.body.append(el);
+      TILE_TYPES[t.type].render(el, { data: t.dataset ? DATASETS[t.dataset] : [], options: { title: t.title, tileOptions: t.tileOptions || {} } });
+      assert.equal(el.querySelector('.tile-error'), null, `${tpl.id}: ${t.title}: ${el.querySelector('.tile-error')?.textContent}`);
+      const ok = t.type === 'kpi' ? '.db-kpi-row' : t.type === 'table' ? '.db-data-table' : t.type === 'text' ? '.db-annotation' : 'svg';
+      assert.ok(el.querySelector(ok), `${tpl.id}: ${t.title} rendered`);
+      el.remove();
+    }
+  }
+});
+
+// The §4 consistency gate runs with this suite (package.json lists node test
+// files explicitly and sits outside the CoC edition slice's file fence).
+await import('./coc-edition-consistency.test.mjs');

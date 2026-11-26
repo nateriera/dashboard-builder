@@ -15,7 +15,10 @@ const TEMPLATES = [
   ['City services: 311 operations', 6],
   ['Performance scorecard (targets & thresholds)', 4],
   ['Executive overview', 5],
-  ['Sales performance', 6]
+  ['Sales performance', 6],
+  // CoC edition (Stage 1b), its own gallery section.
+  ['Board packet (CoC edition)', 8],
+  ['Funder report (CoC edition)', 5]
 ];
 
 function collectErrors(page) {

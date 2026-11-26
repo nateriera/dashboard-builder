@@ -10,7 +10,7 @@ test('S6: starter and all templates keep whole axis titles and legible ticks in 
  await expect(page.locator('#status')).toContainText(/Starter dashboard loaded|Layout restored/);
  if(await page.locator('.first-run-hint').isVisible()) await page.getByRole('button',{name:'Got it'}).click();
  await clickHeaderAction(page,'#btn-templates');
- await expect(page.locator('.tpl-card-name')).toHaveCount(11);
+ await expect(page.locator('.tpl-card-name')).toHaveCount(13);
  const names=['Starter',...await page.locator('.tpl-card-name').allTextContents()];
  await page.getByRole('button',{name:'Close templates',exact:true}).click();
  for(const name of names){

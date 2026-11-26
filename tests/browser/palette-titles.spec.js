@@ -52,7 +52,7 @@ test('S7: keyboard palette toggle matches simulated canvas widths and persists a
 
 test('S7: census titles are whole in both real palette states; all 12 KPI tiles retain their S1 bounds',async({page},testInfo)=>{
  await ready(page);await clickHeaderAction(page,'#btn-templates');
- await expect(page.locator('.tpl-card-name')).toHaveCount(11);
+ await expect(page.locator('.tpl-card-name')).toHaveCount(13);
  const names=['Starter',...await page.locator('.tpl-card-name').allTextContents()];
  await page.getByRole('button',{name:'Close templates',exact:true}).click();
  const records=[];
@@ -73,8 +73,8 @@ test('S7: census titles are whole in both real palette states; all 12 KPI tiles 
   }
  }
  for(const state of ['open','closed']){
-  expect(records.filter(r=>r.palette===state).flatMap(r=>r.kpis)).toHaveLength(12);
-  expect(records.filter(r=>r.palette===state).flatMap(r=>r.titles)).toHaveLength(52);
+  expect(records.filter(r=>r.palette===state).flatMap(r=>r.kpis)).toHaveLength(14);
+  expect(records.filter(r=>r.palette===state).flatMap(r=>r.titles)).toHaveLength(61);
  }
  await testInfo.attach('title-kpi-measurements',{body:JSON.stringify(records,null,2),contentType:'application/json'});
 });

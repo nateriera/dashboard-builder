@@ -5,6 +5,7 @@ import { focusDialog } from "./focus.js";
 
 import {
   BUILT_IN_TEMPLATES,
+  COC_EDITION_TEMPLATES,
   loadUserTemplates,
   saveUserTemplate,
   deleteUserTemplate
@@ -77,6 +78,16 @@ export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrent
   }
   starterSection.appendChild(starterGrid);
 
+  // The CoC edition: HUD System Performance Measure packets on one HMIS
+  // microdata set, grouped apart from the general starter templates.
+  const editionSection = buildSection("CoC edition: HUD System Performance Measures");
+  const editionGrid = document.createElement("div");
+  editionGrid.className = "tpl-grid";
+  for (const tpl of COC_EDITION_TEMPLATES) {
+    editionGrid.appendChild(buildCard(tpl, false));
+  }
+  editionSection.appendChild(editionGrid);
+
   const userSection = buildSection("Your templates");
   const userGrid = document.createElement("div");
   userGrid.className = "tpl-grid";
@@ -137,7 +148,7 @@ export function openTemplateGallery({ applyTemplate, getCurrentTiles, getCurrent
   });
   saveRow.append(saveLabel, nameInput, saveBtn);
 
-  body.append(starterSection, userSection, saveRow);
+  body.append(starterSection, editionSection, userSection, saveRow);
   modal.append(head, note, body);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);

@@ -225,6 +225,71 @@ export const BUILT_IN_TEMPLATES = [
   }
 ];
 
+// ── CoC edition (Stage 1b): board packet + funder report ─────────────────
+// Built on HMIS-shaped microdata for Meridian County (src/tiles/registry.js,
+// generateMeridianHmis); every figure on these tiles is computed from it by
+// summarizeMeridianHmis, and tests/coc-edition-consistency.test.mjs
+// recomputes the headline figures from the microdata alone. Print-first: the
+// packets are documents under the viewer's print rules, so they run longer
+// than one 1440×900 screen. The general templates above are unchanged.
+//
+// Definitions are the approved measure set's texts, verbatim (CoC edition
+// measure set, draft v1 of Nov 24, 2026, approved Nov 25 as the build input).
+// Never edit their wording here: a wording change is a stop-and-report.
+export const COC_EDITION_DEFINITIONS = Object.freeze([
+  Object.freeze({ spm: "SPM Measure 1a, 1b", name: "Length of time people remain homeless", text: "How long people stay homeless before they exit or are housed. Counted in days, from the start of a person's time in shelter or transitional housing to their exit — the shorter this is, the faster the system moves people through. Reported as an average and a middle (median) value, because a small number of very long stays pulls the average up." }),
+  Object.freeze({ spm: "SPM Measure 2", name: "Returns to homelessness", text: "Of the people who left homelessness for a permanent home, how many came back — to outreach, shelter, transitional housing, or a new housing placement — within two years. Counted at three points: within 6 months, between 6 and 12 months, and between 13 and 24 months. A return is a system result, not a personal failure: it usually means the housing or the support around it did not hold." }),
+  Object.freeze({ spm: "SPM Measure 3.1, 3.2", name: "Number of people experiencing homelessness", text: "How many people are homeless here. Counted two ways: on one night in January (the Point-in-Time count, 3.1 — the only count that includes people sleeping outside), and across the whole year in shelter and transitional housing records (3.2 — larger, because it catches everyone who passed through). The two numbers answer different questions and are never interchangeable." }),
+  Object.freeze({ spm: "SPM Measure 4.1–4.6", name: "Employment and income growth", text: "For adults in CoC-funded housing projects, did income grow while the system worked with them? Counted separately for people who stayed (4.1–4.3) and people who left (4.4–4.6), and separately for wages, for other cash income (benefits, disability, pensions), and for both together — because a benefits approval and a new job are different kinds of progress." }),
+  Object.freeze({ spm: "SPM Measure 5.1, 5.2", name: "First-time homelessness", text: "How many people became homeless for the first time — entering shelter or housing projects with no record of homelessness in this system in the previous two years. This is the inflow number: when it falls, prevention and diversion are working upstream; when it rises, the system is being handed more than it can house its way out of." }),
+  Object.freeze({ spm: "SPM Measure 7a, 7b", name: "Successful placement and retention", text: "Did people land in housing, and did they stay? For street outreach (7a): the share of people outreach worked with who moved to a stable destination — housing, family, a treatment or care setting — rather than another place not meant for sleeping. For shelter, transitional housing, and rapid rehousing (7b.1): the share of exits that went to a permanent home. For permanent housing projects (7b.2): the share who stayed housed or left for another permanent home. This is the measure the whole system is for." })
+]);
+export const COC_EDITION_M6 = "HUD's Measure 6 (prevention/placement for Category 3 households) is not applicable to CoCs currently and CoCs do not report it.";
+const definitionsBody = (pointers = {}) => [
+  "From the CoC edition's approved measure set. HUD's System Performance Measures are the authority; these are plain-language renderings, with the SPM number beside each name.",
+  ...COC_EDITION_DEFINITIONS.map((d) => `${d.spm} — ${d.name}${pointers[d.spm] ? ` (${pointers[d.spm]})` : ""}\n${d.text}`),
+  `SPM Measure 6 — Not applicable\n${COC_EDITION_M6}`,
+  "Measures: HUD System Performance Measures (SPM 1–5 and 7; Measure 6 not applicable) · " + SYNTHETIC
+].join("\n\n");
+
+export const COC_EDITION_TEMPLATES = [
+  {
+    id: "coc-board-packet",
+    edition: "coc",
+    theme: "paper",
+    rowHeight: 24,
+    name: "Board packet (CoC edition)",
+    description: "Is the homeless response system housing people faster, keeping them housed, and doing it equitably, by HUD's System Performance Measures?",
+    inspiredBy: { name: "HUD System Performance Measures (structural pattern only)", url: "https://www.hudexchange.info/programs/coc/system-performance-measures/" },
+    tiles: [
+      tile("kpi", 0, 0, 12, 12, "FY2026: 37.5% of leavers went to permanent housing, short of the 45% goal; the median stay fell a day", "cocEdBoardKpis"),
+      tile("bar", 0, 12, 4, 19, "934 of 2,490 leavers went to permanent housing", "cocEdExitDestinations", { sort: "data", xLabel: "Leavers, FY2026" }),
+      tile("smallMultiples", 4, 12, 8, 19, "By race: Black clients exit to housing least and return most", "cocEdEquity", { sort: "data" }),
+      tile("bar", 0, 31, 5, 18, "64 of 121 returns came within six months", "cocEdReturnsTiming", { sort: "data", xLabel: "Returns, FY2024 housing exits" }),
+      tile("stackedBar", 5, 31, 7, 18, "Most people in shelter were homeless for the first time, families most of all", "cocEdInflowVsCount", { mode: "grouped", xLabel: "People, FY2026" }),
+      tile("table", 0, 49, 12, 18, "System Performance Measures, FY2025 vs FY2026", "cocEdSpmTable"),
+      note(0, 67, 12, 9, "What the measures say", "Every household type's median fell from FY2025 to FY2026 (adults only 49 → 47 days, families 108 → 81, youth 18–24 53 → 49, veterans 53 → 42.5; ES/SH/TH stays), but families, the longest stayers, grew from 11.4% to 29.4% of people in shelter or TH, so the overall median barely moved (ES/SH 45 → 44 days; ES/SH/TH 54 → 55). Black clients exited to housing at 32.5% vs 47.0% for White clients and returned within 24 months at 17.2% vs 10.2%; Hispanic counts people of any race; groups under 20 people are suppressed. 64 of 121 returns came within 6 months. 4% of exit destinations are unknown.\n* SPM 2 and SPM 5 need a two-year lookback; for FY2025 it would start before this sample (FY2024–FY2026), so only FY2026 is shown. SPM 2 counts only returns recorded in Meridian's HMIS; a return to a place this system cannot see is not counted. SPM 3.1 is HMIS-based: people in ES/SH/TH on the PIT night plus open street-outreach enrollments. SPM 4 (income) is reported in the funder report."),
+      note(0, 76, 12, 30, "Definitions: the measures in this packet", definitionsBody({ "SPM Measure 4.1–4.6": "reported in the funder report, not in this packet" }))
+    ]
+  },
+  {
+    id: "coc-funder-report",
+    edition: "coc",
+    theme: "paper",
+    rowHeight: 24,
+    name: "Funder report (CoC edition)",
+    description: "Did the system's outcomes and participants' incomes improve this year, by HUD's System Performance Measures?",
+    inspiredBy: { name: "HUD System Performance Measures (structural pattern only)", url: "https://www.hudexchange.info/programs/coc/system-performance-measures/" },
+    tiles: [
+      tile("kpi", 0, 0, 12, 11, "FY2026: more leavers left with more income; exits to housing up slightly", "cocEdFunderKpis"),
+      tile("smallMultiples", 0, 11, 12, 17, "Every outcome measure held or improved except PSH retention (FY2025 vs FY2026, %)", "cocEdPeriodCompare", { sort: "data" }),
+      tile("table", 0, 28, 12, 13, "Income growth, SPM 4.1–4.6: benefits drove stayers' gains, wages drove leavers'", "cocEdIncomeTable"),
+      note(0, 41, 12, 6, "What the measures say", "Exits to permanent housing rose from 37.2% to 37.5%, still short of the 45% CoC goal, and the median stay in shelter fell from 45 to 44 days. 27.1% of adult leavers left with more total income than at entry (26.0% in FY2025) and 34.1% of stayers gained (32.5%). Stayers' gains came more from benefits (23.6%) than wages (16.5%); leavers' came more from wages (17.6%) than benefits (11.9%). SPM 4 covers adults in transitional housing, rapid rehousing and PSH, Meridian's CoC Program-funded projects."),
+      note(0, 47, 12, 30, "Definitions: the measures in this report", definitionsBody())
+    ]
+  }
+];
+
 // ── User templates (saved from the user's own dashboards) ────────────────
 const USER_TPL_KEY = "dashbuilder.templates.v1";
 const LEGACY_USER_TPL_KEY = "klaroDash.templates.v1"; // pre-theme era; read once, then dropped

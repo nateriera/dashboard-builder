@@ -7,6 +7,7 @@ import { isQueryRef, queryId, sampleTableName, uploadTableName } from "../data/s
 import { substituteParameters } from "../data/parameters.js";
 import { TILE_TYPES, guessMapping } from "../tiles/registry.js";
 import { focusDialog } from "./focus.js";
+import { confirmDialog } from "../desktop/bridge.js";
 import { anchorPopover } from "./anchoredPopover.js";
 import { createTransformEditor } from './transformEditor.js';
 import { compileTransformChain } from '../data/wranglingTransforms.js';
@@ -140,9 +141,9 @@ export function toggleWranglingPopover({ anchor, type, meta, dashboard, initialT
         catch(error){status.textContent=error.message;}
       });mappingBox.append(apply);box.append(mappingBox);status.textContent='Choose the matching columns, then apply the recipe.';
     });
-    removeRecipe.addEventListener('click',()=>{
+    removeRecipe.addEventListener('click',async()=>{
       const recipe=recipes.find(item=>item.id===select.value);if(!recipe)return;
-      if(!window.confirm(`Delete recipe “${recipe.name}”?`))return;
+      if(!(await confirmDialog(`Delete recipe “${recipe.name}”?`)))return;
       try{removeWranglingRecipe(recipe.id);render();}catch(error){status.textContent=error.message;}
     });
     save.addEventListener('click',()=>{

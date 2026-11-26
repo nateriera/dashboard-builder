@@ -12,7 +12,7 @@ export const MAX_ROWS = 250000;
 const WRAPPER_KEYS = ["data", "rows", "results", "items"];
 
 export function parseFile(name, text) {
-  if (new TextEncoder().encode(text).length > LIMITS.fileBytes) throw new Error("File limit is 16 MiB. Split or aggregate the file.");
+  if (new TextEncoder().encode(text).length > LIMITS.fileBytes) throw new Error(`File limit is ${LIMITS.fileBytes / (1024 * 1024)} MiB. Split or aggregate the file.`);
   const result = /\.json$/i.test(name) ? parseJson(text) : parseCsv(text);
   assertRows(result.rows);
   if (result.columns.length > LIMITS.columns) throw new Error(`Column limit is ${LIMITS.columns}.`);

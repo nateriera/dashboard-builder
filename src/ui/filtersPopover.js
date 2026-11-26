@@ -1,4 +1,5 @@
 import { anchorPopover } from "./anchoredPopover.js";
+import { confirmDialog } from "../desktop/bridge.js";
 import { focusDialog } from "./focus.js";
 import { dateRangeForPreset, validateFilters } from "../data/filters.js";
 import { enumerateParameterOptions, validateParameters } from "../data/parameters.js";
@@ -141,8 +142,8 @@ function openFiltersPopover({ anchor: nextAnchor, filters, parameters, defaultDa
       const conflict=bound?bindingConflict(bound,filter):null;
       const caption=element("span","",`${filterDescription(filter)} · ${scopeName}${bound?` · bound to parameter ${bound.name}`:''}`);
       const remove=element("button","filter-remove","×");remove.type="button";remove.title=`Remove ${filter.field} filter`;remove.setAttribute("aria-label",`Remove ${filter.field} filter`);
-      remove.addEventListener("click",()=>{
-        if(bound&&!window.confirm(`Filter “${filter.field}” is bound to parameter ${bound.name}. Remove the filter and unbind the parameter?`))return;
+      remove.addEventListener("click",async()=>{
+        if(bound&&!(await confirmDialog(`Filter “${filter.field}” is bound to parameter ${bound.name}. Remove the filter and unbind the parameter?`)))return;
         if(bound)emitParameters(currentParameters.map(item=>item.name===bound.name?{...item,bindings:undefined}:item));
         emitFilters(currentFilters.filter(item=>item.id!==filter.id));renderFiltersPanel();
       });

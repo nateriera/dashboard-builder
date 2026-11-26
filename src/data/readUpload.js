@@ -1,6 +1,6 @@
 import { LIMITS } from './limits.js';
 export function readUpload(file, container) {
-  if (file.size > LIMITS.fileBytes) return Promise.reject(new Error('File limit is 16 MiB. Split or aggregate the file.'));
+  if (file.size > LIMITS.fileBytes) return Promise.reject(new Error(`File limit is ${LIMITS.fileBytes / (1024 * 1024)} MiB. Split or aggregate the file.`));
   return new Promise((resolve,reject) => {
     const worker = new Worker(new URL('./parse.worker.js',import.meta.url),{ type: 'module' });
     const row = document.createElement('div'), status = document.createElement('span'), cancel = document.createElement('button');

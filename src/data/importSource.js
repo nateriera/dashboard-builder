@@ -6,7 +6,7 @@ const PRIVATE_HOST = /^(localhost|.*\.local|.*\.localhost|.*\.internal)$/i;
 
 export function parsePastedTable(text) {
   if (typeof text !== 'string' || !text.trim()) throw new Error('Pasted data is empty. Copy a table with headers and rows, then paste it here.');
-  if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('Paste limit is 16 MiB. Split or aggregate the data.');
+  if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error(`Paste limit is ${MAX_BYTES / (1024 * 1024)} MiB. Split or aggregate the data.`);
   const delimiter = text.includes('\t') ? '\t' : ',';
   const parsed = delimiter === '\t' ? parseDelimited(text, '\t') : parseCsv(text);
   const columns = parsed[0].map((name) => name.trim());
@@ -98,9 +98,9 @@ export async function fetchCsvText(input, { fetchImpl = fetch, signal } = {}) {
   const type = response.headers.get('content-type') || '';
   if (/text\/html|application\/json/i.test(type)) throw new Error('The URL did not return a CSV response; it returned a web page or JSON. Use a direct public CSV link or a public Sheets CSV export link.');
   const declaredSize = Number(response.headers.get('content-length'));
-  if (declaredSize > MAX_BYTES) throw new Error('Download limit is 16 MiB. Reduce the CSV before importing.');
+  if (declaredSize > MAX_BYTES) throw new Error(`Download limit is ${MAX_BYTES / (1024 * 1024)} MiB. Reduce the CSV before importing.`);
   const text = await response.text();
-  if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('Download limit is 16 MiB. Reduce the CSV before importing.');
+  if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error(`Download limit is ${MAX_BYTES / (1024 * 1024)} MiB. Reduce the CSV before importing.`);
   if (!text.trim()) throw new Error('The CSV response is empty.');
   if (/^\s*</.test(text)) throw new Error('The URL returned a web page, not CSV. Check public sharing or use a direct CSV link.');
   return text;

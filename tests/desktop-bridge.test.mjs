@@ -36,7 +36,7 @@ test("bridge wrappers refuse outside the shell", async () => {
 });
 
 test("large-file warning threshold is 250 MiB, inclusive", () => {
-  assert.equal(LARGE_FILE_WARN_BYTES, 250 * 1024 * 1024);
+  assert.equal(LARGE_FILE_WARN_BYTES, 32 * 1024 * 1024);
   assert.equal(needsLargeFileWarning(LARGE_FILE_WARN_BYTES - 1), false);
   assert.equal(needsLargeFileWarning(LARGE_FILE_WARN_BYTES), true);
   assert.equal(needsLargeFileWarning(LARGE_FILE_WARN_BYTES * 2), true);

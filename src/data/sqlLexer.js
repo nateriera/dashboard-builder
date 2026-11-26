@@ -14,7 +14,9 @@ export function* scanSql(sql) {
     else if (sql[i] === "'") context = 'string';
     else if (sql[i] === '"') context = 'quoted identifier';
     else if (sql[i] === '$' && !identifierChar(sql[i - 1])) {
-      delimiter = /^\$[A-Za-z0-9_]*\$/.exec(sql.slice(i))?.[0];
+      // A tag may not start with a digit: `$1` is a positional parameter,
+      // so `$1$ ... $1$` is not a dollar-quoted string (DuckDB/PostgreSQL).
+      delimiter = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i))?.[0];
       if (delimiter) context = 'dollar-quoted string';
     }
     if (!context) { i++; continue; }

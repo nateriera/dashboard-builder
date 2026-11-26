@@ -26,7 +26,8 @@ import {
   starterQuery,
   sampleTableName,
   uploadTableName,
-  isQueryRef
+  isQueryRef,
+  queryUploadRefs
 } from "../data/sql.js";
 
 let releaseRevision = null;
@@ -810,7 +811,9 @@ function openDataPopover({ anchor, type, meta, dashboard, onSample, onUpload, on
     const { id, name, persisted } = saveQuery({
       ...(qstate.chain?{chain:{...qstate.chain,outputMapping:{...qstate.mapping}}}:{}),
       sql: qstate.sql,
-      dependencies: qstate.chain?qstate.chain.source.dependencies:listDatasets().map(ds => `upload:${ds.id}`),
+      // Plain SQL records the uploads its SQL reads, not every upload in the
+      // store (Mythos F1). The HTML export re-derives this from the SQL anyway.
+      dependencies: qstate.chain?qstate.chain.source.dependencies:queryUploadRefs(qstate.sql, listDatasets().map(ds => ds.id)),
       columns: qstate.columns,
       fieldKeys: entry.dynamicFields ? [...qstate.columns] : entry.fields.map((f) => f.key),
       mapping: { ...qstate.mapping }

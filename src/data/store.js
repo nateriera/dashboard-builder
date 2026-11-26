@@ -177,8 +177,14 @@ export function hasDataset(id) {
   return memory.has(id);
 }
 
-/** Split referenced upload datasets into inlinable vs. too-large-for-export. */
-export function inlineDatasets(refs) {
+/** Split referenced upload datasets into inlinable vs. too-large-for-export.
+ *  Eligibility is measured on the live dataset's bytes, before any
+ *  projection, so every export format inlines the same set of datasets.
+ *  When `projectDataset` is given, it maps each inlinable dataset's
+ *  portable record to the form the export actually carries (the layout
+ *  exporters pass the tile/query projection, closing the raw leak);
+ *  without it the record is carried whole. */
+export function inlineDatasets(refs, projectDataset = null) {
   const inlined = {};
   const skipped = [];
   for (const ref of refs) {
@@ -186,7 +192,7 @@ export function inlineDatasets(refs) {
     const ds = memory.get(uploadId(ref));
     if (!ds) { skipped.push(`${ref} (missing)`); continue; }
     if (ds.bytes <= EXPORT_INLINE_BYTES) {
-      inlined[ds.id] = {
+      const record = {
         name: ds.name,
         columns: ds.columns,
         rows: ds.rows,
@@ -194,6 +200,7 @@ export function inlineDatasets(refs) {
         mapping: ds.mapping,
         raw: ds.raw || null
       };
+      inlined[ds.id] = projectDataset ? projectDataset(record, ds) : record;
     } else {
       skipped.push(`${ds.name} (${ds.id}: ${ds.bytes.toLocaleString()} bytes exceeds ${EXPORT_INLINE_BYTES.toLocaleString()} byte inline limit)`);
     }

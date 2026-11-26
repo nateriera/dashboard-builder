@@ -2075,7 +2075,7 @@ async function download(filename, text) {
   return true;
 }
 
-function inlineLayoutBackup(layout, { minimize = false } = {}) {
+function inlineLayoutBackup(layout) {
   // Inline small uploaded datasets so the exported file is self-contained.
   // Includes the dashboard-wide default dataset, not just per-tile uploads.
   const refs = layout.tiles.map((t) => t.dataset).filter(isUploadRef);
@@ -2083,27 +2083,23 @@ function inlineLayoutBackup(layout, { minimize = false } = {}) {
     refs.push(layout.defaultDataset.ref);
   }
   const queryRefs = layout.tiles.map(t => t.dataset).filter(isQueryRef);
-  // HTML export: query tiles pull in only the uploads their SQL actually
-  // reads (I1). The lossless JSON backup keeps its stored-dependency rule.
-  const consumed = minimize ? queryConsumersForExport(layout) : new Map();
-  if (minimize) refs.push(...consumed.keys());
-  else for (const qref of queryRefs) {
-    const q = getQuery(queryId(qref));
-    if (q?.dependencies) refs.push(...q.dependencies.filter(isUploadRef));
-    else refs.push(...listDatasets().map(ds => 'upload:' + ds.id));
-  }
-  const { inlined, skipped } = inlineDatasets([...new Set(refs)]);
-  if (minimize) {
-    // HTML export (§5.5): project each inlined dataset onto the union
-    // allowlist of the tiles bound to it plus the columns consuming query
-    // SQL names (I2). The table-tile exemption applies only to direct
-    // bindings (I3). The JSON export leaves minimize off (§5.6) and stays
-    // lossless.
-    for (const [id, dataset] of Object.entries(inlined)) {
-      const queryKeys = consumed.get(`upload:${id}`);
-      inlined[id] = projectBackupDataset(dataset, referencingTilesForDataset(layout, `upload:${id}`), (type) => TILE_TYPES[type], filterFieldsForTile, true, queryKeys ? { queryKeys: [...queryKeys] } : {});
-    }
-  }
+  // Every export format derives query consumption from the SQL at export
+  // time (I1): query tiles pull in only the uploads their SQL actually
+  // reads. A stored `dependencies` list is never trusted for inclusion —
+  // the JSON backup used to inline by it, which carried uploads no tile
+  // or query reads into the exported file (the loose-threads leak).
+  const consumed = queryConsumersForExport(layout);
+  refs.push(...consumed.keys());
+  // Project each inlined dataset onto the union allowlist of the tiles
+  // bound to it plus the columns consuming query SQL names (I2), for
+  // `rows` and `raw` alike, in both export formats. The table-tile
+  // exemption applies only to direct bindings (I3).
+  const projectDataset = (record, ds) => {
+    const ref = `upload:${ds.id}`;
+    const queryKeys = consumed.get(ref);
+    return projectBackupDataset(record, referencingTilesForDataset(layout, ref), (type) => TILE_TYPES[type], filterFieldsForTile, true, queryKeys ? { queryKeys: [...queryKeys] } : {});
+  };
+  const { inlined, skipped } = inlineDatasets([...new Set(refs)], projectDataset);
   let blanked = 0;
   for (const dataset of Object.values(inlined)) {
     const clean = materializeExportRows(dataset.rows, dataset.raw?.rows || dataset.rows);
@@ -2245,7 +2241,7 @@ async function exportHtml(password = null, note) {
       return;
     }
 
-    const {backup,skipped}=inlineLayoutBackup(layout, { minimize: true });
+    const {backup,skipped}=inlineLayoutBackup(layout);
     const payload = {
       app: "dashboard-builder",
       version: 5,

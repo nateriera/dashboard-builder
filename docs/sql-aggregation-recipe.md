@@ -28,4 +28,4 @@ longer eligible to apply; run the edited query successfully again first.
 Results are capped at 10,000 rows and 100 columns.
 
 For exact SQL number behavior and supported casts, see the README’s
-[Exact numbers and dates](../README.md#exact-numbers-and-dates) contract.
+[Exact numbers and dates](reference.md#exact-numbers-and-dates) contract.

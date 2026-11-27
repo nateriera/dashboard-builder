@@ -98,7 +98,34 @@ Use this for a sales team's forecast and pipeline review.
 
 ![Sales performance](screenshots/template-sales-performance.png)
 
-All eleven template definitions live in [src/templates.js](../src/templates.js).
+## CoC edition: HUD System Performance Measures
+
+The two CoC edition templates report the fictional Meridian County's
+FY2026 against the HUD System Performance Measures, with the measures'
+plain-language definitions carried in each file. Their figures are
+computed from synthetic HMIS-shaped sample data, not client records.
+
+## Board packet (CoC edition)
+
+Headline KPIs for exits to permanent housing (SPM 7b.1) and median length
+of time homeless (SPM 1a), exits by destination, housing exits and
+returns by race and ethnicity, returns timing, first-time homelessness
+against the annual count, the full measures table, findings, and the
+measure definitions.
+Use this as a board-facing Continuum of Care performance packet.
+
+![Board packet (CoC edition)](screenshots/template-board-packet-coc.png)
+
+## Funder report (CoC edition)
+
+Headline findings, the outcome measures for FY2025 against FY2026, the
+full income measures table (SPM 4.1–4.6) the board packet leaves out,
+findings, and the measure definitions.
+Use this for funder reporting on income growth and housing outcomes.
+
+![Funder report (CoC edition)](screenshots/template-funder-report-coc.png)
+
+All thirteen template definitions live in [src/templates.js](../src/templates.js).
 This page embeds the captures in `docs/screenshots/`. The in-app gallery shows
 bundled thumbnails for the built-in templates and schematic previews for custom
 saved templates, so private chart contents are not captured into an image.

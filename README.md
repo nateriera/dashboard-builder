@@ -1,6 +1,6 @@
 # Dashboard Builder
 
-**A free, local-first dashboard composer.** Drag-and-drop grid, 18 chart and content tile types, in-browser SQL, and one-click export to a self-contained HTML file. No account, no server, no subscription.
+**A free, local-first dashboard composer.** Drag-and-drop grid, 18 chart and content tile types, in-browser SQL, and export to a self-contained HTML file. No account, no subscription, and nothing leaves your device until you send it.
 
 **[Open the live demo](https://nateriera.github.io/dashboard-builder/)**
 
@@ -15,7 +15,7 @@ The demo is the bundled Meridian County homeless-response example, built on synt
 
 - Drag-and-drop, resizable 12-column grid with content-aware tile sizing
 - 18 tile types: bar, column, line, scatter + trend, dot, donut, choropleth, small multiples, KPI, table, text/annotation, stacked bar, stacked column, histogram, box plot, area, heatmap, and treemap
-- CSV/JSON upload processed locally — your data never leaves the browser — plus built-in sample datasets
+- CSV/JSON upload processed locally — nothing leaves your device until you send it — plus built-in sample datasets
 - Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
 - Dashboard category, numeric, and date filters connect explicitly to chart fields, including relative date presets
@@ -35,7 +35,7 @@ The demo is the bundled Meridian County homeless-response example, built on synt
 - Build ordered transform chains in the Transform tab: GroupBy, day/week/month Bucket, Between, Top, MovingAvg, Stats, Cumulative, Change, paired periods, Pivot, Histogram, and Ratio
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
 - 4 themes, 13 built-in templates plus a preloaded Meridian County starter dashboard, save/load multi-page dashboards as JSON
-- **CoC edition**: a board packet and a funder report for Continuum of Care reporting, built on the HUD System Performance Measures (SPM 1–7) with plain-language definitions carried in the file, over synthetic HMIS-shaped sample data for the fictional Meridian County
+- **CoC edition**: a board packet and a funder report for Continuum of Care reporting, built on the HUD System Performance Measures (1a, 2, 3.1 HMIS-based, 4, 5 and 7; 6 not applicable per HUD) with plain-language definitions carried in the file and the gaps named there, over synthetic HMIS-shaped sample data for the fictional Meridian County
 - The exported file is one self-contained, offline HTML document — every page in one scrollable file, labeled as an offline snapshot, with a Restore exported filters button and print rules. Email it or host it anywhere; no server needed
 - Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
 
@@ -54,10 +54,10 @@ The same composer also ships as an installed desktop app (Tauri) for
 Windows and Linux. It opens and saves the same project JSON and HTML
 shares as the web app — files move between the two freely — and uses
 native open and save dialogs and native confirmations in place of the
-browser's. The installed app runs from local files, and your data stays
-on your machine, as it does in the browser.
+browser's. The installed app runs from local files, and nothing leaves
+your device until you send it, as in the browser.
 
-Packages are built per platform: MSI and NSIS installers on Windows;
+**Download:** prebuilt installers are on the [v0.1.0 release page](https://github.com/nateriera/dashboard-builder/releases/tag/v0.1.0). Packages are built per platform: MSI and NSIS installers on Windows;
 .deb, .rpm and AppImage on Linux. To build from source you need the Rust
 toolchain and your platform's Tauri prerequisites, then:
 

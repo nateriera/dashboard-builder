@@ -27,14 +27,15 @@ The demo is the bundled Meridian County homeless-response example, built on synt
 - Configure chart mark clicks to filter charts, inspect source records, or navigate to a drill-through page
 - Inspect source columns in each chart's paginated data table
 - Select a category to see its contributing source rows
-- **Share as HTML** exports a standalone dashboard with working filters and chart cross-filtering; you add its title, author and data period at share time
+- **Share as HTML** exports a standalone dashboard with working filters and chart cross-filtering; you add its title, author, data period and an optional cover note at share time, and on narrow screens the shared file stacks its tiles in reading order
 - Switch a tile among chart types supported by its current data columns
 - Typed parameters — number, text, boolean, date, number range, date range, single select and multi-select — feed SQL `{{name}}` placeholders and transform steps, or bind to a dashboard filter so one control drives it
 - Optional per-tile reference lines, with labels, mark targets and thresholds
 - Save and reuse local data-wrangling recipes for grouping and calculated fields
 - Build ordered transform chains in the Transform tab: GroupBy, day/week/month Bucket, Between, Top, MovingAvg, Stats, Cumulative, Change, paired periods, Pivot, Histogram, and Ratio
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
-- 4 themes, 11 built-in templates plus a preloaded Meridian County starter dashboard, save/load multi-page dashboards as JSON
+- 4 themes, 13 built-in templates plus a preloaded Meridian County starter dashboard, save/load multi-page dashboards as JSON
+- **CoC edition**: a board packet and a funder report for Continuum of Care reporting, built on the HUD System Performance Measures (SPM 1–7) with plain-language definitions carried in the file, over synthetic HMIS-shaped sample data for the fictional Meridian County
 - The exported file is one self-contained, offline HTML document — every page in one scrollable file, labeled as an offline snapshot, with a Restore exported filters button and print rules. Email it or host it anywhere; no server needed
 - Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
 
@@ -50,12 +51,14 @@ npm run dev
 ## Template gallery
 
 The composer opens on a Meridian County starter dashboard: 311 timeliness and
-homelessness at a glance, on synthetic data for a fictitious county. Eleven
-original built-in templates, from homeless system performance and behavioral
-health quality to 311 operations, scorecards and sales, are pictured in the
+homelessness at a glance, on synthetic data for a fictitious county. Thirteen
+original built-in templates — eleven general-purpose, from homeless system
+performance and behavioral health quality to 311 operations, scorecards and
+sales, plus the two-template CoC edition for Continuum of Care board and
+funder reporting — are pictured in the
 [template gallery](docs/template-gallery.md).
 
-Choose **More actions → Templates** in the composer to try any of the eleven.
+Choose **More actions → Templates** in the composer to try any of the thirteen.
 
 ## Beginner guides
 
@@ -73,6 +76,19 @@ data. The composer may offer a small set of charts when existing column-name
 mapping rules can map the fields conservatively. Review, change field choices,
 or uncheck suggestions before building. You can also set the upload as dashboard data or keep the
 current dashboard. Profiling and chart suggestions run locally in the browser.
+
+## What a shared file contains
+
+Exports are deliberately narrow. A JSON or HTML export carries only the
+uploaded datasets the dashboard actually uses — bound to a tile, following
+the dashboard default, or read by a saved query's SQL — and each carried
+dataset is projected to the columns its tiles and queries reference. An
+upload the dashboard never reads cannot leak into a shared file, and
+neither can a column no chart uses. The in-browser SQL engine runs with
+external access disabled and its configuration locked, so a query cannot
+reach the network or the filesystem. One exception: a table tile bound
+directly to an upload carries that upload's columns in full, because the
+table displays them.
 
 ## Known issues
 
@@ -226,7 +242,9 @@ Templates use the same schema validation and preserve chart options.
 
 Uploads live in IndexedDB `dashbuilder`, object store `datasets`; queries live
 at `dashbuilder.queries.v1`. Data that cannot persist is labeled session only.
-Export JSON provides a backup.
+Export JSON provides a backup of the dashboard and the data it uses;
+uploads and columns the dashboard does not reference are not carried (see
+*What a shared file contains*), so keep source files for a complete archive.
 
 Legacy dataset keys `dashbuilder.datasets.v1` and `klaroDash.datasets.v1` remain
 until every record has been written and read back from IndexedDB. Partial writes,
@@ -245,14 +263,16 @@ datasets invalidates eligibility; mapping changes cannot bypass it. Results from
 superseded revisions are rejected. Cache identity includes revision and field
 contract, and becomes stale as soon as data changes.
 
-Query dependencies conservatively include all registered uploads at Apply;
-legacy queries with unknown dependencies include all registered uploads during
-export. Arbitrary SQL is not parsed with a best-effort regular expression.
-Export JSON includes eligible inputs, saved SQL and mappings. Missing/oversized
-inputs and failed queries are listed before downloading; proceeding retains
-broken references and an `omittedDependencies` list. Each dataset's inline
-budget is 500 KiB. Portability therefore depends on carrying every dependency.
-See the [JSON backup and HTML sharing guide](docs/json-backup-html-sharing.md)
+Which uploads a query consumes is derived from its SQL at export time —
+the dependency list stored at Apply is never trusted for inclusion, so a
+query saved by an older version cannot pull an upload it does not read
+into an export. Export JSON includes the consumed inputs (projected to
+the columns in use), saved SQL and mappings. Missing or oversized inputs
+and failed queries are listed before downloading; proceeding retains
+broken references and an `omittedDependencies` list. Each dataset's
+inline budget is 500 KiB, measured on the stored dataset before
+projection, so both export formats inline the same set. See the
+[JSON backup and HTML sharing guide](docs/json-backup-html-sharing.md)
 for the difference between the editable backup and the standalone viewer.
 
 HTML export carries materialized query results, all tile rows, theme and options;
@@ -316,7 +336,7 @@ Engineering limits are separate from measured device capacity:
 
 | Resource | Limit / behavior |
 | --- | --- |
-| Upload | 16 MiB, 250,000 rows, 100 columns |
+| Upload | 64 MiB, 250,000 rows, 100 columns |
 | SQL returned rows / columns | 10,000 / 100; add LIMIT or aggregate |
 | Dense plotted marks | 2,000, with visible sampling notice |
 | Bar-like categories, box plot labels and treemap labels | 100 distinct values, otherwise unsupported-data notice |
@@ -353,7 +373,7 @@ are not promised; a cache hit is not a verified offline installation mode.
 
 ### Templates and release
 
-Eleven original built-in templates and user-saved templates retain theme and
+Thirteen original built-in templates and user-saved templates retain theme and
 tile options. Applying a template asks before replacing the dashboard. Templates
 contain data references, so missing uploads/queries require repair in another
 browser. Contributed templates must use original compositions rather than

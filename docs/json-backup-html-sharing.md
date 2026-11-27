@@ -7,7 +7,7 @@ menu.
 
 | Export | Use it for | What it contains |
 | --- | --- | --- |
-| **Export JSON** | An editable backup to import into Dashboard Builder | Layout, bindings, options, saved SQL, and eligible uploaded inputs. Each upload has a 500 KiB inline budget. |
+| **Export JSON** | An editable backup to import into Dashboard Builder | Layout, bindings, options, saved SQL, and the uploaded inputs the dashboard uses, projected to the columns in use. Each upload has a 500 KiB inline budget. |
 | **Share as HTML** | Sharing a finished dashboard as a viewer, with an embedded editable backup | A single HTML file with materialized tile rows, theme, options, and a layout backup. The viewer opens without the composer, SQL engine, or network access. |
 
 ![The built-in dashboard after loading the saved JSON backup; it remains editable in the composer](screenshots/json-backup-composer.png)
@@ -21,7 +21,12 @@ load it later, choose **More actions** → **Import JSON / HTML** and select tha
 the composer. The screenshot above shows the built-in dashboard after loading
 its backup. Built-in sample bindings remain references to the samples bundled
 with the app. Uploaded datasets are included only when available and within
-the per-dataset size budget. Before downloading, the app lists missing,
+the per-dataset size budget. Inclusion follows use, not storage: an
+upload is carried only if a tile binds it, it is the dashboard default,
+or a saved query's SQL reads it — and then only the columns those tiles
+and queries reference. An upload the dashboard never reads, and any
+column no chart uses, stays out of the file. Keep your source files if
+you need a complete archive of an upload. Before downloading, the app lists missing,
 oversized, or failed-query dependencies. Continuing preserves those references
 and records the omissions in `omittedDependencies`; an affected tile shows
 **Data unavailable** after import.
@@ -35,7 +40,8 @@ Use **Share as HTML** in the header for a portable viewer. The export materializ
 each tile, so recipients do not need the source upload or SQL query to view the
 charts. The viewer has no composer, SQL tab, upload controls, or promise of
 offline composer startup. New HTML exports also embed the editable layout,
-saved queries (including transform chains), and eligible source uploads. Choose
+saved queries (including transform chains), and the same projected set
+of consumed uploads a JSON export would carry. Choose
 **More actions** → **Import JSON / HTML** in Dashboard Builder to restore that backup; import reads
 only its embedded JSON and never executes the HTML. Imported queries require
 Run and Apply before they can execute in tiles.

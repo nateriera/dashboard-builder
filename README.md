@@ -18,26 +18,21 @@ The demo is the bundled Meridian County homeless-response example, built on synt
 - CSV/JSON upload processed locally — nothing leaves your device until you send it — plus built-in sample datasets
 - Guided upload summary with column-type and missing-value observations plus explainable chart suggestions
 - In-browser SQL via DuckDB-WASM: query your uploads, apply results straight to tiles
-- Dashboard category, numeric, and date filters connect explicitly to chart fields, including relative date presets
-- Set filters at dashboard, page, or selected-chart scope across named report pages
+- Dashboard category, numeric, and date filters connect explicitly to chart fields, including relative date presets, and apply at dashboard, page, or selected-chart scope across named report pages
 - Save named dashboard views that restore the active page, filters, parameters, and theme
 - Move and resize tiles from the keyboard: **Move and resize** enters arrangement mode, arrow keys move, Shift + arrow keys resize, Enter finishes, and Escape restores every tile on the page to where it was
-- Brush a time-series range or select category marks to create independent cross-filters from multiple charts
-- Choose whether each category chart filters rows, highlights matching marks, or ignores incoming cross-filters
+- Brush a time-series range or select category marks to create independent cross-filters from multiple charts; each category chart can filter rows, highlight matching marks, or ignore incoming cross-filters
 - Configure chart mark clicks to filter charts, inspect source records, or navigate to a drill-through page
-- Inspect source columns in each chart's paginated data table
-- Select a category to see its contributing source rows
-- **Share as HTML** exports a standalone dashboard with working filters and chart cross-filtering; you add its title, author, data period and an optional cover note at share time, and on narrow screens the shared file stacks its tiles in reading order
+- Inspect the data behind any chart: a paginated table of its source columns, and the contributing source rows behind a selected category
+- **Share as HTML** exports a standalone dashboard — one self-contained, offline HTML document with working filters and chart cross-filtering, every page in one scrollable file, labeled as an offline snapshot, with a Restore exported filters button and print rules. You add its title, author, data period and an optional cover note at share time, and on narrow screens the shared file stacks its tiles in reading order. Email it or host it anywhere; no server needed
 - Switch a tile among chart types supported by its current data columns
 - Typed parameters — number, text, boolean, date, number range, date range, single select and multi-select — feed SQL `{{name}}` placeholders and transform steps, or bind to a dashboard filter so one control drives it
 - Optional per-tile reference lines, with labels, mark targets and thresholds
-- Save and reuse local data-wrangling recipes for grouping and calculated fields
-- Build ordered transform chains in the Transform tab: GroupBy, day/week/month Bucket, Between, Top, MovingAvg, Stats, Cumulative, Change, paired periods, Pivot, Histogram, and Ratio
+- Wrangle data locally: save and reuse recipes for grouping and calculated fields, and build ordered transform chains in the Transform tab — GroupBy, day/week/month Bucket, Between, Top, MovingAvg, Stats, Cumulative, Change, paired periods, Pivot, Histogram, and Ratio
 - Sort category charts ascending, descending, or by source order; optionally show the top 1–100 categories
 - 4 themes, 13 built-in templates plus a preloaded Meridian County starter dashboard, save/load multi-page dashboards as JSON
 - **CoC edition**: a board packet and a funder report for Continuum of Care reporting, built on the HUD System Performance Measures (1a, 2, 3.1 HMIS-based, 4, 5 and 7; 6 not applicable per HUD) with plain-language definitions carried in the file and the gaps named there, over synthetic HMIS-shaped sample data for the fictional Meridian County
-- The exported file is one self-contained, offline HTML document — every page in one scrollable file, labeled as an offline snapshot, with a Restore exported filters button and print rules. Email it or host it anywhere; no server needed
-- Data-integrity guardrails: explicit binding modes, visible sampling notices, per-chart data tables
+- Data-integrity guardrails: explicit binding modes and visible sampling notices
 
 ## Quick start
 

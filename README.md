@@ -48,6 +48,24 @@ npm ci
 npm run dev
 ```
 
+## Desktop app
+
+The same composer also ships as an installed desktop app (Tauri) for
+Windows and Linux. It opens and saves the same project JSON and HTML
+shares as the web app — files move between the two freely — and uses
+native open and save dialogs and native confirmations in place of the
+browser's. The installed app runs from local files, and your data stays
+on your machine, as it does in the browser.
+
+Packages are built per platform: MSI and NSIS installers on Windows;
+.deb, .rpm and AppImage on Linux. To build from source you need the Rust
+toolchain and your platform's Tauri prerequisites, then:
+
+```sh
+npm ci
+npm run desktop:build
+```
+
 ## Template gallery
 
 The composer opens on a Meridian County starter dashboard: 311 timeliness and

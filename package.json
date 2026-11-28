@@ -12,7 +12,7 @@
     "topojson-client": "^3.1.0"
   },
   "description": "Free, open-source drag-and-drop dashboard composer. Pick chart types from a palette, drop them onto a grid, bind data, and export a self-contained HTML dashboard \u2014 no subscription, no server, no account.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "author": "Nate Riera",
   "repository": {

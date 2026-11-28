@@ -1,6 +1,6 @@
 [package]
 name = "dashboard-builder"
-version = "0.1.0"
+version = "0.1.1"
 description = "Free, open-source drag-and-drop dashboard composer. Desktop edition: Tauri shell over the web build."
 authors = ["Nate Riera"]
 edition = "2024"

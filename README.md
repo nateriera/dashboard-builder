@@ -52,7 +52,7 @@ native open and save dialogs and native confirmations in place of the
 browser's. The installed app runs from local files, and nothing leaves
 your device until you send it, as in the browser.
 
-**Download:** prebuilt installers are on the [v0.1.0 release page](https://github.com/nateriera/dashboard-builder/releases/tag/v0.1.0). Packages are built per platform: MSI and NSIS installers on Windows;
+**Download:** prebuilt installers are on the [latest release page](https://github.com/nateriera/dashboard-builder/releases/latest). Packages are built per platform: MSI and NSIS installers on Windows;
 .deb, .rpm and AppImage on Linux. To build from source you need the Rust
 toolchain and your platform's Tauri prerequisites, then:
 

@@ -80,3 +80,33 @@ export function validateParameterBindings(parameters, filters, resolveFieldInfos
   }
   return parameters;
 }
+
+// Remove each parameter's filter binding whose filterId is absent from
+// `filters`. Pure: inputs are never mutated, and when nothing is detached the
+// original `parameters` value is returned as-is. The parameter itself, its
+// value and any non-filter bindings survive; a parameter left with no
+// bindings loses the key, the same shape the filters popover writes on
+// unbind. Used at the point of loss (tile removal, saved views), by the
+// serialize funnel, and by load-side recovery. validateParameterBindings
+// stays strict; this helper is how callers make a set satisfy it.
+export function detachMissingFilterBindings(parameters, filters) {
+  if (!Array.isArray(parameters)) return { parameters, detached: [] };
+  const filterIds = new Set((Array.isArray(filters) ? filters : []).map(filter => filter?.id));
+  const detached = [];
+  const next = parameters.map(parameter => {
+    if (!Array.isArray(parameter?.bindings)) return parameter;
+    const kept = parameter.bindings.filter(binding => binding?.kind !== 'filter' || filterIds.has(binding.filterId));
+    if (kept.length === parameter.bindings.length) return parameter;
+    detached.push(parameter.name);
+    const { bindings: _dropped, ...rest } = parameter;
+    return kept.length ? { ...rest, bindings: kept } : rest;
+  });
+  return { parameters: detached.length ? next : parameters, detached };
+}
+
+// True for exactly the error validateParameterBindings throws for a binding
+// whose filter is missing. Load-side recovery uses it so that every other
+// validation failure keeps today's behavior.
+export function isMissingFilterBindingError(error) {
+  return /^Parameter [A-Za-z_][A-Za-z0-9_]* is bound to missing filter [A-Za-z0-9_-]{1,100}\.$/.test(error?.message || '');
+}

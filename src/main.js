@@ -2,6 +2,7 @@ import { validateLayout, assertNoCollisions } from "./data/layout.js";
 import { decodeLayoutFile } from './data/layoutImport.js';
 import { validateFilters, applyFilters, distinctValues, filterFieldType, sortAndLimitRows } from "./data/filters.js";
 import { validateParameters, substituteParameters } from "./data/parameters.js";
+import { detachMissingFilterBindings, isMissingFilterBindingError } from "./data/parameterBindings.js";
 import { datasetVersion, listDatasets, storageIssues, rollbackDatasets, subscribeDatasetChanges } from "./data/store.js";
 import { querySnapshot, rollbackQueries, serializeQueries } from "./data/queries.js";
 import { LIMITS } from "./data/limits.js";
@@ -92,10 +93,25 @@ function paintStatus() {
   const count = statusDroppedOverride ?? [...normalizationDrops.values()].reduce((sum, value) => sum + value, 0);
   statusEl.textContent = statusMessage + (count ? ` · ${blankingNotice(count)}` : '');
 }
-function setStatus(msg, { dropped = null } = {}) {
+// A detached-binding notice rides along on the save confirmations that its
+// own change triggers ("Changes saved in this browser · …"): the autosave
+// that follows it is its last carrier, and any other status clears it.
+let bindingNotice = '';
+function setStatus(msg, { dropped = null, keepBindingNotice = false } = {}) {
+  if (!keepBindingNotice) bindingNotice = '';
   statusMessage = msg;
   statusDroppedOverride = dropped;
   paintStatus();
+}
+function detachedBindingsNotice(names, reason) {
+  return `Detached parameter bindings: ${names.join(', ')} (${reason}). The parameter${names.length === 1 ? ' and its value were' : 's and their values were'} kept.`;
+}
+function announceBindingNotice(notice, prefix = '') {
+  bindingNotice = notice;
+  setStatus([prefix, notice].filter(Boolean).join(' · '), { keepBindingNotice: true });
+}
+function setSavedStatus() {
+  setStatus(['Changes saved in this browser', bindingNotice].filter(Boolean).join(' · '), { keepBindingNotice: true });
 }
 function setPersistenceWarning(message) {
   if (!persistenceWarningEl) return;
@@ -1412,7 +1428,10 @@ function serializeLayout() {
     ...(dashboardMeta ? { meta: { ...dashboardMeta } } : {}),
     defaultDataset: dashboardDefault,
     filters,
-    parameters,
+    // F2 guarantee: never emit a binding to a filter that is not emitted.
+    // Silent backstop for every persistence path (autosave, desktop Save,
+    // Export JSON, share backup); the point of loss does the telling.
+    parameters: detachMissingFilterBindings(parameters, filters).parameters,
     savedViews,
     pages,
     currentPageId,
@@ -1423,8 +1442,28 @@ function serializeLayout() {
 
 let bulkLoading = false; // suppresses autosave while a layout is being loaded
 
+// Load-side recovery (F3): a layout that fails validation ONLY because a
+// parameter is bound to a missing filter (as v0.1.0 could save) is read with
+// the dead binding detached. Any other failure throws the original error,
+// exactly as validateLayout would.
+function readLayout(data) {
+  try { return { data: validateLayout(data), detached: [] }; }
+  catch (err) {
+    if (!isMissingFilterBindingError(err) || data === null || typeof data !== 'object' || Array.isArray(data)) throw err;
+    const { parameters: healed, detached } = detachMissingFilterBindings(data.parameters, data.filters);
+    if (!detached.length) throw err;
+    let valid;
+    try { valid = validateLayout({ ...data, parameters: healed }); }
+    catch { throw err; }
+    return { data: valid, detached };
+  }
+}
+const RECOVERED_BINDING_REASON = 'bound filter no longer exists';
+
+// Returns the names of parameters whose dead bindings were detached on read.
 function loadLayout(data, { fit = false } = {}) {
-  data = validateLayout(data);
+  const read = readLayout(data);
+  data = read.data;
   bulkLoading = true;
   try {
     grid.removeAll();
@@ -1451,6 +1490,7 @@ function loadLayout(data, { fit = false } = {}) {
   } finally {
     bulkLoading = false;
   }
+  return read.detached;
 }
 
 function renderPageTabs() {
@@ -1509,7 +1549,8 @@ function scheduleAutosave() {
   saveTimer = setTimeout(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
-      if (!protectArrangementAnnouncement) setStatus('Changes saved in this browser');
+      if (!protectArrangementAnnouncement) setSavedStatus();
+      bindingNotice = '';
     } catch {
       setPersistenceWarning("Autosave failed: storage unavailable");
     }
@@ -1520,7 +1561,7 @@ function saveNow() {
   if (protectUnreadableSave) { setPersistenceWarning("Save blocked to protect the unreadable dashboard."); return; }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeLayout()));
-    setStatus('Changes saved in this browser');
+    setSavedStatus();
   } catch {
     setPersistenceWarning("Save failed: storage unavailable");
   }
@@ -1577,7 +1618,15 @@ grid.on("removed", (_event, items) => {
     filtersChanged=true;
     return targets.length ? [{...filter,targets}] : [];
   });
-  if (!bulkLoading && filtersChanged) setFilters(next);
+  if (!bulkLoading && filtersChanged) {
+    setFilters(next);
+    // F1: a parameter bound to a pruned filter is detached at the point of loss.
+    const { parameters: kept, detached } = detachMissingFilterBindings(parameters, filters);
+    if (detached.length) {
+      setParameters(kept);
+      announceBindingNotice(detachedBindingsNotice(detached, `bound filter removed with the deleted tile${items.length === 1 ? '' : 's'}`));
+    }
+  }
   else scheduleAutosave();
 });
 
@@ -1784,13 +1833,18 @@ document.getElementById('btn-apply-view')?.addEventListener('click', () => {
   switchDashboardPage(view.currentPageId);
   filters = validateFilters(structuredClone(view.filters));
   const dashboardParameters=new Map(parameters.map(parameter=>[parameter.name,parameter]));
-  parameters = validateParameters((view.parameters||[]).map(parameter=>{
+  // F1 (saved views): the view's filter snapshot may lack a filter a
+  // dashboard parameter is bound to; that binding detaches here.
+  const viewBindings = detachMissingFilterBindings((view.parameters||[]).map(parameter=>{
     const definition=dashboardParameters.get(parameter.name);
     return definition?{...definition,value:structuredClone(parameter.value)}:parameter;
-  }));
+  }), filters);
+  parameters = validateParameters(viewBindings.parameters);
   setTheme(view.theme); refreshThemeButton();
   renderAllTiles(); refreshQueryTiles(); scheduleAutosave();
-  setStatus(`Applied saved view “${view.name}”.` + (view.brokenParameters?.length ? ` Detached parameter bindings: ${view.brokenParameters.join(', ')}.` : ''));
+  const appliedView = `Applied saved view “${view.name}”.` + (view.brokenParameters?.length ? ` Detached parameter bindings: ${view.brokenParameters.join(', ')}.` : '');
+  if (viewBindings.detached.length) announceBindingNotice(detachedBindingsNotice(viewBindings.detached, 'bound filter not in this saved view'), appliedView);
+  else setStatus(appliedView);
 });
 function dashboardFilterTiles() {
   const pageNames=new Map(pages.map(page=>[page.id,page.name]));
@@ -2331,7 +2385,7 @@ async function importLayoutText(name, text) {
     catch (rollbackError) { rollbackErrors.push(rollbackError); }
   };
   try {
-    const data = validateLayout(decodeLayoutFile(name, text));
+    const { data, detached } = readLayout(decodeLayoutFile(name, text));
     assertNoCollisions(data,getDataset,getQuery,listDatasets().map(dataset => dataset.id));
     if (!(await confirmDialog("Importing replaces the current dashboard (all pages). A recovery copy of the current state will be kept. Continue?"))) return false;
     const previous = serializeLayout();
@@ -2372,7 +2426,9 @@ async function importLayoutText(name, text) {
     const bits = [];
     if (restored) bits.push(`${restored} dataset${restored === 1 ? "" : "s"}`);
     if (restoredQueries) bits.push(`${restoredQueries} quer${restoredQueries === 1 ? "y" : "ies"}`);
-    setStatus(`Imported ${name}` + (bits.length ? ` (${bits.join(", ")} restored)` : ""));
+    const imported = `Imported ${name}` + (bits.length ? ` (${bits.join(", ")} restored)` : "");
+    if (detached.length) announceBindingNotice(detachedBindingsNotice(detached, RECOVERED_BINDING_REASON), imported);
+    else setStatus(imported);
     return true;
   } catch (err) {
     setStatus(`Import failed: ${err.message}` + (rollbackErrors.length ? ' Rollback incomplete; the pre-import recovery copy was retained.' : ''));
@@ -2528,10 +2584,11 @@ function starterLayout() {
   let restored = false;
   let raw = null;
   let corruptMessage = "";
+  let recoveredBindings = [];
   try {
     raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      loadLayout(JSON.parse(raw));
+      recoveredBindings = loadLayout(JSON.parse(raw));
       restored = true;
       setStatus("Layout restored from this browser · Stored locally");
     }
@@ -2568,6 +2625,11 @@ function starterLayout() {
   if (!restored) {
     loadLayout(starterLayout());
     setStatus(corruptMessage || "Starter dashboard loaded · Stored locally");
+  } else if (recoveredBindings.length) {
+    // F3: the stored layout was readable once its dead binding was detached.
+    // Write the healed layout back so the next launch reads it directly.
+    announceBindingNotice(detachedBindingsNotice(recoveredBindings, RECOVERED_BINDING_REASON), 'Layout restored from this browser · Stored locally');
+    scheduleAutosave();
   } else {
     setStatus('Layout restored from this browser · Stored locally');
   }
